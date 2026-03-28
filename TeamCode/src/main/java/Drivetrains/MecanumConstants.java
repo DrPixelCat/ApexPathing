@@ -4,7 +4,6 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 /**
  * Mecanum Constants class
- * Mecanum COnstants class
  * @author Xander Haemel - 31616 404 Not Found
  */
 public class MecanumConstants {

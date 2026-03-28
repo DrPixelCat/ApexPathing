@@ -1,4 +1,4 @@
-package Follower;
+package Followers;
 
 import Util.Pose;
 import Util.Vector;

@@ -4,7 +4,9 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
+
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+
 
 
 import java.util.List;
@@ -27,8 +29,6 @@ public class MecanumDrive extends Drivetrain{
     DcMotorEx rr;
 
     boolean useBrakeMode;
-
-
     //Constructor
     public MecanumDrive(HardwareMap hardwareMap, MecanumConstants constants, List<DcMotorEx> motors, double[] lastMotorPowers){
         this.mechconstants = constants;
@@ -52,13 +52,13 @@ public class MecanumDrive extends Drivetrain{
      * @param turn the power to turn
      */
 
+
     /**
      * sets the calculated powers of each motor
      * @param drive power to drive forward
      * @param strafe power to strafe
      * @param turn power to turn
      */
-
     public void setPowers(double drive, double strafe, double turn){
         double [] powers = calculatePower(drive, strafe, turn);
         lf.setPower(powers[0]);
@@ -83,6 +83,7 @@ public class MecanumDrive extends Drivetrain{
         //return
         return  calculatedPowers;
     }
+
 
     /**
      * robot centric drive
@@ -151,6 +152,7 @@ public class MecanumDrive extends Drivetrain{
             }
         }
     }
+
     public void breakFollowing() {
         for (int i = 0; i < motors.size(); i++) lastMotorPowers[i] = 0;
         setPower(0);
@@ -218,5 +220,4 @@ public class MecanumDrive extends Drivetrain{
         telemetry.addData("leftRear velocity", lr.getVelocity());
         telemetry.addData("rightRear velocity", rr.getVelocity());
     }
-
 }
