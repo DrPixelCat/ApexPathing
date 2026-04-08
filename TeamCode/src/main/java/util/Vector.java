@@ -52,6 +52,8 @@ public class Vector {
         return hypot(x, y);
     }
 
+    public double getMagnitudeSquared() { return x * x + y * y; }
+
     public void setMagnitude(double value) {
         double ang = getTheta();
         this.x = value * cos(ang);
@@ -137,6 +139,7 @@ public class Vector {
     public String debug() {
         return "Vector <x: " + x + ", y: " + y + ">, <magnitude: " + getMagnitude() + ", θ: " + getTheta() + ">";
     }
+
     private static double normalizeAngle(double angle) {
         while (angle > PI) angle -= 2 * PI;
         while (angle < -PI) angle += 2 * PI;
