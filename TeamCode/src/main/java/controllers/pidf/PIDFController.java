@@ -14,8 +14,6 @@ public class PIDFController extends Controller {
    private double integralSum = 0.0;
    private final double iLimit = 1.0;
 
-   private ElapsedTime timer;
-
     public PIDFController(double kP, double kI, double kD, double kF) {
         this.kP = kP;
         this.kI = kI;

@@ -1,9 +1,11 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.tuning.manual;
 
 import com.qualcomm.robotcore.eventloop.opmode.*;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-@TeleOp
+import org.firstinspires.ftc.teamcode.Constants;
+
+@TeleOp(name = "Wheel Direction Debugger", group = "Apex Pathing Tuning")
 public class WheelDirectionDebugger extends OpMode {
     DcMotor fl, fr, bl, br;
 
