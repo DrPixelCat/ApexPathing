@@ -67,7 +67,6 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
         int currentMotorIndex = 0;
 
         if (opModeIsActive()) {
-            // The state machine MUST live inside a continuous while loop to keep ticking
             while (opModeIsActive() && currentMotorIndex < motorArray.length) {
                 MotorEx motor = motorArray[currentMotorIndex];
 
@@ -158,7 +157,7 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
                 telemetry.update();
             }
 
-            // 7. Display the final assignments in a loop
+            // Display the final assignments in a loop
             while (opModeIsActive()) {
                 telemetry.addLine("--- Tuning Complete ---");
                 for (String result : telemetrySummary) {
