@@ -64,15 +64,18 @@ public class Mecanum extends Drivetrain {
             frPower = (frPower / max) * constants.maxPower;
             brPower = (brPower / max) * constants.maxPower;
         }
-        //current limiting
-        double currentRatio = getTotalCurrent() /constants.currentLimit;
-        //normalizer current
-        if(getTotalCurrent() > constants.currentLimit){
-            flPower /= currentRatio;
-            frPower /= currentRatio;
-            blPower /= currentRatio;
-            brPower /= currentRatio;
+
+        // Normalize motor powers to not exceed the max current (if enabled)
+        if (constants.maxCurrent < 0) {
+            if (getTotalCurrent() > constants.maxCurrent) {
+                double currentRatio = getTotalCurrent() / constants.maxCurrent;
+                flPower /= currentRatio;
+                frPower /= currentRatio;
+                blPower /= currentRatio;
+                brPower /= currentRatio;
+            }
         }
+
         flMotor.setPower(flPower);
         blMotor.setPower(blPower);
         frMotor.setPower(frPower);
@@ -92,6 +95,14 @@ public class Mecanum extends Drivetrain {
         setPowers(0, 0, 0, 0);
     }
 
+    /**
+     * @return the total motor current of the drivetrain in amps
+     */
+    private double getTotalCurrent(){
+        return flMotor.getCurrent(CurrentUnit.AMPS) + frMotor.getCurrent(CurrentUnit.AMPS) +
+               blMotor.getCurrent(CurrentUnit.AMPS) + brMotor.getCurrent(CurrentUnit.AMPS);
+    }
+
     public void debug(Telemetry telemetry) {
         telemetry.addData("Front Left Power", flMotor.getPower());
         telemetry.addData("Front Right Power", frMotor.getPower());
@@ -106,14 +117,5 @@ public class Mecanum extends Drivetrain {
                 "Mecanum(fl=%.1f, bl=%.1f, fr=%.1f, br=%.1f)", 
                 flMotor.getPower(), blMotor.getPower(), frMotor.getPower(), brMotor.getPower()
         );
-    }
-
-    /**
-     * gets the total current of the drivetrain
-     * @return a double in Amps
-     */
-    private double getTotalCurrent(){
-        return flMotor.getCurrent(CurrentUnit.AMPS) + frMotor.getCurrent(CurrentUnit.AMPS) +
-                blMotor.getCurrent(CurrentUnit.AMPS)+ brMotor.getCurrent(CurrentUnit.AMPS);
     }
 }

@@ -1,15 +1,20 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+
+import controllers.PDFLController.PDFLCoefficients;
 import core.ApexBuilder;
 import drivetrains.constants.DrivetrainConstants;
 import drivetrains.constants.MecanumConstants;
 import localizers.constants.LocalizerConstants;
-import localizers.constants.OTOSConstants;
+import localizers.constants.PinpointConstants;
 import followers.constants.FollowerConstants;
 import followers.constants.P2PFollowerConstants;
 import util.Angle;
 import util.Distance;
-import util.Pose;
 
 /**
  * This class extends {@link ApexBuilder} and provides the specific constants for the drivetrain,
@@ -37,24 +42,27 @@ public class Constants extends ApexBuilder {
 
     @Override
     public LocalizerConstants setLocalizerConstants() { // Any LocalizerConstants
-        return new OTOSConstants()
-                .setName("otos")
-                .setOffset(new Pose(227, -16, 0, Distance.Units.MILLIMETERS, Angle.Units.DEGREES))
-                .setLinearScalar(1.05)
-                .setHeadingScalar(1.0);
+        return new PinpointConstants()
+                .setName("pinpoint")
+                .setDistanceUnit(DistanceUnit.INCH)
+                .setAngleUnit(AngleUnit.DEGREES)
+                .setXOffset(0.0) // In distanceUnit
+                .setYOffset(0.0) // In distanceUnit
+                .setXPodDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
+                .setYPodDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
+                .setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
     }
 
     @Override
     public FollowerConstants setFollowerConstants() { // Any FollowerConstants
         return new P2PFollowerConstants()
-                .setTranslationalGain(0.05)
-                .setTranslationalD(0)
-                .setHeadingGain(1)
-                .setHeadingD(0.05)
-                .setTranslationalTolerance(67) // Inches
-                .setHeadingTolerance(3.0) // Degrees
-                .setMaxPower(0.5) // Specifically for following, not drivetrain max power
-                .setMinPower(0.04);
+                .setAxialCoeffs(new PDFLCoefficients(0.0, 0.0, 0.0))
+                .setStrafeCoeffs(new PDFLCoefficients(0.0, 0.0, 0.0))
+                .setHeadingCoeffs(new PDFLCoefficients(0.0, 0.0, 0.0))
+                .setHeadingTolerance(Angle.fromDeg(3.0))
+                .setTranslationalTolerance(Distance.fromIn(2.0))
+                .setMaxTranslationalPower(0.7)
+                .setMaxTurnPower(0.7);
     }
 }
 
@@ -103,19 +111,15 @@ new SwerveConstants()
                         .setMotorReversed(true)
         )
         .setMaxPower(1.0)
-        .setTrackWidth(Distance.fromMm(300))
-        .setWheelbase(Distance.fromMm(300))
+        .setTrackWidth(Distance.fromMm(0))
+        .setWheelbase(Distance.fromMm(0))
         .setRobotCentric(true);
 */
 
-/* Pinpoint constants
-new PinpointConstants()
-        .setName("pinpoint")
-        .setDistanceUnit(DistanceUnit.INCH)
-        .setAngleUnit(AngleUnit.DEGREES)
-        .setXOffset(-3.31) // In distanceUnit
-        .setYOffset(-6.61) // In distanceUnit
-        .setXPodDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-        .setYPodDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-        .setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+/* OTOS Constants
+new OTOSConstants() // Tuned for Dylan + Mikey strafer chassis with OTOS, don't change these
+    .setName("otos")
+    .setOffset(new Pose(227, -16, 0, Distance.Units.MILLIMETERS, Angle.Units.DEGREES))
+    .setLinearScalar(1.05)
+    .setHeadingScalar(1.0);
 */

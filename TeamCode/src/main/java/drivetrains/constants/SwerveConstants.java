@@ -28,6 +28,7 @@ public class SwerveConstants extends DrivetrainConstants {
 
     // Misc
     public double maxPower = 1.0; // Max power to apply to any module's motor, from 0 to 1
+    public double maxCurrent = -1.0; // Max total motor current in amps, negative for no limit
     public boolean robotCentric = true; // Whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp
 
     private double totalMaxCurrent = 8; //amps
@@ -123,6 +124,16 @@ public class SwerveConstants extends DrivetrainConstants {
      */
     public SwerveConstants setMaxPower(double maxPower) {
         this.maxPower = maxPower;
+        return this;
+    }
+
+    /**
+     * Sets the maximum total motor current allowed in amps. Set to a negative value for no limit.
+     * @param amps is the current limit in amps
+     * @return this instance for chaining
+     */
+    public SwerveConstants setMaxCurrent(double amps){
+        this.maxCurrent = amps;
         return this;
     }
 

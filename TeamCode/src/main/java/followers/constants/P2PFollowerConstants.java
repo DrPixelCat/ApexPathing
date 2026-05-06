@@ -1,10 +1,12 @@
 package followers.constants;
 
+import controllers.PDFLController.PDFLCoefficients;
 import controllers.PDFLController;
-import controllers.vector.PDLVectorController;
 import drivetrains.Drivetrain;
 import followers.P2PFollower;
 import localizers.Localizer;
+import util.Angle;
+import util.Distance;
 
 /**
  * Point to point follower constants class
@@ -12,26 +14,23 @@ import localizers.Localizer;
  */
 public class P2PFollowerConstants extends FollowerConstants {
     // Tunable constants
-    public double translationalGain = 0.03;
-    public double translationalD = 0.0;
-    public double headingGain = 0.5;
-    public double headingD = 0.0;
-
-    // Power limits while following (note that these may be overridden by the drivetrain's power limits)
-    public double maxPower = 1.0;
-    public double minPower = 0.05;
+    public PDFLCoefficients axialCoeffs = new PDFLCoefficients();
+    public PDFLCoefficients strafeCoeffs = new PDFLCoefficients();
+    public PDFLCoefficients headingCoeffs = new PDFLCoefficients();
 
     // Controllers
-    public final PDLVectorController translationalController;
-    public final PDFLController headingController;
+    public PDFLController axialController;
+    public PDFLController strafeController;
+    public PDFLController headingController;
 
     /**
      * Constructor for the P2PFollowerConstants class
      */
     public P2PFollowerConstants() {
-        this.translationalController = new PDLVectorController(translationalGain, translationalD, minPower);
-        this.headingController = new PDFLController(headingGain, headingD, 0.0, minPower);
-        headingController.useAsAngularController();
+        this.axialController = new PDFLController(axialCoeffs);
+        this.strafeController = new PDFLController(strafeCoeffs);
+        this.headingController = new PDFLController(headingCoeffs);
+        this.headingController.useAsAngularController();
     }
 
     @Override
@@ -40,92 +39,108 @@ public class P2PFollowerConstants extends FollowerConstants {
     }
 
     // region Setters
-
     /**
-     * Sets the translational proportional gain.
-     * @param translationalGain the translational Kp
+     * Sets the PDFL coefficients for the axial controller.
+     * @param coeffs the new axial {@link PDFLCoefficients}
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setTranslationalGain(double translationalGain) {
-        this.translationalGain = translationalGain;
-        this.translationalController.setPDLCoefficients(translationalGain, translationalD, minPower);
+    public P2PFollowerConstants setAxialCoeffs(PDFLCoefficients coeffs) {
+        this.axialCoeffs = coeffs;
+        this.axialController.setCoefficients(coeffs);
         return this;
     }
 
     /**
-     * Sets the translational derivative gain to mitigate overshoot
-     * @param translationalD the derivative gain for translational movement
+     * Sets the PDFL coefficients for the strafe controller.
+     * @param coeffs the new strafe {@link PDFLCoefficients}
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setTranslationalD(double translationalD) {
-        this.translationalD = translationalD;
-        this.translationalController.setPDLCoefficients(translationalGain, translationalD, minPower);
+    public P2PFollowerConstants setStrafeCoeffs(PDFLCoefficients coeffs) {
+        this.strafeCoeffs = coeffs;
+        this.strafeController.setCoefficients(coeffs);
         return this;
     }
 
     /**
-     * Sets the heading proportional gain.
-     * @param headingGain the heading Kp
+     * Sets the PDFL coefficients for the heading controller.
+     * @param coeffs the new heading {@link PDFLCoefficients}
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setHeadingGain(double headingGain) {
-        this.headingGain = headingGain;
-        this.headingController.setPDFLCoefficients(headingGain, headingD, 0.0, minPower);
+    public P2PFollowerConstants setHeadingCoeffs(PDFLCoefficients coeffs) {
+        this.headingCoeffs = coeffs;
+        this.headingController.setCoefficients(coeffs);
         return this;
     }
 
     /**
-     * Sets the heading derivative gain to mitigate heading overshoot
-     * @param headingD the heading derivative gain
-     * @return this instance for chaining
-     */
-    public P2PFollowerConstants setHeadingD(double headingD) {
-        this.headingD = headingD;
-        this.headingController.setPDFLCoefficients(headingGain, headingD, 0.0, minPower);
-        return this;
-    }
-
-    /**
-     * Sets the translational tolerance.
+     * Sets the translational error tolerance for the robot to be considered "at the target".
      * @param translationalTolerance the tolerance in inches
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setTranslationalTolerance(double translationalTolerance) {
-        this.translationalController.setTolerance(translationalTolerance);
+    public P2PFollowerConstants setTranslationalTolerance(Distance translationalTolerance) {
+        this.axialController.setTolerance(translationalTolerance);
+        this.strafeController.setTolerance(translationalTolerance);
         return this;
     }
 
     /**
-     * Sets the heading tolerance.
-     * @param headingToleranceDegrees the tolerance in degrees
+     * Sets the heading error tolerance for the robot to be considered "at the target".
+     * @param headingTolerance the tolerance in degrees
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setHeadingTolerance(double headingToleranceDegrees) {
-        this.headingController.setTolerance(Math.toRadians(headingToleranceDegrees));
+    public P2PFollowerConstants setHeadingTolerance(Angle headingTolerance) {
+        this.headingController.setTolerance(headingTolerance);
         return this;
     }
 
     /**
-     * Sets the maximum power.
-     * @param maxPower the maximum power limit
+     * Sets the maximum translational power that the follower can output.
+     * Note that drivetrain power limits take precedence over this and this only affects following
+     * @param maxTranslationalPower the maximum translational power (0 to 1)
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setMaxPower(double maxPower) {
-        this.maxPower = maxPower;
+    public P2PFollowerConstants setMaxTranslationalPower(double maxTranslationalPower) {
+        this.axialController.setMaxPower(maxTranslationalPower);
+        this.strafeController.setMaxPower(maxTranslationalPower);
         return this;
     }
 
     /**
-     * Sets the minimum power.
-     * @param minPower the minimum power limit
+     * Sets the maximum rotational power that the follower can output.
+     * Note that drivetrain power limits take precedence over this and this only affects following
+     * @param maxTurnPower the maximum rotational power (0 to 1)
      * @return this instance for chaining
      */
-    public P2PFollowerConstants setMinPower(double minPower) {
-        this.minPower = minPower;
-        this.headingController.setPDFLCoefficients(headingGain, headingD, 0.0, minPower);
-        this.translationalController.setPDLCoefficients(translationalGain, translationalD, minPower);
+    public P2PFollowerConstants setMaxTurnPower(double maxTurnPower) {
+        this.headingController.setMaxPower(maxTurnPower);
         return this;
     }
 
+    /**
+     * Sets the deadzone for the axial controller. The controller will output 0 if the error is
+     * within the range of [-deadzone, deadzone].
+     */
+    public P2PFollowerConstants setAxialDeadzone(double axialDeadzone) {
+        this.axialController.setDeadzone(axialDeadzone);
+        return this;
+    }
+
+    /**
+     * Sets the deadzone for the strafe controller. The controller will output 0 if the error is
+     * within the range of [-deadzone, deadzone].
+     */
+    public P2PFollowerConstants setStrafeDeadzone(double strafeDeadzone) {
+        this.strafeController.setDeadzone(strafeDeadzone);
+        return this;
+    }
+
+    /**
+     * Sets the deadzone for the heading controller. The controller will output 0 if the error is
+     * within the range of [-deadzone, deadzone].
+     */
+    public P2PFollowerConstants setHeadingDeadzone(double headingDeadzone) {
+        this.headingController.setDeadzone(headingDeadzone);
+        return this;
+    }
     // endregion
 }

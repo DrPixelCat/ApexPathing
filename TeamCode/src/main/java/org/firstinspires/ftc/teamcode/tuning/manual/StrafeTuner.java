@@ -16,22 +16,24 @@ import localizers.Localizer;
 import util.Pose;
 
 /**
- * OpMode for tuning the heading controller with Panels. Hold A to turn the robot 180 degrees and
- * hold B to turn it back to the starting heading. Adjust the proportional gain, derivative gain,
- * minimum power, and deadzone in Panels.
+ * OpMode for tuning the strafe controller with Panels. Hold X to move the robot 24 inches left,
+ * hold B to move 6 inches right, and hold A to move it back to the start position. Adjust the
+ * proportional gain, derivative gain, minimum power, and deadzone in Panels.
  *
  * @author Joel - 7842 Browncoats Alumni
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 @Configurable
-@TeleOp(name = "Heading Tuner", group = "Apex Pathing Tuning")
-public class HeadingTuner extends OpMode {
+@TeleOp(name = "Strafe Tuner", group = "Apex Pathing Tuning")
+public class StrafeTuner extends OpMode {
     private Drivetrain drivetrain;
     private Localizer localizer;
     private PDFLController controller;
+    private PDFLController headingController;
     private JoinedTelemetry fullTelem;
 
     double target = 0;
+    public static boolean maintainHeading; // Use the heading controller
     public static double deadzone;
     public static double proportionalGain; // kP
     public static double derivativeGain; // kD
@@ -49,23 +51,32 @@ public class HeadingTuner extends OpMode {
         P2PFollowerConstants followerConstants = (P2PFollowerConstants) constants.setFollowerConstants();
 
         // Extract the controllers, coefficients, and deadzone from the constants class
-        // Note .useAngularController() is called by constants
-        controller = followerConstants.headingController;
+        headingController = followerConstants.headingController;
+        controller = followerConstants.strafeController;
         proportionalGain = controller.getCoefficients().kP;
         derivativeGain = controller.getCoefficients().kD;
         minPower = controller.getCoefficients().kL;
         deadzone = controller.getDeadzone();
 
         fullTelem.addLine(
-                "Hold X to rotate 180 degrees, B to rotate to -45 degrees. and A to move back to start position."
+                "Hold X to move left 24 inches, B to move right 6 inches, and A to move back to start position."
         );
         fullTelem.update();
     }
 
     private void moveToTarget(double target) {
         this.target = target;
-        double error = target - this.localizer.getPose().getHeading();
-        this.drivetrain.moveWithVectors(0, 0, -this.controller.calculateFromError(error));
+
+        double turn = 0;
+        if (maintainHeading) {
+            double headingError = 0 - this.localizer.getPose().getHeading(); // Target heading is 0 degrees
+            turn = headingController.calculateFromError(headingError);
+        } else {
+            headingController.reset(); // Prevent derivative kick when not maintaining heading
+        }
+
+        double error = target - this.localizer.getPose().getY();
+        this.drivetrain.moveWithVectors(0, this.controller.calculateFromError(error), turn);
     }
 
     @Override
@@ -75,19 +86,21 @@ public class HeadingTuner extends OpMode {
         controller.setCoefficients(new PDFLCoefficients(proportionalGain, derivativeGain, minPower));
         controller.setDeadzone(deadzone);
 
-        if (gamepad1.x) { // Move to 180 degrees when X is held
-            moveToTarget(Math.PI);
-        } else if (gamepad1.b) { // Move to -45 (315) degrees when B is held
-            moveToTarget(-Math.PI / 4);
-        } else if (gamepad1.a) { // Move back to 0 degrees when A is held
+        if (gamepad1.x) { // Move 24 inches to the left when X is held
+            moveToTarget(24);
+        } else if (gamepad1.b) { // Move 6 inches to the right when B is held
+            moveToTarget(-6);
+        } else if (gamepad1.a) { // Move back to 0 when A is held
             moveToTarget(0);
         } else {
+            // Prevent derivative kick
             controller.reset();
+            headingController.reset();
             drivetrain.stop();
         }
 
         fullTelem.addData("Target: ", target);
-        fullTelem.addData("Position: ", localizer.getPose().getHeading());
+        fullTelem.addData("Position: ", localizer.getPose().getY());
         fullTelem.update();
     }
 }
