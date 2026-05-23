@@ -128,16 +128,6 @@ public class SwerveConstants extends DrivetrainConstants {
     }
 
     /**
-     * Sets the maximum total motor current allowed in amps. Set to a negative value for no limit.
-     * @param amps is the current limit in amps
-     * @return this instance for chaining
-     */
-    public SwerveConstants setMaxCurrent(double amps){
-        this.maxCurrent = amps;
-        return this;
-    }
-
-    /**
      * Sets whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp.
      * @param robotCentric whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp
      * @return this instance for chaining
@@ -169,4 +159,6 @@ public class SwerveConstants extends DrivetrainConstants {
         this.totalMaxCurrent = amperes;
         return this;
     }
+
+
 }

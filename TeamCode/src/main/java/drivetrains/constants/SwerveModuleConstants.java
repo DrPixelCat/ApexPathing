@@ -22,7 +22,7 @@ public class SwerveModuleConstants {
 
     // Tuned values (these are set by the main SwerveConstants class because all modules should have the same tuning)
     public double steeringPGain = 0.015; // Proportional gain for steering correction
-
+    double OffsetAngle = 0;
     /**
      * Constructor for the SwerveConstants class
      */
@@ -84,6 +84,16 @@ public class SwerveModuleConstants {
      */
     public SwerveModuleConstants setEncoderName(String name) {
         this.encoderName = name;
+        return this;
+    }
+
+    /**
+     * sets the swerve heading offset angle
+     * @param degrees is the angle
+     * @return this instance for chaining
+     */
+    public SwerveModuleConstants setModuleAngleOffset(double degrees){
+        this.OffsetAngle = degrees;
         return this;
     }
 }
