@@ -47,7 +47,7 @@ public class AutoTest extends LinearOpMode {
         while (opModeIsActive()) {
             follower.update();
 
-            if (!follower.isBusy()) {
+            if (!follower.isBusy() || timerStarted) {
                 if (iterator < poses.length - 1) {
                     // Wait before moving on for the robot to settle
                     if (!timerStarted) {

@@ -69,10 +69,9 @@ public class P2PFollower extends Follower {
         if (axialController.isAtTarget() && strafeController.isAtTarget() && headingController.isAtTarget()) {
             if (!this.holdingPose) {
                 isBusy = false;
+                drivetrain.stop();
+                return;
             }
-
-            drivetrain.stop();
-            return;
         }
 
         // Note: powers are clipped to max powers defined in constants
