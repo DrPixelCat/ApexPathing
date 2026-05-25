@@ -1,6 +1,6 @@
 package followers;
 
-import controllers.PDFLController;
+import controllers.PDSController;
 import drivetrains.Drivetrain;
 import localizers.Localizer;
 import followers.constants.P2PFollowerConstants;
@@ -16,9 +16,9 @@ import util.Vector;
 public class P2PFollower extends Follower {
     private final P2PFollowerConstants constants;
 
-    private final PDFLController axialController;
-    private final PDFLController strafeController;
-    private final PDFLController headingController;
+    private final PDSController axialController;
+    private final PDSController strafeController;
+    private final PDSController headingController;
 
     /**
      * Constructor for the P2PFollower
@@ -49,9 +49,7 @@ public class P2PFollower extends Follower {
     }
 
     public boolean axialAtTarget() { return constants.axialController.isAtTarget(); }
-
     public boolean strafeAtTarget() { return constants.strafeController.isAtTarget(); }
-
     public boolean headingAtTarget() { return constants.headingController.isAtTarget(); }
 
     @Override

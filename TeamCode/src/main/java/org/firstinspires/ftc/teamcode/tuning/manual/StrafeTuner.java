@@ -8,8 +8,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.Constants;
 
-import controllers.PDFLController.PDFLCoefficients;
-import controllers.PDFLController;
+import controllers.PDSController.PDSCoefficients;
+import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.constants.P2PFollowerConstants;
 import localizers.Localizer;
@@ -19,7 +19,8 @@ import util.Pose;
 /**
  * OpMode for tuning the strafe controller with Panels. Hold X to move the robot 64 inches left,
  * hold B to move 6 inches right, and hold A to move it back to the start position. Adjust the
- * proportional gain, derivative gain, minimum power, and deadzone in Panels.
+ * coefficients, deadzone, and tolerance in Panels. If maintainHeading is true, the robot will use
+ * the heading controller to maintain its heading while strafing.
  *
  * @author Joel - 7842 Browncoats Alumni
  * @author Dylan B. - 18597 RoboClovers - Delta
@@ -30,16 +31,17 @@ import util.Pose;
 public class StrafeTuner extends OpMode {
     private Drivetrain drivetrain;
     private Localizer localizer;
-    private PDFLController controller;
-    private PDFLController headingController;
+    private PDSController controller;
+    private PDSController headingController;
     private JoinedTelemetry fullTelem;
 
     double target = 0;
     public static boolean maintainHeading; // Use the heading controller
-    public static double deadzone;
-    public static double proportionalGain; // kP
-    public static double derivativeGain; // kD
-    public static double minPower; // kL
+    public static double kP;
+    public static double kD;
+    public static double kS;
+    public static double kSDeadzone;
+    public static double outputDeadzone;
     public static double tolerance; // Tolerance for being at the target (inches)
 
     private boolean wasAtTarget = false;
@@ -60,10 +62,11 @@ public class StrafeTuner extends OpMode {
         headingController = followerConstants.headingController;
         headingController.setTarget(0);
         controller = followerConstants.strafeController;
-        proportionalGain = controller.getCoefficients().kP;
-        derivativeGain = controller.getCoefficients().kD;
-        minPower = controller.getCoefficients().kL;
-        deadzone = controller.getDeadzone();
+        kP = controller.getCoefficients().kP;
+        kD = controller.getCoefficients().kD;
+        kS = controller.getCoefficients().kS;
+        kSDeadzone = controller.getCoefficients().kSDeadzone;
+        outputDeadzone = controller.getDeadzone();
         tolerance = controller.getTolerance();
 
         fullTelem.addLine(
@@ -91,8 +94,8 @@ public class StrafeTuner extends OpMode {
     public void loop() {
         localizer.update();
 
-        controller.setCoefficients(new PDFLCoefficients(proportionalGain, derivativeGain, minPower));
-        controller.setDeadzone(deadzone);
+        controller.setCoefficients(new PDSCoefficients(kP, kD, kS, kSDeadzone));
+        controller.setDeadzone(outputDeadzone);
         controller.setTolerance(new Distance(tolerance)); // Inches
 
         if (gamepad1.x) { // Move 64 inches to the left when X is held

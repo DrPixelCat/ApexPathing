@@ -26,8 +26,6 @@ import util.Pose;
  */
 @TeleOp(name = "Auto Motor Direction + Assignment", group = "Apex Pathing Tuning")
 public class AutoMotorDirectionAndAssignment extends LinearOpMode {
-
-    // --- Constants & Lookups ---
     private static final Map<WheelTendencies, WheelPos> MOTOR_LUT = Map.of(
             new WheelTendencies(MovementDirection.NORTH_EAST, Rotation.CW), WheelPos.FRONT_LEFT,
             new WheelTendencies(MovementDirection.NORTH_WEST, Rotation.CCW), WheelPos.FRONT_RIGHT,
