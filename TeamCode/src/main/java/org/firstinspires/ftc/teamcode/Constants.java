@@ -4,7 +4,6 @@ import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-
 import controllers.PDFLController.PDFLCoefficients;
 import controllers.PDSController;
 import core.ApexBuilder;
@@ -12,10 +11,11 @@ import drivetrains.constants.DrivetrainConstants;
 import drivetrains.constants.MecanumConstants;
 import drivetrains.constants.SwerveConstants;
 import drivetrains.constants.SwerveModuleConstants;
+import followers.constants.P2PFollowerConstants;
 import localizers.constants.LocalizerConstants;
 import localizers.constants.PinpointConstants;
 import followers.constants.FollowerConstants;
-import followers.constants.P2PFollowerConstants;
+import followers.constants.BSplineFollowerConstants;
 import util.Angle;
 import util.Distance;
 
@@ -27,6 +27,7 @@ import util.Distance;
  * your robot's hardware and tuning preferences.
  *
  * @author Dylan B. 18597 RoboClovers - Delta
+ * @author Sohum Arora - 22985 Paraducks
  */
 public class Constants extends ApexBuilder {
     @Override
@@ -64,11 +65,21 @@ public class Constants extends ApexBuilder {
                 .setHeadingCoeffs(new PDSController.PDSCoefficients(0.0, 0.0, 0.0, 0.0))
                 .setHeadingTolerance(Angle.fromDeg(2.0))
                 .setAxialTolerance(Distance.fromIn(1.5))
-                .setMaxAxialPower(1)
                 .setStrafeTolerance(Distance.fromIn(1.5))
+                .setMaxAxialPower(1)
+                .setMaxStrafePower(1)
                 .setMaxTurnPower(1);
     }
 
+    public FollowerConstants setBSplineFollowerConstants() { //TODO this will become setFollowerConstants after P2P goes
+        return new BSplineFollowerConstants()
+                .setTranslationCoeffs(new PDSController.PDSCoefficients(0.0, 0.0, 0.0, 0.0))
+                .setHeadingCoeffs(new PDSController.PDSCoefficients(0.0, 0.0, 0.0, 0.0))
+                .setVelocityFF(0.01)
+                .setHeadingTolerance(Math.toRadians(1.0))
+                .setDistanceTolerance(0.5)
+                .setTTolerance(0.95);
+    }
 }
 
 

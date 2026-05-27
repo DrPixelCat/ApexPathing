@@ -1,6 +1,6 @@
 package followers;
 
-
+import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.constants.BSplineFollowerConstants;
 import localizers.Localizer;
@@ -20,11 +20,17 @@ import util.Vector;
 public class BSplineFollower extends Follower {
     private static final double pi2 = 2 * Math.PI;
     private final BSplineFollowerConstants constants;
+
+    // PDS Controllers for closed-loop feedback
+    private final PDSController translationController;
+    private final PDSController headingController;
+
     private Path path;
     private long holdStartTimeNs = 0;
     private boolean holdTimerInitialized = false;
     private long pauseStartNs = 0;
     private boolean wasHoldingPosePrevFrame = false;
+
     /**
      * BSplineFollower constructor
      * @param constants - Your BSplineFollowerConstants (ensure configured)
@@ -32,6 +38,21 @@ public class BSplineFollower extends Follower {
     public BSplineFollower(BSplineFollowerConstants constants, Drivetrain drivetrain, Localizer localizer) {
         super(drivetrain, localizer);
         this.constants = constants;
+
+        // Initialize controllers with PDS coefficients from constants
+        this.translationController = new PDSController(constants.translationCoeffs);
+        this.headingController = new PDSController(constants.headingCoeffs);
+
+        // Mark heading controller as angular so it handles angle normalization
+        this.headingController.setAngularController();
+    }
+
+    /**
+     * Retrieves the active constants instance driving this follower.
+     * Useful for live tuning via dashboards.
+     */
+    public BSplineFollowerConstants getConstants() {
+        return this.constants;
     }
 
     /**
@@ -45,6 +66,10 @@ public class BSplineFollower extends Follower {
         this.holdingPose = false;
         this.holdTimerInitialized = false;
         this.wasHoldingPosePrevFrame = false;
+
+        // Reset controllers right before starting a new path to prevent derivative kick
+        translationController.reset();
+        headingController.reset();
     }
 
     @Override
@@ -74,7 +99,7 @@ public class BSplineFollower extends Follower {
         Pose current = getPose();
         Path.PathNode currentNode = path.getCurrentNode();
 
-        //Turn logic
+        // Turn logic
         if (currentNode.type == Path.NodeType.TURN) {
             double targetHeading = currentNode.targetHeading.getRad();
             double currentHeading = current.getHeading();
@@ -90,8 +115,9 @@ public class BSplineFollower extends Follower {
                 return;
             }
 
-            double turnPower = headingError * constants.headingP;
+            double turnPower = headingController.calculateFromError(headingError);
             drive(0, 0, turnPower, currentHeading);
+
         } else if (currentNode.type == Path.NodeType.HOLD) {
             if (!holdTimerInitialized) {
                 holdStartTimeNs = System.nanoTime();
@@ -114,17 +140,21 @@ public class BSplineFollower extends Follower {
 
             Pose lockPose = currentNode.holdPose;
             Vector error = lockPose.toVec().subtract(current.toVec());
-            Vector feedback = error.multiply(constants.translationP);
+
+            double errorMag = error.getMagnitude();
+            double translationPower = translationController.calculateFromError(errorMag);
+            Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
 
             double headingError = getShortestAngularDistance(current.getHeading(), lockPose.getHeading());
-            double turnPower = headingError * constants.headingP;
+            double turnPower = headingController.calculateFromError(headingError);
 
             drive(feedback.getX(), feedback.getY(), turnPower, current.getHeading());
+
         } else if (currentNode.type == Path.NodeType.DRIVE) {
             PathSegment segment = currentNode.segment;
             HeadingInterpolator interpolator = currentNode.interpolator;
 
-            if (segment == null || interpolator == null) { //null check
+            if (segment == null || interpolator == null) {
                 stop();
                 return;
             }
@@ -135,7 +165,10 @@ public class BSplineFollower extends Follower {
             Vector targetVel = segment.getFirstDerivative(t);
 
             Vector error = targetPoseVec.subtract(current.toVec());
-            Vector feedback = error.multiply(constants.translationP);
+
+            double errorMag = error.getMagnitude();
+            double translationPower = translationController.calculateFromError(errorMag);
+            Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
 
             Vector feedforward = targetVel.multiply(constants.velocityFF);
             Vector drivePower = feedback.add(feedforward);
@@ -148,7 +181,7 @@ public class BSplineFollower extends Follower {
             double currentHeading = current.getHeading();
 
             double headingError = getShortestAngularDistance(currentHeading, targetHeading);
-            double turnPower = headingError * constants.headingP;
+            double turnPower = headingController.calculateFromError(headingError);
 
             double distance = segment.getDistanceToEnd_in(targetPoseVec, t);
             if (t >= constants.tTolerance && distance < constants.distanceTolerance) {
@@ -168,11 +201,6 @@ public class BSplineFollower extends Follower {
         }
     }
 
-    /**
-     * Logic to actively hold the last robot Pose on the field
-     * Actively means that the robot will move back to the hold pose if its pushed off it for example
-     * Useful option for autos
-     */
     private void holdPose() {
         Pose currentPose = getPose();
 
@@ -185,10 +213,10 @@ public class BSplineFollower extends Follower {
             return;
         }
 
-        double maxPower = 1.0;
-        Vector feedback = errorMag > 0 ? error.normalize().multiply(Math.min(errorMag * constants.translationP, maxPower)) : new Vector(0, 0);
+        double translationPower = translationController.calculateFromError(errorMag);
+        Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
 
-        double turnPower = Math.max(-maxPower, Math.min(maxPower, headingError * constants.headingP));
+        double turnPower = headingController.calculateFromError(headingError);
 
         drive(feedback.getX(), feedback.getY(), turnPower, currentPose.getHeading());
     }

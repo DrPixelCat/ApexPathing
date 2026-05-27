@@ -1,6 +1,5 @@
 package paths;
 
-import paths.heading.InterpolationStyle;
 import util.Angle;
 import util.Distance;
 import util.Pose;
