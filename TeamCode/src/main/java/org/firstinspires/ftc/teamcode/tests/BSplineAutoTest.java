@@ -13,7 +13,8 @@ import util.Pose;
 
 /**
  * Test Autonomous opMode utilizing {@link paths.ExamplePathAPIV3}
- * IMPORTANT: Make sure that you have your {@link BSplineFollowerConstants} set up
+ * IMPORTANT: Make sure that you have your {@link BSplineFollowerConstants} set up after running {@link org.firstinspires.ftc.teamcode.tuning.manual.BSplineTuner}
+ * @author Sohum Arora - 22985 Paraducks
  */
 @Autonomous(name = "Apex BSpline Auto Test", group = "Apex Pathing Tests")
 public class BSplineAutoTest extends LinearOpMode {
@@ -41,13 +42,14 @@ public class BSplineAutoTest extends LinearOpMode {
             Pose targetPose = follower.getTargetPose();
 
             telemetry.addLine(follower.isBusy() ? "Follower IS busy" : "Follower is NOT busy");
-            if (targetPose != null) {
-                telemetry.addData("Target X", targetPose.getX());
-                telemetry.addData("Target Y", targetPose.getY());
-            }
+            telemetry.addLine(targetPose != null ? "Target X: " + targetPose.getX() : "");
+            telemetry.addLine(targetPose != null ? "Target Y: " + targetPose.getY() : "");
+
             telemetry.addData("Current X", currentPose.getX());
             telemetry.addData("Current Y", currentPose.getY());
+
             telemetry.addData("Heading", currentPose.getHeading());
+
             telemetry.update();
         }
 

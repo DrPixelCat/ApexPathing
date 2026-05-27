@@ -1,5 +1,6 @@
 package followers.constants;
 
+import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.BSplineFollower;
 import localizers.Localizer;
@@ -12,8 +13,8 @@ import localizers.Localizer;
  */
 public class BSplineFollowerConstants extends FollowerConstants {
     // Tunable constants
-    public double translationP = 0.1;
-    public double headingP = 0.4;
+    public PDSController.PDSCoefficients translationCoeffs = new PDSController.PDSCoefficients(0.1, 0.0, 0.0, 0.0);
+    public PDSController.PDSCoefficients headingCoeffs = new PDSController.PDSCoefficients(0.4, 0.0, 0.0, 0.0);
     public double velocityFF = 0.01;
 
     // Tolerances
@@ -35,22 +36,22 @@ public class BSplineFollowerConstants extends FollowerConstants {
 
     // region Setters
     /**
-     * Sets the proportional gain for translation error.
-     * @param translationP the new translational P gain
+     * Sets the PDS coefficients for translation error.
+     * @param translationCoeffs the new translational PDS coefficients
      * @return this instance for chaining
      */
-    public BSplineFollowerConstants setTranslationP(double translationP) {
-        this.translationP = translationP;
+    public BSplineFollowerConstants setTranslationCoeffs(PDSController.PDSCoefficients translationCoeffs) {
+        this.translationCoeffs = translationCoeffs;
         return this;
     }
 
     /**
-     * Sets the proportional gain for heading error.
-     * @param headingP the new heading P gain
+     * Sets the PDS coefficients for heading error.
+     * @param headingCoeffs the new heading PDS coefficients
      * @return this instance for chaining
      */
-    public BSplineFollowerConstants setHeadingP(double headingP) {
-        this.headingP = headingP;
+    public BSplineFollowerConstants setHeadingCoeffs(PDSController.PDSCoefficients headingCoeffs) {
+        this.headingCoeffs = headingCoeffs;
         return this;
     }
 
