@@ -1,97 +1,45 @@
 package followers.constants;
 
-import controllers.PDSController;
+import com.bylazar.configurables.annotations.Configurable;
 import drivetrains.Drivetrain;
 import followers.BSplineFollower;
 import localizers.Localizer;
 
 /**
  * B-Spline path follower constants class.
- * Run {@link org.firstinspires.ftc.teamcode.tuning.manual.BSplineTuner} to determine the values of these constants and refer
- * to the ApexPathing documentation for how to properly tune these constants
- * @author Sohum Arora - 22985 Paraducks
  */
+@Configurable
 public class BSplineFollowerConstants extends FollowerConstants {
-    // Tunable constants
-    public PDSController.PDSCoefficients translationCoeffs = new PDSController.PDSCoefficients(0.1, 0.0, 0.0, 0.0);
-    public PDSController.PDSCoefficients headingCoeffs = new PDSController.PDSCoefficients(0.4, 0.0, 0.0, 0.0);
-    public double velocityFF = 0.01;
+    // Keep them as flat, static primitives so Dashboard/Panels can read them live!
+    public static double translationP = 0.1;
+    public static double headingP = 0.4;
+    public static double velocityFF = 0.01;
 
     // Tolerances
-    public double headingTolerance = Math.toRadians(1.0);
-    public double distanceTolerance = 0.5;
-    public double tTolerance = 0.95;
+    public static double headingTolerance = Math.toRadians(1.0);
+    public static double distanceTolerance = 0.5;
+    public static double tTolerance = 0.95;
 
-    /**
-     * Constructor for the BSplineFollowerConstants class
-     */
-    public BSplineFollowerConstants() {
-        // Initialization if needed
-    }
+    public BSplineFollowerConstants() {}
 
     @Override
     public BSplineFollower build(Drivetrain drivetrain, Localizer localizer) {
         return new BSplineFollower(this, drivetrain, localizer);
     }
 
-    // region Setters
-    /**
-     * Sets the PDS coefficients for translation error.
-     * @param translationCoeffs the new translational PDS coefficients
-     * @return this instance for chaining
-     */
-    public BSplineFollowerConstants setTranslationCoeffs(PDSController.PDSCoefficients translationCoeffs) {
-        this.translationCoeffs = translationCoeffs;
+    // Keep instance methods normal so they don't accidentally stomp on static values globally
+    public BSplineFollowerConstants setTranslationP(double translationP) {
+        BSplineFollowerConstants.translationP = translationP;
         return this;
     }
 
-    /**
-     * Sets the PDS coefficients for heading error.
-     * @param headingCoeffs the new heading PDS coefficients
-     * @return this instance for chaining
-     */
-    public BSplineFollowerConstants setHeadingCoeffs(PDSController.PDSCoefficients headingCoeffs) {
-        this.headingCoeffs = headingCoeffs;
+    public BSplineFollowerConstants setHeadingP(double headingP) {
+        BSplineFollowerConstants.headingP = headingP;
         return this;
     }
 
-    /**
-     * Sets the velocity feedforward gain.
-     * @param velocityFF the new velocity feedforward gain
-     * @return this instance for chaining
-     */
     public BSplineFollowerConstants setVelocityFF(double velocityFF) {
-        this.velocityFF = velocityFF;
-        return this;
-    }
-
-    /**
-     * Sets the heading error tolerance for the robot to consider its heading on target.
-     * @param headingTolerance the tolerance in radians
-     * @return this instance for chaining
-     */
-    public BSplineFollowerConstants setHeadingTolerance(double headingTolerance) {
-        this.headingTolerance = headingTolerance;
-        return this;
-    }
-
-    /**
-     * Sets the distance error tolerance for the robot to consider its position on target.
-     * @param distanceTolerance the tolerance in inches
-     * @return this instance for chaining
-     */
-    public BSplineFollowerConstants setDistanceTolerance(double distanceTolerance) {
-        this.distanceTolerance = distanceTolerance;
-        return this;
-    }
-
-    /**
-     * Sets the t-parameter tolerance for ending the spline path.
-     * @param tTolerance the t tolerance value (typically close to 1.0)
-     * @return this instance for chaining
-     */
-    public BSplineFollowerConstants setTTolerance(double tTolerance) {
-        this.tTolerance = tTolerance;
+        BSplineFollowerConstants.velocityFF = velocityFF;
         return this;
     }
 }

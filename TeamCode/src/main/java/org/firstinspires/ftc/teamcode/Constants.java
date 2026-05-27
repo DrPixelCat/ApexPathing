@@ -58,13 +58,7 @@ public class Constants extends ApexBuilder {
 
     @Override
     public FollowerConstants setFollowerConstants() { // Any FollowerConstants
-        return new BSplineFollowerConstants()
-                .setTranslationCoeffs(new PDSController.PDSCoefficients(0.1, 0.0, 0.0, 0.0))
-                .setHeadingCoeffs(new PDSController.PDSCoefficients(0.4, 0.0, 0.0, 0.0))
-                .setVelocityFF(0.01)
-                .setHeadingTolerance(Math.toRadians(1.0))
-                .setDistanceTolerance(0.5)
-                .setTTolerance(0.95);
+        return new BSplineFollowerConstants(); //Add your constants here after tuning it with Panels
     }
 
 }
