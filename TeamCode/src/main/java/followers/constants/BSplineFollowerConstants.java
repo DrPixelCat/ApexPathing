@@ -2,7 +2,7 @@ package followers.constants;
 
 import controllers.PDSController;
 import drivetrains.Drivetrain;
-import followers.BSplineFollower;
+import followers.MovementFollower;
 import localizers.Localizer;
 
 /**
@@ -25,8 +25,8 @@ public class BSplineFollowerConstants extends FollowerConstants {
     public BSplineFollowerConstants() {}
 
     @Override
-    public BSplineFollower build(Drivetrain drivetrain, Localizer localizer) {
-        return new BSplineFollower(this, drivetrain, localizer);
+    public MovementFollower build(Drivetrain drivetrain, Localizer localizer) {
+        return new MovementFollower(this, drivetrain, localizer);
     }
 
     // --- Builder Setters for Constants.java ---

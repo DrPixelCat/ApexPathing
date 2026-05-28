@@ -4,20 +4,25 @@ import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.constants.BSplineFollowerConstants;
 import localizers.Localizer;
-import paths.Path;
-import paths.PathSegment;
+
+// New Architecture Imports
+import paths.movements.FollowerMovement;
+import paths.movements.Path;
+import paths.movements.Turn;
+import paths.geometry.PathSegment;
 import paths.heading.HeadingInterpolator;
+
 import util.Angle;
 import util.Pose;
 import util.Vector;
 
 /**
- * BSplineFollower class, capable of following paths made with PathBuilder
+ * MovementFollower class, capable of following FollowerMovements made with Builders
  * Important: Ensure your BSplineFollower constants are fully configured
  * before attempting to use this follower {@link BSplineFollowerConstants}
  * @author Sohum Arora 22985 Paraducks
  */
-public class BSplineFollower extends Follower {
+public class MovementFollower extends Follower {
     private static final double pi2 = 2 * Math.PI;
     private final BSplineFollowerConstants constants;
 
@@ -25,17 +30,19 @@ public class BSplineFollower extends Follower {
     private final PDSController translationController;
     private final PDSController headingController;
 
-    private Path path;
+    // Architecture Change: Singular active movement. Throws exception if overridden prematurely.
+    private FollowerMovement currentMovement = null;
+
     private long holdStartTimeNs = 0;
     private boolean holdTimerInitialized = false;
     private long pauseStartNs = 0;
     private boolean wasHoldingPosePrevFrame = false;
 
     /**
-     * BSplineFollower constructor
+     * MovementFollower constructor
      * @param constants - Your BSplineFollowerConstants (ensure configured)
      */
-    public BSplineFollower(BSplineFollowerConstants constants, Drivetrain drivetrain, Localizer localizer) {
+    public MovementFollower(BSplineFollowerConstants constants, Drivetrain drivetrain, Localizer localizer) {
         super(drivetrain, localizer);
         this.constants = constants;
 
@@ -56,12 +63,17 @@ public class BSplineFollower extends Follower {
     }
 
     /**
-     * Sets the path to be followed
-     * @param path is the path to be followed
+     * Sets the movement to be followed.
+     * @param movement is the movement to be followed
+     * @throws IllegalStateException if the follower is already busy executing a movement.
      */
-    public void followPath(Path path) {
-        this.path = path;
-        this.path.reset();
+    public void follow(FollowerMovement movement) {
+        if (this.isBusy || this.currentMovement != null) {
+            throw new IllegalStateException("Cannot follow a new movement while the follower is currently busy! Check !follower.isBusy() in your state machine before calling follow().");
+        }
+
+        // Standard call: Start executing immediately
+        this.currentMovement = movement;
         this.isBusy = true;
         this.holdingPose = false;
         this.holdTimerInitialized = false;
@@ -91,68 +103,44 @@ public class BSplineFollower extends Follower {
             wasHoldingPosePrevFrame = false;
         }
 
-        if (!isBusy || path == null) {
+        if (!isBusy || currentMovement == null) {
             drivetrain.stop();
             return;
         }
 
         Pose current = getPose();
-        Path.PathNode currentNode = path.getCurrentNode();
 
         // Turn logic
-        if (currentNode.type == Path.NodeType.TURN) {
-            double targetHeading = currentNode.targetHeading.getRad();
+        if (currentMovement instanceof Turn) {
+            Turn turn = (Turn) currentMovement;
+
+            double targetHeading = turn.getEndPose().getHeading();
             double currentHeading = current.getHeading();
             double headingError = getShortestAngularDistance(currentHeading, targetHeading);
 
             if (Math.abs(headingError) < constants.headingTolerance) {
-                if (path.isLastSegment()) {
-                    this.isBusy = false;
-                    this.breakFollowing();
-                } else {
-                    path.advance();
-                }
+                this.isBusy = false;
+                this.currentMovement = null;
+                this.breakFollowing();
                 return;
             }
 
-            double turnPower = headingController.calculateFromError(headingError);
-            drive(0, 0, turnPower, currentHeading);
-
-        } else if (currentNode.type == Path.NodeType.HOLD) {
-            if (!holdTimerInitialized) {
-                holdStartTimeNs = System.nanoTime();
-                holdTimerInitialized = true;
-            }
-
-            long elapsedNs = System.nanoTime() - holdStartTimeNs;
-            long totalDurationNs = (long) (currentNode.holdDurationSeconds * 1e9);
-
-            if (elapsedNs >= totalDurationNs) {
-                holdTimerInitialized = false;
-                if (path.isLastSegment()) {
-                    this.isBusy = false;
-                    this.breakFollowing();
-                } else {
-                    path.advance();
-                }
-                return;
-            }
-
-            Pose lockPose = currentNode.holdPose;
-            Vector error = lockPose.toVec().subtract(current.toVec());
+            Vector targetPoseVec = turn.getStartPose().toVec();
+            Vector error = targetPoseVec.subtract(current.toVec());
 
             double errorMag = error.getMagnitude();
             double translationPower = translationController.calculateFromError(errorMag);
             Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
 
-            double headingError = getShortestAngularDistance(current.getHeading(), lockPose.getHeading());
             double turnPower = headingController.calculateFromError(headingError);
 
-            drive(feedback.getX(), feedback.getY(), turnPower, current.getHeading());
+            // Pass the calculated feedback instead of 0, 0
+            drive(feedback.getX(), feedback.getY(), turnPower, currentHeading);
 
-        } else if (currentNode.type == Path.NodeType.DRIVE) {
-            PathSegment segment = currentNode.segment;
-            HeadingInterpolator interpolator = currentNode.interpolator;
+        } else if (currentMovement instanceof Path) {
+            Path pathSegmentMove = (Path) currentMovement;
+            PathSegment segment = pathSegmentMove.getParametricPath();
+            HeadingInterpolator interpolator = pathSegmentMove.getInterpolator();
 
             if (segment == null || interpolator == null) {
                 stop();
@@ -185,15 +173,12 @@ public class BSplineFollower extends Follower {
 
             double distance = segment.getDistanceToEnd_in(targetPoseVec, t);
             if (t >= constants.tTolerance && distance < constants.distanceTolerance) {
-                if (path.isLastSegment()) {
-                    Vector finalPosition = segment.getPosition(1.0);
-                    this.setTargetPose(new Pose(finalPosition.getX(), finalPosition.getY(), targetHeading));
-                    this.holdingPose = true;
-                    this.isBusy = false;
-                    this.breakFollowing();
-                } else {
-                    path.advance();
-                }
+                Vector finalPosition = segment.getPosition(1.0);
+                this.setTargetPose(new Pose(finalPosition.getX(), finalPosition.getY(), targetHeading));
+                this.holdingPose = true;
+                this.isBusy = false;
+                this.currentMovement = null;
+                this.breakFollowing();
                 return;
             }
 
@@ -233,5 +218,6 @@ public class BSplineFollower extends Follower {
         super.stop();
         this.holdTimerInitialized = false;
         this.wasHoldingPosePrevFrame = false;
+        this.currentMovement = null;
     }
 }

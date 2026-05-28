@@ -1,6 +1,5 @@
-package paths;
+package paths.geometry;
 
-import paths.geometry.ParametricSegment;
 import util.Vector;
 
 /**
@@ -197,4 +196,33 @@ public class PathSegment {
         return length;
     }
 
+
+    /**
+     * Calculates the instantaneous radius of curvature of a parametric curve at a specific point.
+     * <p>
+     * The radius of curvature is geometrically defined as the radius of the circular arc
+     * which best approximates the curve at that point. It is computed using the magnitude
+     * of the first derivative cubed, divided by the magnitude of the 2D cross product
+     * of the first and second derivatives.
+     *
+     * @param firstDerivative  The first derivative vector (velocity/tangent) of the curve.
+     * @param secondDerivative The second derivative vector (acceleration) of the curve.
+     * @return The instantaneous radius of curvature. Returns Double.POSITIVE_INFINITY if the curve is perfectly straight.
+     */
+    public static double calculateRadiusOfCurvature(Vector firstDerivative, Vector secondDerivative) {
+        // Use the Vector class's built-in 2D cross product utility
+        double crossProductMag = Math.abs(firstDerivative.crossProduct(secondDerivative));
+
+        // Safety Check: If the cross product is near zero, the derivatives are parallel,
+        // meaning the path is a perfectly straight line with an infinite radius.
+        if (crossProductMag < 1e-6) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        // Use the Vector class's built-in magnitude utility to calculate ||r'||^3
+        double velocityMag = firstDerivative.getMagnitude();
+        double numerator = Math.pow(velocityMag, 3);
+
+        return numerator / crossProductMag;
+    }
 }

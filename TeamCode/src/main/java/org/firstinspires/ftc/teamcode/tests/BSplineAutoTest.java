@@ -5,10 +5,10 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.Constants;
 
-import followers.BSplineFollower;
+import followers.MovementFollower;
 import followers.constants.BSplineFollowerConstants;
 import paths.ExamplePathAPIV3;
-import paths.Path;
+import paths.movements.Path;
 import util.Pose;
 
 /**
@@ -21,9 +21,8 @@ public class BSplineAutoTest extends LinearOpMode {
     private boolean mirror = false; //Pass in the constructor for ExamplePathAPIV3, change as required
     @Override
     public void runOpMode() throws InterruptedException {
-        BSplineFollower follower = (BSplineFollower) new Constants().build(hardwareMap, Pose.zero());
-        Path autoPath = new ExamplePathAPIV3(mirror).testPath();
-
+        MovementFollower follower = (MovementFollower) new Constants().build(hardwareMap, Pose.zero());
+        Path autoPath = (Path) new ExamplePathAPIV3(mirror).getAutoRoutine()[0];
         while (opModeInInit()){
             telemetry.addLine("Robot initialized");
             telemetry.update();
@@ -33,7 +32,7 @@ public class BSplineAutoTest extends LinearOpMode {
 
         if (isStopRequested()) return;
 
-        follower.followPath(autoPath);
+        follower.follow(autoPath);
 
         while (opModeIsActive() && !isStopRequested()) {
             follower.update();

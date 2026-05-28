@@ -10,11 +10,11 @@ import org.firstinspires.ftc.teamcode.Constants;
 
 import controllers.PDSController.PDSCoefficients;
 import drivetrains.Drivetrain;
-import followers.BSplineFollower;
+import followers.MovementFollower;
 import followers.constants.BSplineFollowerConstants;
 import localizers.Localizer;
-import paths.Path;
-import paths.PathBuilder;
+import paths.movements.Path;
+import paths.builders.PathBuilder;
 import util.Pose;
 
 /**
@@ -29,7 +29,7 @@ import util.Pose;
 public class BSplineTuner extends OpMode {
     private Drivetrain drivetrain;
     private Localizer localizer;
-    private BSplineFollower follower;
+    private MovementFollower follower;
     private BSplineFollowerConstants followerConstants;
     private JoinedTelemetry fullTelem;
 
@@ -92,7 +92,7 @@ public class BSplineTuner extends OpMode {
                         .addControlPoints(new Pose(24, 24, Math.toRadians(90)), new Pose(48, 0, 0))
                         .build();
             }
-            follower.followPath(currentPath);
+            follower.follow(currentPath);
             pathActive = true;
         }
         follower.update();

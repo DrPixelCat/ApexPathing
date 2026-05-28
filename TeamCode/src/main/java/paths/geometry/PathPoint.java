@@ -1,4 +1,4 @@
-package paths;
+package paths.geometry;
 
 import util.Vector;
 
