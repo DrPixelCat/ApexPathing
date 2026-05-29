@@ -8,7 +8,7 @@ import followers.Follower;
 import drivetrains.constants.DrivetrainConstants;
 import localizers.constants.LocalizerConstants;
 import followers.constants.FollowerConstants;
-import util.Pose;
+import geometry.Pose;
 
 /**
  * Abstract class for building a {@link Follower} object using custom drivetrain, localizer, and

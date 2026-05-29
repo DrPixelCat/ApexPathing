@@ -6,10 +6,11 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
+import geometry.Vector;
 import localizers.constants.OTOSConstants;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Angle;
+import geometry.Pose;
+import util.DistUnit;
 
 /**
  * Localizer for the SparkFun OTOS (Odometry Tracking and Orientation System) using the SparkFunOTOS
@@ -33,9 +34,9 @@ public class OTOS extends Localizer {
 
     private SparkFunOTOS.Pose2D toSparkfunPose2D(Pose pose) {
         return new SparkFunOTOS.Pose2D(
-                pose.getXComponent().getIn(),
-                pose.getYComponent().getIn(),
-                pose.getHeadingComponent().getRad()
+                pose.getX().getIn(),
+                pose.getY().getIn(),
+                pose.getHeading().getRad()
         );
     }
 
@@ -47,18 +48,10 @@ public class OTOS extends Localizer {
         otos.getPosVelAcc(pos, vel, acc);
 
         // NOTE: ADD ACCELERATION IF NEEDED
-        currentPose = new Pose(
-                pos.x, pos.y, pos.h,
-                Distance.Units.INCHES, Angle.Units.RADIANS, false
-        );
-        currentVelocity = new Pose(
-                vel.x, vel.y, vel.h,
-                Distance.Units.INCHES, Angle.Units.RADIANS, false
-        );
+        currentPose = new Pose(Vector.of(pos.x, pos.y, DistUnit.IN), Angle.fromRad(pos.h));
+        currentVelocity = new Pose(Vector.of(vel.x, vel.y, DistUnit.IN), Angle.fromRad(vel.h));
     }
 
     @Override
-    public void setPose(Pose pose) {
-        otos.setPosition(toSparkfunPose2D(pose));
-    }
+    public void setPose(Pose pose) { otos.setPosition(toSparkfunPose2D(pose)); }
 }

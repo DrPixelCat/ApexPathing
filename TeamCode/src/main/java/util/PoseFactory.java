@@ -1,125 +1,81 @@
 package util;
 
+import geometry.Angle;
+import geometry.ArcPose;
+import geometry.Dist;
+import geometry.Pose;
+import geometry.Vector;
+
+/**
+ * A factory class for creating {@link Pose} objects from various types of input including many
+ * quality of life methods for units and mirroring.
+ *
+ * @author Dylan B. - 18597 RoboClovers - Delta
+ */
 public class PoseFactory {
-    private Distance.Units distanceUnit;
-    private Angle.Units angleUnit;
-    private boolean mirror;
+    /** Axis to mirror the Pose across, if any. */
+    public enum Mirror { NONE, X, Y }
+
+    private Mirror mirror;
+    private DistUnit distUnit;
+    private AngleUnit angleUnit;
 
     // region Constructors
-    /**
-     * Constructor for the {@link PoseFactory} class
-     * @param distanceUnit the {@link Distance.Units} to use for pose positions
-     * @param angleUnit the {@link Angle.Units} to use for pose headings
-     * @param mirror whether to mirror the pose across the y-axis (for switching alliances)
-     */
-    public PoseFactory(Distance.Units distanceUnit, Angle.Units angleUnit, boolean mirror) {
-        this.distanceUnit = distanceUnit;
-        this.angleUnit = angleUnit;
-        this.mirror = mirror;
+    /** Creates a PoseFactory with the specified units and mirroring configuration. */
+    public PoseFactory(DistUnit distUnit, AngleUnit angleUnit, Mirror mirror) {
+        this.distUnit = distUnit; this.angleUnit = angleUnit; this.mirror = mirror;
     }
 
-    /**
-     * Constructor for the {@link PoseFactory} class with mirroring set to false
-     * @param distanceUnit the {@link Distance.Units} to use for pose positions
-     * @param angleUnit the {@link Angle.Units} to use for pose headings
-     */
-    public PoseFactory(Distance.Units distanceUnit, Angle.Units angleUnit) {
-        this(distanceUnit, angleUnit, false);
+    /** Creates a PoseFactory with the specified units. */
+    public PoseFactory(DistUnit distUnit, AngleUnit angleUnit) {
+        this(distUnit, angleUnit, Mirror.NONE);
     }
-
-    /**
-     * Constructor for the {@link PoseFactory} class with default units of inches and degrees,
-     * and mirroring set to false
-     */
-    public PoseFactory() { this(Distance.Units.INCHES, Angle.Units.DEGREES, false); }
     // endregion
 
-    // region Builder methods
-    /**
-     * Builds a {@link Pose} with the specified x, y, and heading values in the builder's units
-     * @param x the x component of the position in the builder's distance unit
-     * @param y the y component of the position in the builder's distance unit
-     * @param heading the heading of the pose as an angle value in the builder's angle unit
-     * @return a new {@link Pose} object with the specified values and builder's units
-     */
-    public Pose build(double x, double y, double heading) {
-        return new Pose(x, y, heading, this.distanceUnit, this.angleUnit, this.mirror);
+    // region Internal utility methods
+    /** Applies the configured mirroring to a Pose. */
+    private Pose applyMirror(Pose pose) {
+        if (mirror == Mirror.NONE) return pose;
+        return mirror == Mirror.X ? pose.mirrorX() : pose.mirrorY();
     }
-
-    /**
-    * Builds a {@link Pose} with the specified x and y values in the builder's units
-    * and a heading of 0
-    * @param x the x component of the position in the builder's distance unit
-    * @param y the y component of the position in the builder's distance unit
-    * @return a new {@link Pose} object with the specified values and builder's units
-    */
-    public Pose build(double x, double y) { return build(x, y, 0.0); }
-
-    /**
-     * Builds a {@link Pose} with the given {@link Vector} and {@link Angle} in the builder's units
-     * @param position the position of the pose as a {@link Vector}
-     * @param heading the heading of the pose as an {@link Angle}
-     * @return a new {@link Pose} object with the specified values and builder's units
-     */
-    public Pose build(Vector position, Angle heading) {
-        return new Pose(
-                position.getXComponent().get(this.distanceUnit),
-                position.getYComponent().get(this.distanceUnit),
-                heading.get(this.angleUnit),
-                this.distanceUnit, this.angleUnit, this.mirror
-        );
-    }
-
-    /**
-    * Builds a {@link Pose} with the given {@link Vector} and a heading of 0 in the builder's units
-    * @param position the position of the pose as a {@link Vector}
-    * @return a new {@link Pose} object with the specified values and builder's units
-    */
-    public Pose build(Vector position) { return build(position, new Angle()); }
     // endregion
 
-    // region Getters and setters for builder configuration
-    /** @return the {@link Distance.Units} used by the builder for pose positions */
-    public Distance.Units getDistanceUnit() { return this.distanceUnit; }
+    // region Setters
+    /** Sets the mirroring configuration for this PoseFactory. */
+    public void setMirror(Mirror mirror) { this.mirror = mirror; }
 
-    /** @param distanceUnit the {@link Distance.Units} for the builder to use for positions */
-    public void setDistanceUnit(Distance.Units distanceUnit) { this.distanceUnit = distanceUnit; }
+    /** Sets the distance unit for this PoseFactory. */
+    public void setDistUnit(DistUnit distUnit) { this.distUnit = distUnit; }
 
-    /** @return the {@link Angle.Units} used by the builder for pose headings */
-    public Angle.Units getAngleUnit() { return this.angleUnit; }
-
-    /** @param angleUnit the {@link Angle.Units} for the builder to use for headings */
-    public void setAngleUnit(Angle.Units angleUnit) { this.angleUnit = angleUnit; }
-
-    /** @return whether the builder is set to mirror poses across the y-axis */
-    public boolean isMirror() { return this.mirror; }
-
-    /** @param mirror whether the builder should mirror poses across the y-axis */
-    public void setMirror(boolean mirror) { this.mirror = mirror; }
-
-    /** Toggles the mirroring setting of the builder */
-    public void toggleMirror() { this.mirror = !this.mirror; }
+    /** Sets the angle unit for this PoseFactory. */
+    public void setAngleUnit(AngleUnit angleUnit) { this.angleUnit = angleUnit; }
     // endregion
-    // Keep your code safe by routing .at() through the unit-aware build chain!
-    /**
-     * Alias for {@link #build(double, double, double)} which respects units and mirroring.
-     */
-    public Pose at(double x, double y, double heading) {
-        return build(x, y, heading);
+
+    // region Getters
+    /** @return the mirroring configuration for this PoseFactory. */
+    public Mirror getMirror() { return mirror; }
+
+    /** @return the distance unit for this PoseFactory. */
+    public DistUnit getDistUnit() { return distUnit; }
+
+    /** @return the angle unit for this PoseFactory. */
+    public AngleUnit getAngleUnit() { return angleUnit; }
+    // endregion
+
+    // region Pose creation methods
+    /** Creates a Pose from the given (x, y, heading) values in the configured units and mirroring. */
+    public Pose of(double x, double y, double heading) {
+        Pose pose = new Pose(Vector.of(x, y, distUnit), Angle.of(heading, angleUnit));
+        return applyMirror(pose);
     }
 
-    /**
-     * Alias for {@link #build(double, double)} which respects units and mirroring.
-     */
-    public Pose at(double x, double y) {
-        return build(x, y, 0.0);
-    }
+    /** Creates a Pose from the given (x, y) values in the configured units with a heading of 0 */
+    public Pose of(double x, double y) { return of(x, y, 0); }
 
-    /**
-     * Alias to build a TightenedPose at the coordinates
-     * //TODO: Make this cleaner?
-     */
-    public ArcPose arcPoseAt(double x, double y, double radius) {
-        return new ArcPose(at(x, y), radius);
+    /** Creates an ArcPose from the given (x, y) and radius values in the configured units and mirroring. */
+    public ArcPose arcPoseOf(double x, double y, double radius) {
+        ArcPose pose = new ArcPose(Vector.of(x, y, distUnit), Dist.of(radius, distUnit));
+        return (ArcPose) applyMirror(pose); // Will always return an ArcPose, so we can just cast it
     }
+    // endregion
 }

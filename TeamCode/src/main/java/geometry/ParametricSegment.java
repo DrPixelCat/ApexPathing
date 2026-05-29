@@ -1,6 +1,4 @@
-package paths.geometry;
-
-import util.Vector;
+package geometry;
 
 /**
  * Represents a purely mathematical, stateless 2D parametric curve.
@@ -29,10 +27,7 @@ public interface ParametricSegment {
      */
     default Vector getTangentVector(double t) {
         Vector d1 = getFirstDerivative(t);
-        if (d1.getMagnitudeSquared() < 1e-9) {
-            return new Vector(0, 0); // Failsafe for singularities
-        }
-        return d1.normalize();
+        return d1.normalize(); // handles zero magnitude
     }
 
     /**
@@ -41,7 +36,7 @@ public interface ParametricSegment {
      */
     default Vector getNormalVector(double t) {
         // Rotating the tangent by 90 degrees (PI/2 radians) yields the normal
-        return getTangentVector(t).rotated(Math.PI / 2.0);
+        return getTangentVector(t).rotate(Angle.fromRad(Math.PI / 2));
     }
 
     /**
@@ -53,13 +48,13 @@ public interface ParametricSegment {
         Vector d1 = getFirstDerivative(t);
         Vector d2 = getSecondDerivative(t);
 
-        double magSq = d1.getMagnitudeSquared();
+        double magSq = d1.getMagSq().getIn();
         if (magSq <= 1e-9) {
             return 0.0;
         }
 
         // κ = (v × a) / |v|^3
-        double crossProduct = d1.crossProduct(d2);
+        double crossProduct = d1.cross(d2).getIn();
         return crossProduct / Math.pow(magSq, 1.5);
     }
 }

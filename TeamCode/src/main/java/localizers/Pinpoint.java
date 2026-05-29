@@ -5,11 +5,13 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 import localizers.constants.PinpointConstants;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Vector;
+import geometry.Angle;
+import geometry.Pose;
+import util.DistUnit;
 
 /**
  * Localizer for the goBILDA Pinpoint Odometry Computer using the GoBildaPinpointDriver class.
@@ -38,19 +40,25 @@ public class Pinpoint extends Localizer {
     @Override
     public void update() {
         pinpoint.update();
-        currentPose = Pose.fromPose2D(
-                pinpoint.getPosition(), Distance.Units.INCHES, Angle.Units.RADIANS, false
+        currentPose = new Pose(
+                Vector.of(
+                        pinpoint.getPosX(DistanceUnit.INCH), pinpoint.getPosY(DistanceUnit.INCH),
+                        DistUnit.IN
+                ), Angle.fromRad(pinpoint.getHeading(AngleUnit.RADIANS))
         );
         currentVelocity = new Pose(
-                pinpoint.getVelX(DistanceUnit.INCH),
-                pinpoint.getVelY(DistanceUnit.INCH),
-                pinpoint.getHeadingVelocity(AngleUnit.RADIANS.getUnnormalized()),
-                Distance.Units.INCHES, Angle.Units.RADIANS, false
+                Vector.of(
+                        pinpoint.getVelX(DistanceUnit.INCH), pinpoint.getVelY(DistanceUnit.INCH),
+                        DistUnit.IN
+                ), Angle.fromRad(pinpoint.getHeading(AngleUnit.RADIANS))
         );
     }
 
     @Override
     public void setPose(Pose pose) {
-        pinpoint.setPosition(pose.toPose2D());
+        pinpoint.setPosition(new Pose2D(
+                DistanceUnit.INCH, pose.getX().getIn(), pose.getY().getIn(),
+                AngleUnit.RADIANS, pose.getHeading().getRad()
+        ));
     }
 }

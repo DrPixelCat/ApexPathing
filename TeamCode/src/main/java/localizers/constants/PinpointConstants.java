@@ -8,6 +8,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 import localizers.Pinpoint;
 
+// TODO: Make offsets uses a Vector
 /**
  * Pinpoint localizer constants class
  * @author Dylan B. - 18597 RoboClovers - Delta

@@ -5,16 +5,15 @@ import drivetrains.Drivetrain;
 import followers.constants.BSplineFollowerConstants;
 import localizers.Localizer;
 
-// New Architecture Imports
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 import paths.movements.Turn;
-import paths.geometry.PathSegment;
+import geometry.PathSegment;
 import paths.heading.HeadingInterpolator;
 
-import util.Angle;
-import util.Pose;
-import util.Vector;
+import geometry.Angle;
+import geometry.Vector;
+import geometry.Pose;
 
 /**
  * MovementFollower class, capable of following FollowerMovements made with Builders
@@ -58,9 +57,7 @@ public class MovementFollower extends Follower {
      * Retrieves the active constants instance driving this follower.
      * Useful for live tuning via dashboards.
      */
-    public BSplineFollowerConstants getConstants() {
-        return this.constants;
-    }
+    public BSplineFollowerConstants getConstants() { return this.constants; }
 
     /**
      * Sets the movement to be followed.
@@ -114,8 +111,8 @@ public class MovementFollower extends Follower {
         if (currentMovement instanceof Turn) {
             Turn turn = (Turn) currentMovement;
 
-            double targetHeading = turn.getEndPose().getHeading();
-            double currentHeading = current.getHeading();
+            double targetHeading = turn.getEndPose().getHeading().getRad();
+            double currentHeading = current.getHeading().getRad();
             double headingError = getShortestAngularDistance(currentHeading, targetHeading);
 
             if (Math.abs(headingError) < constants.headingTolerance) {
@@ -125,17 +122,17 @@ public class MovementFollower extends Follower {
                 return;
             }
 
-            Vector targetPoseVec = turn.getStartPose().toVec();
-            Vector error = targetPoseVec.subtract(current.toVec());
+            Vector targetPoseVec = turn.getStartPose().getPos();
+            Vector error = targetPoseVec.minus(current.getPos());
 
-            double errorMag = error.getMagnitude();
+            double errorMag = error.getMag().getIn();
             double translationPower = translationController.calculateFromError(errorMag);
-            Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
+            Vector feedback = errorMag > 0 ? error.normalize().times(translationPower) : Vector.zero();
 
             double turnPower = headingController.calculateFromError(headingError);
 
             // Pass the calculated feedback instead of 0, 0
-            drive(feedback.getX(), feedback.getY(), turnPower, currentHeading);
+            drive(feedback.getX().getIn(), feedback.getY().getIn(), turnPower, currentHeading);
 
         } else if (currentMovement instanceof Path) {
             Path pathSegmentMove = (Path) currentMovement;
@@ -147,26 +144,26 @@ public class MovementFollower extends Follower {
                 return;
             }
 
-            double t = segment.getBestT(current.toVec());
+            double t = segment.getBestT(current.getPos());
 
             Vector targetPoseVec = segment.getPosition(t);
             Vector targetVel = segment.getFirstDerivative(t);
 
-            Vector error = targetPoseVec.subtract(current.toVec());
+            Vector error = targetPoseVec.minus(current.getPos());
 
-            double errorMag = error.getMagnitude();
+            double errorMag = error.getMag().getIn();
             double translationPower = translationController.calculateFromError(errorMag);
-            Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
+            Vector feedback = errorMag > 0 ? error.normalize().times(translationPower) : Vector.zero();
 
-            Vector feedforward = targetVel.multiply(constants.velocityFF);
-            Vector drivePower = feedback.add(feedforward);
+            Vector feedforward = targetVel.times(constants.velocityFF);
+            Vector drivePower = feedback.plus(feedforward);
 
-            double driveX = drivePower.getX();
-            double driveY = drivePower.getY();
+            double driveX = drivePower.getX().getIn();
+            double driveY = drivePower.getY().getIn();
 
             Angle targetAngle = interpolator.getHeading(t, targetVel);
             double targetHeading = targetAngle.getRad();
-            double currentHeading = current.getHeading();
+            double currentHeading = current.getHeading().getRad();
 
             double headingError = getShortestAngularDistance(currentHeading, targetHeading);
             double turnPower = headingController.calculateFromError(headingError);
@@ -174,7 +171,7 @@ public class MovementFollower extends Follower {
             double distance = segment.getDistanceToEnd_in(targetPoseVec, t);
             if (t >= constants.tTolerance && distance < constants.distanceTolerance) {
                 Vector finalPosition = segment.getPosition(1.0);
-                this.setTargetPose(new Pose(finalPosition.getX(), finalPosition.getY(), targetHeading));
+                this.setTargetPose(new Pose(finalPosition, Angle.fromRad(targetHeading)));
                 this.holdingPose = true;
                 this.isBusy = false;
                 this.currentMovement = null;
@@ -189,9 +186,9 @@ public class MovementFollower extends Follower {
     private void holdPose() {
         Pose currentPose = getPose();
 
-        Vector error = targetPose.toVec().subtract(currentPose.toVec());
-        double errorMag = error.getMagnitude();
-        double headingError = getShortestAngularDistance(currentPose.getHeading(), targetPose.getHeading());
+        Vector error = targetPose.getPos().minus(currentPose.getPos());
+        double errorMag = error.getMag().getIn();
+        double headingError = getShortestAngularDistance(currentPose.getHeading().getRad(), targetPose.getHeading().getRad());
 
         if (errorMag < constants.distanceTolerance && Math.abs(headingError) < constants.headingTolerance) {
             drivetrain.stop();
@@ -199,11 +196,11 @@ public class MovementFollower extends Follower {
         }
 
         double translationPower = translationController.calculateFromError(errorMag);
-        Vector feedback = errorMag > 0 ? error.normalize().multiply(translationPower) : new Vector(0, 0);
+        Vector feedback = errorMag > 0 ? error.normalize().times(translationPower) : Vector.zero();
 
         double turnPower = headingController.calculateFromError(headingError);
 
-        drive(feedback.getX(), feedback.getY(), turnPower, currentPose.getHeading());
+        drive(feedback.getX().getIn(), feedback.getY().getIn(), turnPower, currentPose.getHeading().getRad());
     }
 
     private double getShortestAngularDistance(double currentRad, double targetRad) {

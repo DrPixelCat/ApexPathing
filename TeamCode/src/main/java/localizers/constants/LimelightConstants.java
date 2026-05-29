@@ -3,10 +3,10 @@ package localizers.constants;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import localizers.Limelight;
-import util.Pose;
 
 /**
  * Limelight localizer constants class
+ *
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class LimelightConstants extends LocalizerConstants {
@@ -21,9 +21,7 @@ public class LimelightConstants extends LocalizerConstants {
     public LimelightConstants() {}
 
     @Override
-    public Limelight build(HardwareMap hardwareMap) {
-        return new Limelight(hardwareMap, this);
-    }
+    public Limelight build(HardwareMap hardwareMap) { return new Limelight(hardwareMap, this); }
 
     /**
      * Sets the Limelight hardware name.

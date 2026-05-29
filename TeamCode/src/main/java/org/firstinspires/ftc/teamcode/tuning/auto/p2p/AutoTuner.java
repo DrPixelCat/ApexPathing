@@ -14,9 +14,9 @@ import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.constants.P2PFollowerConstants;
 import localizers.Localizer;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Angle;
+import geometry.Dist;
+import geometry.Pose;
 
 /**
  * Base class for P2P follower PDS controller tuner OpModes
@@ -165,7 +165,7 @@ public abstract class AutoTuner extends LinearOpMode {
             lastTime = System.nanoTime();
 
             double headingCorrection = angularTuner ? 0 :
-                    headingController.calculate(localizer.getPose().getHeading());
+                    headingController.calculate(localizer.getPose().getHeading().getRad());
             applyControl(1.0, headingCorrection);
         }
 
@@ -197,7 +197,7 @@ public abstract class AutoTuner extends LinearOpMode {
         if (angularTuner) {
             controller.setTolerance(Angle.fromDeg(3)); // 2 degree tolerance
         } else {
-            controller.setTolerance(Distance.fromIn(1)); // 1 inch tolerance
+            controller.setTolerance(Dist.fromIn(1)); // 1 inch tolerance
             headingController.reset(); headingController.setTarget(0);
         }
 
@@ -237,7 +237,7 @@ public abstract class AutoTuner extends LinearOpMode {
 
             double output = controller.calculate(currentPosition);
             double headingCorrection = angularTuner ? 0 :
-                    headingController.calculate(localizer.getPose().getHeading());
+                    headingController.calculate(localizer.getPose().getHeading().getRad());
             applyControl(output, headingCorrection);
 
             if (controller.isAtTarget()) {

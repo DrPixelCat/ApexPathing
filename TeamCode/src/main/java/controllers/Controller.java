@@ -2,8 +2,8 @@ package controllers;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
-import util.Angle;
-import util.Distance;
+import geometry.Angle;
+import geometry.Dist;
 
 /**
  * Base class for all controllers. Handles common logic like tolerance checking, deadzone, and time anomaly detection.
@@ -36,7 +36,7 @@ public abstract class Controller {
         }
         this.tolerance = tolerance.getRad();
     }
-    public void setTolerance(Distance tolerance) {
+    public void setTolerance(Dist tolerance) {
         if (angularController) {
             throw new IllegalStateException("Cannot set linear tolerance on an angular controller");
         }

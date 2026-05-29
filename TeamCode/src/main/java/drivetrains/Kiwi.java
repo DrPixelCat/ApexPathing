@@ -83,9 +83,7 @@ public class Kiwi extends Drivetrain {
         setPowers(frMotorPower, bMotorPower, flMotorPower);
     }
 
-    public void stop() {
-        setPowers(0, 0, 0);
-    }
+    public void stop() { setPowers(0, 0, 0); }
 
     /**
      * @return the total motor current of the drivetrain in amps

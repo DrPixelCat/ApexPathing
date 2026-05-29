@@ -1,7 +1,6 @@
 package drivetrains.constants;
 
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import drivetrains.Swerve;
@@ -23,6 +22,7 @@ public class SwerveModuleConstants {
     // Tuned values (these are set by the main SwerveConstants class because all modules should have the same tuning)
     public double steeringPGain = 0.015; // Proportional gain for steering correction
     double OffsetAngle = 0;
+
     /**
      * Constructor for the SwerveConstants class
      */
@@ -53,7 +53,8 @@ public class SwerveModuleConstants {
      * @return this instance for chaining
      */
     public SwerveModuleConstants setMotorReversed(boolean reversed) {
-        this.motorData.setDirection(reversed ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+        this.motorData.setDirection(reversed ? DcMotor.Direction.REVERSE :
+                DcMotor.Direction.FORWARD);
         return this;
     }
 
@@ -63,7 +64,8 @@ public class SwerveModuleConstants {
      * @return this instance for chaining
      */
     public SwerveModuleConstants setBrakeMode(boolean brakeMode) {
-        this.motorData.setBrakeMode(brakeMode ? DcMotor.ZeroPowerBehavior.BRAKE : DcMotor.ZeroPowerBehavior.FLOAT);
+        this.motorData.setBrakeMode(brakeMode ? DcMotor.ZeroPowerBehavior.BRAKE :
+                DcMotor.ZeroPowerBehavior.FLOAT);
         return this;
     }
 

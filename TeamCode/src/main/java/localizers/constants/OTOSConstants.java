@@ -3,9 +3,7 @@ package localizers.constants;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import localizers.OTOS;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Pose;
 
 /**
  * OTOS localizer constants class
@@ -16,7 +14,7 @@ public class OTOSConstants extends LocalizerConstants {
     public String name = "sensor_otos";
 
     // The pose of the OTOS relative to the robot center (x, y, heading)
-    public Pose offset = new Pose(0, 0, 0, Distance.Units.INCHES, Angle.Units.DEGREES);
+    public Pose offset = Pose.zero(); // Default to (0, 0, 0) if not set
 
     // Scalars
     public double linearScalar = 1.0;
@@ -28,9 +26,7 @@ public class OTOSConstants extends LocalizerConstants {
     public OTOSConstants() {}
 
     @Override
-    public OTOS build(HardwareMap hardwareMap) {
-        return new OTOS(hardwareMap, this);
-    }
+    public OTOS build(HardwareMap hardwareMap) { return new OTOS(hardwareMap, this); }
 
     /**
      * Sets the OTOS hardware name.

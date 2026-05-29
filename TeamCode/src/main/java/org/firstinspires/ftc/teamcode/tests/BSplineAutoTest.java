@@ -9,7 +9,8 @@ import followers.MovementFollower;
 import followers.constants.BSplineFollowerConstants;
 import paths.ExamplePathAPIV3;
 import paths.movements.Path;
-import util.Pose;
+import geometry.Pose;
+import util.PoseFactory;
 
 /**
  * Test Autonomous opMode utilizing {@link paths.ExamplePathAPIV3}
@@ -18,11 +19,10 @@ import util.Pose;
  */
 @Autonomous(name = "Apex BSpline Auto Test", group = "Apex Pathing Tests")
 public class BSplineAutoTest extends LinearOpMode {
-    private boolean mirror = false; //Pass in the constructor for ExamplePathAPIV3, change as required
     @Override
     public void runOpMode() throws InterruptedException {
         MovementFollower follower = (MovementFollower) new Constants().build(hardwareMap, Pose.zero());
-        Path autoPath = (Path) new ExamplePathAPIV3(mirror).getAutoRoutine()[0];
+        Path autoPath = (Path) new ExamplePathAPIV3(PoseFactory.Mirror.NONE).getAutoRoutine()[0];
         while (opModeInInit()){
             telemetry.addLine("Robot initialized");
             telemetry.update();
@@ -34,21 +34,20 @@ public class BSplineAutoTest extends LinearOpMode {
 
         follower.follow(autoPath);
 
-        while (opModeIsActive() && !isStopRequested()) {
+        while (opModeIsActive()) {
             follower.update();
 
             Pose currentPose = follower.getPose();
             Pose targetPose = follower.getTargetPose();
 
             telemetry.addLine(follower.isBusy() ? "Follower IS busy" : "Follower is NOT busy");
-            telemetry.addLine(targetPose != null ? "Target X: " + targetPose.getX() : "");
-            telemetry.addLine(targetPose != null ? "Target Y: " + targetPose.getY() : "");
-
+            if (targetPose != null) {
+                telemetry.addData("Target X", targetPose.getX());
+                telemetry.addData("Target Y", targetPose.getY());
+            }
             telemetry.addData("Current X", currentPose.getX());
             telemetry.addData("Current Y", currentPose.getY());
-
             telemetry.addData("Heading", currentPose.getHeading());
-
             telemetry.update();
         }
 

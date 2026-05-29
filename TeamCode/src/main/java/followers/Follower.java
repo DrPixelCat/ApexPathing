@@ -1,12 +1,8 @@
 package followers;
 
 import drivetrains.Drivetrain;
-import followers.constants.FollowerConstants;
-import followers.constants.P2PFollowerConstants;
 import localizers.Localizer;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Pose;
 
 /**
  * Parent class for followers
@@ -118,8 +114,6 @@ public abstract class Follower {
         isBusy = true;
         holdingPose = false;
         this.targetPose = targetPose.copy();
-        this.targetPose.setDistanceUnit(Distance.Units.INCHES);
-        this.targetPose.setAngleUnit(Angle.Units.RADIANS);
     }
 
     /**
@@ -134,7 +128,9 @@ public abstract class Follower {
      * @return the robot's current velocity estimate from the localizer
      */
     public Pose getVelocity() { return localizer.getVelocity(); }
-    public void breakFollowing() {
-        this.stop();
-    }
+
+    /**
+     * End any active path following or pose holding and stop the robot
+     */
+    public void breakFollowing() { this.stop(); }
 }

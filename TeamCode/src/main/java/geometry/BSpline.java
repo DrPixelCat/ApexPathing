@@ -1,6 +1,7 @@
-package paths.geometry;
+package geometry;
 
-import util.Vector;
+import geometry.Vector;
+import util.DistUnit;
 
 /**
  * Represents a Uniform Cubic B-Spline.
@@ -58,8 +59,8 @@ public class BSpline implements ParametricSegment {
             Vector p2 = paddedPoints[i + 2];
             Vector p3 = paddedPoints[i + 3];
 
-            double[] xWindow = {p0.getX(), p1.getX(), p2.getX(), p3.getX()};
-            double[] yWindow = {p0.getY(), p1.getY(), p2.getY(), p3.getY()};
+            double[] xWindow = {p0.getX().getIn(), p1.getX().getIn(), p2.getX().getIn(), p3.getX().getIn()};
+            double[] yWindow = {p0.getY().getIn(), p1.getY().getIn(), p2.getY().getIn(), p3.getY().getIn()};
 
             this.cx[i] = BLEND_MATRIX.multiply(xWindow);
             this.cy[i] = BLEND_MATRIX.multiply(yWindow);
@@ -89,7 +90,7 @@ public class BSpline implements ParametricSegment {
         double x = ((cX[0] * localT + cX[1]) * localT + cX[2]) * localT + cX[3];
         double y = ((cY[0] * localT + cY[1]) * localT + cY[2]) * localT + cY[3];
 
-        return new Vector(x, y);
+        return Vector.of(x, y, DistUnit.IN);
     }
 
     /**
@@ -115,7 +116,7 @@ public class BSpline implements ParametricSegment {
         double dy = (3.0 * cY[0] * localT + 2.0 * cY[1]) * localT + cY[2];
 
         // Chain rule scaling
-        return new Vector(dx, dy).multiply(numSegments);
+        return Vector.of(dx, dy, DistUnit.IN).times(numSegments);
     }
 
     /**
@@ -141,6 +142,6 @@ public class BSpline implements ParametricSegment {
         double ddy = 6.0 * cY[0] * localT + 2.0 * cY[1];
 
         // Chain rule scaling
-        return new Vector(ddx, ddy).multiply((double) numSegments * numSegments);
+        return Vector.of(ddx, ddy, DistUnit.IN).times((double) numSegments * numSegments);
     }
 }

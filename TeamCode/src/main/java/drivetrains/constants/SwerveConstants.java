@@ -3,7 +3,7 @@ package drivetrains.constants;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import drivetrains.Swerve;
-import util.Distance;
+import geometry.Dist;
 
 /**
  * Swerve drivetrain constants class
@@ -20,8 +20,8 @@ public class SwerveConstants extends DrivetrainConstants {
     public SwerveModuleConstants brModuleConstants = new SwerveModuleConstants();
 
     // Distances and spacing
-    public Distance wheelbase = Distance.fromMm(300); // Front pod to back pod spacing
-    public Distance trackWidth = Distance.fromMm(300); // Left pod to right pod spacing
+    public Dist wheelbase = Dist.fromIn(14); // Front pod to back pod spacing
+    public Dist trackWidth = Dist.fromIn(14); // Left pod to right pod spacing
     public double diagonalDistance; // Inches
     public double wheelbaseRatio; // Wheelbase / diagonal distance
     public double trackWidthRatio; // Track width / diagonal distance
@@ -46,7 +46,7 @@ public class SwerveConstants extends DrivetrainConstants {
     }
 
     /** @return the diagonal distance between the wheelbase and trackwidth in inches. */
-    private double getDiagonalDistance() { return this.wheelbase.hypotenuse(this.trackWidth).getIn(); }
+    private double getDiagonalDistance() { return this.wheelbase.hypot(this.trackWidth).getIn(); }
 
     /** @return the ratio between the wheelbase and diagonal distance. */
     public double getWheelbaseRatio() { return this.wheelbase.getIn() / this.diagonalDistance; }
@@ -57,6 +57,7 @@ public class SwerveConstants extends DrivetrainConstants {
     /** @return the maximum current for the drivetrain
      */
     public double MaxCurrentThreshold(){return this.totalMaxCurrent; }
+
     /**
      * Sets the front left module constants.
      * @param constants the {@link SwerveModuleConstants} to use for the front left module
@@ -102,7 +103,7 @@ public class SwerveConstants extends DrivetrainConstants {
      * @param wheelbase the front pod to back pod spacing
      * @return this instance for chaining
      */
-    public SwerveConstants setWheelbase(Distance wheelbase) {
+    public SwerveConstants setWheelbase(Dist wheelbase) {
         this.wheelbase = wheelbase;
         return this;
     }
@@ -112,7 +113,7 @@ public class SwerveConstants extends DrivetrainConstants {
      * @param trackWidth the left pod to right pod spacing
      * @return this instance for chaining
      */
-    public SwerveConstants setTrackWidth(Distance trackWidth) {
+    public SwerveConstants setTrackWidth(Dist trackWidth) {
         this.trackWidth = trackWidth;
         return this;
     }

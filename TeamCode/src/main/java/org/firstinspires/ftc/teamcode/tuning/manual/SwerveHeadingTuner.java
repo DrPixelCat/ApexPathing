@@ -1,18 +1,9 @@
 package org.firstinspires.ftc.teamcode.tuning.manual;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.Constants;
-
-import controllers.PDFLController;
-import drivetrains.Drivetrain;
-import drivetrains.Swerve;
 import drivetrains.SwerveModule;
-import drivetrains.constants.SwerveConstants;
-import drivetrains.constants.SwerveModuleConstants;
-import localizers.Localizer;
-import util.Pose;
+import drivetrains.constants.SwerveConstants;;
 
 /**
  * @author Xander Haemel - UNFINISHED

@@ -25,10 +25,10 @@ public class AxialAutoTuner extends AutoTuner {
     }
 
     @Override
-    public double getCurrentPosition() { return this.localizer.getPose().getX(); }
+    public double getCurrentPosition() { return this.localizer.getPose().getX().getIn(); }
 
     @Override
-    public double getCurrentVelocity() { return this.localizer.getVelocity().getX(); }
+    public double getCurrentVelocity() { return this.localizer.getVelocity().getX().getIn(); }
 
     @Override
     public void applyControl(double controlOutput, double headingCorrection) {

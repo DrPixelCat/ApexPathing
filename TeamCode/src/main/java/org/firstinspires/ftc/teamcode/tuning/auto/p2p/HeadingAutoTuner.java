@@ -25,10 +25,10 @@ public class HeadingAutoTuner extends AutoTuner {
     }
 
     @Override
-    public double getCurrentPosition() { return this.localizer.getPose().getHeading(); }
+    public double getCurrentPosition() { return this.localizer.getPose().getHeading().getRad(); }
 
     @Override
-    public double getCurrentVelocity() { return this.localizer.getVelocity().getHeading(); }
+    public double getCurrentVelocity() { return this.localizer.getVelocity().getHeading().getRad(); }
 
     @Override
     public void applyControl(double controlOutput, double headingCorrection) {

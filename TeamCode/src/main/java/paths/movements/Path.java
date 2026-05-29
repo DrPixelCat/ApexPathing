@@ -5,9 +5,9 @@ import java.util.Collections;
 import java.util.List;
 
 import paths.callbacks.Callback;
-import paths.geometry.PathSegment;
 import paths.heading.HeadingInterpolator;
-import util.Pose;
+import geometry.PathSegment;
+import geometry.Pose;
 
 /**
  * Represents a complete, navigable geometric route for the robot to follow.
@@ -20,7 +20,6 @@ import util.Pose;
  * @author Sohum Arora 22985 Paraducks
  */
 public class Path implements FollowerMovement {
-
     private final List<String> buildWarnings = new ArrayList<>();
     private final ArrayList<Callback> callbacks = new ArrayList<>();
 
@@ -32,33 +31,25 @@ public class Path implements FollowerMovement {
      * Attaches an executable mechanical/software action to this path.
      * * @param callback The callback object defining the trigger point and executable action.
      */
-    public void addCallback(Callback callback) {
-        callbacks.add(callback);
-    }
+    public void addCallback(Callback callback) { callbacks.add(callback); }
 
     /**
      * Retrieves all scheduled actions attached to this path.
      * * @return An array of callbacks scheduled along the route.
      */
-    public Callback[] getCallbacks() {
-        return callbacks.toArray(new Callback[0]);
-    }
+    public Callback[] getCallbacks() { return callbacks.toArray(new Callback[0]); }
 
     /**
      * Sets the final target pose (coordinates and heading) of this path.
      * * @param endPose The geometric terminus of the route.
      */
-    public void setEndPose(Pose endPose) {
-        this.endPose = endPose;
-    }
+    public void setEndPose(Pose endPose) { this.endPose = endPose; }
 
     /**
      * Retrieves the final target pose of this path.
      * * @return The geometric terminus of the route.
      */
-    public Pose getEndPose() {
-        return endPose;
-    }
+    public Pose getEndPose() { return endPose; }
 
     /**
      * Injects the calculated geometric curve (e.g., a B-Spline) that defines
@@ -73,9 +64,7 @@ public class Path implements FollowerMovement {
      * Retrieves the geometric curve defining the physical route.
      * * @return The compiled path segment.
      */
-    public PathSegment getParametricPath() {
-        return parametricPath;
-    }
+    public PathSegment getParametricPath() { return parametricPath; }
 
     /**
      * Injects the strategy used to calculate the robot's target heading
@@ -90,9 +79,7 @@ public class Path implements FollowerMovement {
      * Retrieves the heading strategy for this path.
      * * @return The heading interpolator.
      */
-    public HeadingInterpolator getInterpolator() {
-        return interpolator;
-    }
+    public HeadingInterpolator getInterpolator() { return interpolator; }
 
     /**
      * Logs a non-fatal warning generated during the path building process

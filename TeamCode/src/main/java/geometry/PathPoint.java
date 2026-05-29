@@ -1,6 +1,4 @@
-package paths.geometry;
-
-import util.Vector;
+package geometry;
 
 /**
  * Represents a precalculated, discrete point along a parametric path segment.

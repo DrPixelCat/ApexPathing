@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import drivetrains.constants.MecanumConstants;
 import localizers.Localizer;
-import util.Pose;
+import geometry.Pose;
 
 /**
  * OpMode for automatically determining the direction and position of each motor on a mecanum drivetrain.
@@ -85,7 +85,7 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
             switch (state) {
                 case POSITIVE_POWER:
                     // Reset pose and timer once, then move to a waiting state
-                    localizer.setPose(new Pose(0, 0, 0));
+                    localizer.setPose(Pose.zero());
                     motor.setPower(0.6);
                     timer.setTarget(750);
                     state = TuningState.WAIT_POSITIVE;
@@ -101,9 +101,9 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
                 case CALCULATE:
                     // Measure the results
                     MovementDirection direction = MovementDirection.fromAngle(
-                            localizer.getPose().getPositionComponent().getTheta()
+                            localizer.getPose().getPos().getTheta().getRad()
                     );
-                    Rotation rotation = (localizer.getPose().getHeading() > 0) ? Rotation.CCW : Rotation.CW;
+                    Rotation rotation = (localizer.getPose().getHeading().getRad() > 0) ? Rotation.CCW : Rotation.CW;
 
                     // Identify the wheel based on behavior
                     WheelTendencies detected = new WheelTendencies(direction, rotation);
@@ -133,7 +133,7 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
                     break;
 
                 case FIRST_DECELERATE:
-                    if (localizer.getVelocity().getPositionComponent().getMagnitudeSquared() < 0.5) {
+                    if (localizer.getVelocity().getPos().getMagSq().getIn() < 0.5) {
                         state = TuningState.NEGATIVE_POWER;
                     }
                     break;
@@ -153,7 +153,7 @@ public class AutoMotorDirectionAndAssignment extends LinearOpMode {
                     break;
 
                 case SECOND_DECELERATE:
-                    if (localizer.getVelocity().getPositionComponent().getMagnitudeSquared() < 0.5) {
+                    if (localizer.getVelocity().getPos().getMagSq().getIn() < 0.5) {
                         // We finished this motor! Increment the index and reset the state.
                         currentMotorIndex++;
                         state = TuningState.POSITIVE_POWER;

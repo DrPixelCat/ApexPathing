@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import paths.callbacks.Callback;
-import util.Angle;
-import util.Pose;
+import geometry.Angle;
+import geometry.Pose;
 
 /**
  * Represents a stationary point-turn movement.
@@ -14,7 +14,6 @@ import util.Pose;
  * to the specified target heading.
  */
 public class Turn implements FollowerMovement {
-    
     private final Pose startPose;
     private final Pose endPose;
     private final List<Callback> callbacks = new ArrayList<>();
@@ -27,23 +26,15 @@ public class Turn implements FollowerMovement {
     public Turn(Pose startPose, Angle targetHeading) {
         this.startPose = startPose;
         // The end pose shares the same X/Y, but updates the heading
-        this.endPose = new Pose(startPose.getX(), startPose.getY(), targetHeading.getRad());
+        this.endPose = new Pose(startPose.getPos(), targetHeading);
     }
 
-    public void addCallback(Callback callback) {
-        callbacks.add(callback);
-    }
+    public void addCallback(Callback callback) { callbacks.add(callback); }
 
-    public Callback[] getCallbacks() {
-        return callbacks.toArray(new Callback[0]);
-    }
+    public Callback[] getCallbacks() { return callbacks.toArray(new Callback[0]); }
 
-    public Pose getStartPose() {
-        return startPose;
-    }
+    public Pose getStartPose() { return startPose; }
 
     @Override
-    public Pose getEndPose() {
-        return endPose;
-    }
+    public Pose getEndPose() { return endPose; }
 }

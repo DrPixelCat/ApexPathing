@@ -13,9 +13,12 @@ import drivetrains.Drivetrain;
 import followers.MovementFollower;
 import followers.constants.BSplineFollowerConstants;
 import localizers.Localizer;
-import paths.builders.MovementBuilder; // Updated import to use the unified builder
 import paths.movements.Path;
-import util.Pose;
+import paths.builders.PathBuilder;
+import geometry.Pose;
+import util.AngleUnit;
+import util.DistUnit;
+import util.PoseFactory;
 
 /**
  * OpMode for tuning the BSpline follower with Panels. Matches the architecture of AxialTuner.
@@ -32,6 +35,7 @@ public class BSplineTuner extends OpMode {
     private MovementFollower follower;
     private BSplineFollowerConstants followerConstants;
     private JoinedTelemetry fullTelem;
+    private PoseFactory pose = new PoseFactory(DistUnit.IN, AngleUnit.DEG);
 
     // --- DASHBOARD TUNING VARIABLES ---
     public static double tP, tD, tS, tSDeadzone; // Translation PDS
@@ -54,7 +58,8 @@ public class BSplineTuner extends OpMode {
         fullTelem = new JoinedTelemetry(PanelsTelemetry.INSTANCE.getFtcTelemetry(), telemetry);
 
         // Extract the constants specific to the BSpline follower
-        followerConstants = (BSplineFollowerConstants) constants.setBSplineFollowerConstants();
+        // NOTE: You must be using BSplineFollowerConstants
+        followerConstants = (BSplineFollowerConstants) constants.setFollowerConstants();
 
         // Populate Dashboard variables with the initial values from your Constants file
         tP = followerConstants.translationCoeffs.kP;
@@ -84,14 +89,18 @@ public class BSplineTuner extends OpMode {
     private void runPath(boolean forward) {
         if (!pathActive) {
             if (!forward) {
-                // Explicit downcast to Path since MovementBuilder.build() returns polymorphic FollowerMovement
-                currentPath = (Path) new MovementBuilder(localizer.getPose())
-                        .addControlPoints(new Pose(24, 24, Math.toRadians(90)), new Pose(0, 0, 0))
+                currentPath = new PathBuilder(localizer.getPose())
+                        .addControlPoints(
+                                pose.of(24, 24, 90),
+                                pose.of(0, 0, 0)
+                        )
                         .build();
             } else {
-                // Explicit downcast to Path since MovementBuilder.build() returns polymorphic FollowerMovement
-                currentPath = (Path) new MovementBuilder(localizer.getPose())
-                        .addControlPoints(new Pose(24, 24, Math.toRadians(90)), new Pose(48, 0, 0))
+                currentPath = new PathBuilder(localizer.getPose())
+                        .addControlPoints(
+                                pose.of(24, 24, 90),
+                                pose.of(48, 0, 0)
+                        )
                         .build();
             }
             follower.follow(currentPath);
@@ -117,6 +126,7 @@ public class BSplineTuner extends OpMode {
         } else if (gamepad1.a) { // Move back to start position when A is held
             runPath(false);
         } else {
+            // Safe fallback sequence clearing operational active paths to protect drive system
             follower.stop();
             drivetrain.stop();
             pathActive = false;
@@ -133,9 +143,9 @@ public class BSplineTuner extends OpMode {
         wasAtTarget = atTarget;
 
         fullTelem.addData("Target Path: ", pathActive ? "Active" : "Inactive");
-        fullTelem.addData("Position X: ", localizer.getPose().getX());
-        fullTelem.addData("Position Y: ", localizer.getPose().getY());
-        fullTelem.addData("Heading: ", Math.toDegrees(localizer.getPose().getHeading()));
+        fullTelem.addData("Position X: ", localizer.getPose().getX().getIn());
+        fullTelem.addData("Position Y: ", localizer.getPose().getY().getIn());
+        fullTelem.addData("Heading: ", localizer.getPose().getHeading().getRad());
         fullTelem.addData("At Target: ", atTarget);
         fullTelem.addData("Drivetrain Output: ", drivetrain.toString());
         fullTelem.update();

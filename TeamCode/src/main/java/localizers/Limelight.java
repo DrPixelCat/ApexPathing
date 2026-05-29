@@ -8,10 +8,11 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 
+import geometry.Vector;
 import localizers.constants.LimelightConstants;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Angle;
+import geometry.Pose;
+import util.DistUnit;
 
 /**
  * Localizer for the Limelight Vision 3A Smart Camera using the Limelight3A class.
@@ -47,10 +48,13 @@ public class Limelight extends Localizer {
             }
 
             if (botPose != null) {
-                Pose newPose = new Pose(
-                        botPose.getPosition().x, botPose.getPosition().y, // Meters
-                        botPose.getOrientation().getYaw(AngleUnit.RADIANS),
-                        Distance.Units.METERS, Angle.Units.RADIANS, false
+                Pose newPose = new Pose( // Limelight gives us meters
+                        Vector.of(
+                                botPose.getPosition().x,
+                                botPose.getPosition().y,
+                                DistUnit.M
+                        ),
+                        Angle.fromRad(botPose.getOrientation().getYaw(AngleUnit.RADIANS))
                 );
 
                 // Get current time in nanoseconds
@@ -60,12 +64,15 @@ public class Limelight extends Localizer {
                 if (lastPose != null) {
                     double dt = (currentTime - lastTime) / 1e9; // Convert nanoseconds to seconds
                     if (dt > 0) {
-                        Pose deltaPose = newPose.subtract(lastPose);
+                        Pose deltaPose = newPose.minus(lastPose);
 
                         this.currentVelocity = new Pose(
-                                deltaPose.getX() / dt, deltaPose.getY() / dt, // Meters per second
-                                deltaPose.getHeading() / dt, // Radians per second
-                                Distance.Units.METERS, Angle.Units.RADIANS, false
+                                Vector.of(
+                                        deltaPose.getX().getIn() / dt,
+                                        deltaPose.getY().getIn() / dt,
+                                        DistUnit.IN
+                                ),
+                                Angle.fromRad(deltaPose.getHeading().getRad() / dt)
                         );
                     }
                 }
@@ -81,8 +88,6 @@ public class Limelight extends Localizer {
     @Override
     public void setPose(Pose pose) {
         // The Limelight doesn't support setting position, but we can set the orientation
-        cam.updateRobotOrientation(pose.getHeadingComponent().get(Angle.Units.DEGREES));
+        cam.updateRobotOrientation(pose.getHeading().getRad());
     }
-
-
 }

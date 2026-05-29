@@ -1,6 +1,4 @@
-package paths.geometry;
-
-import util.Vector;
+package geometry;
 
 /**
  * A wrapper class that binds a mathematical parametric curve to physical properties.
@@ -8,6 +6,7 @@ import util.Vector;
  * This class handles the generation of a Look-Up Table (LUT) to precalculate
  * arc-length distances, enabling blisteringly fast O(1) distance lookups and
  * highly efficient closest-point projection using Newton-Raphson refinement.
+ * Internally, all units are inches and radians.
  * <p>
  * Author: DrPixelCat
  */
@@ -39,7 +38,7 @@ public class PathSegment {
             Vector location = segment.getPosition(t);
 
             if (lastPoint != null) {
-                distFromEnd += lastPoint.subtract(location).getMagnitude();
+                distFromEnd += lastPoint.minus(location).getMag().getIn();
             }
             lastPoint = location;
             LUTpoints[i] = new PathPoint(t, distFromEnd, location);
@@ -67,7 +66,7 @@ public class PathSegment {
 
         // Coarse search via LUT
         for (PathPoint point : LUTpoints) {
-            double distSq = point.getLocation().subtract(location).getMagnitudeSquared();
+            double distSq = point.getLocation().minus(location).getMagSq().getIn();
 
             if (distSq < minDistSq) {
                 minDistSq = distSq;
@@ -81,8 +80,8 @@ public class PathSegment {
             Vector b = segment.getPosition(bestT);
             Vector d1 = segment.getFirstDerivative(bestT);
 
-            Vector diff = b.subtract(location);
-            double numerator = diff.dotProduct(d1);
+            Vector diff = b.minus(location);
+            double numerator = diff.dot(d1).getIn();
 
             // Optional Fast-Exit: If the distance vector is perfectly orthogonal to the tangent,
             // we have already found the exact closest point.
@@ -91,7 +90,7 @@ public class PathSegment {
             }
 
             Vector d2 = segment.getSecondDerivative(bestT);
-            double denominator = d1.dotProduct(d1) + diff.dotProduct(d2);
+            double denominator = d1.dot(d1).plus(diff.dot(d2)).getIn();
 
             // Abort on singularity to prevent backward pushing
             if (denominator <= 0.0) {
@@ -153,7 +152,7 @@ public class PathSegment {
         if (t >= 1.0) return 0.0;
 
         if (t <= 0.0) {
-            double mag = closestPointOnCurve.subtract(LUTpoints[0].getLocation()).getMagnitude();
+            double mag = closestPointOnCurve.minus(LUTpoints[0].getLocation()).getMag().getIn();
             return mag + LUTpoints[0].getDistanceToEnd_in();
         }
 
@@ -165,7 +164,7 @@ public class PathSegment {
 
         PathPoint nextPoint = LUTpoints[nextIndex];
 
-        double mag = closestPointOnCurve.subtract(nextPoint.getLocation()).getMagnitude();
+        double mag = closestPointOnCurve.minus(nextPoint.getLocation()).getMag().getIn();
         return mag + nextPoint.getDistanceToEnd_in();
     }
 
@@ -183,7 +182,7 @@ public class PathSegment {
         Vector prev = segment.getPosition(0.0);
         for (int i = 1; i <= SAMPLES; i++) {
             Vector curr = segment.getPosition((double) i / SAMPLES);
-            roughLength += curr.subtract(prev).getMagnitude();
+            roughLength += curr.minus(prev).getMag().getIn();
             prev = curr;
         }
         return roughLength;
@@ -192,10 +191,7 @@ public class PathSegment {
     /**
      * @return The high-accuracy calculated length of the segment in inches.
      */
-    public double getLength_in() {
-        return length;
-    }
-
+    public double getLength_in() { return length; }
 
     /**
      * Calculates the instantaneous radius of curvature of a parametric curve at a specific point.
@@ -211,7 +207,7 @@ public class PathSegment {
      */
     public static double calculateRadiusOfCurvature(Vector firstDerivative, Vector secondDerivative) {
         // Use the Vector class's built-in 2D cross product utility
-        double crossProductMag = Math.abs(firstDerivative.crossProduct(secondDerivative));
+        double crossProductMag = firstDerivative.cross(secondDerivative).abs().getIn();
 
         // Safety Check: If the cross product is near zero, the derivatives are parallel,
         // meaning the path is a perfectly straight line with an infinite radius.
@@ -220,7 +216,7 @@ public class PathSegment {
         }
 
         // Use the Vector class's built-in magnitude utility to calculate ||r'||^3
-        double velocityMag = firstDerivative.getMagnitude();
+        double velocityMag = firstDerivative.getMag().getIn();
         double numerator = Math.pow(velocityMag, 3);
 
         return numerator / crossProductMag;

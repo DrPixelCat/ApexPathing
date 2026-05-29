@@ -1,6 +1,6 @@
 package paths.movements;
 
-import util.Pose;
+import geometry.Pose;
 
 /**
  * A marker interface representing any executable navigational action 

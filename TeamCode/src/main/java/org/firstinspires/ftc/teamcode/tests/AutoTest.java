@@ -7,9 +7,9 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Constants;
 
 import followers.P2PFollower;
-import util.Angle;
-import util.Distance;
-import util.Pose;
+import geometry.Pose;
+import util.AngleUnit;
+import util.DistUnit;
 import util.PoseFactory;
 
 /**
@@ -26,14 +26,14 @@ public class AutoTest extends LinearOpMode {
     private boolean timerStarted = true; // Start with true so it doesn't wait to move to the first pose
 
     // Poses
-    private final PoseFactory pb = new PoseFactory(Distance.Units.INCHES, Angle.Units.DEGREES, false);
+    private final PoseFactory pose = new PoseFactory(DistUnit.IN, AngleUnit.DEG);
     final Pose[] poses = {
-            pb.build(0, 0, 0), // startPose
-            //pb.build(24, 0, 0), // X movement only
-            //pb.build(0, 24, 0), // Y movement only
-            pb.build(0, 0, 180), // Heading movement only
-            //pb.build(24, 24, 0) // Translational only
-            //pb.build(24, 24, 90) // All at once
+            pose.of(0, 0, 0), // startPose
+            //pose.of(24, 0, 0), // X movement only
+            //pose.of(0, 24, 0), // Y movement only
+            pose.of(0, 0, 180), // Heading movement only
+            //pose.of(24, 24, 0) // Translational only
+            //pose.of(24, 24, 90) // All at once
     };
 
     @Override

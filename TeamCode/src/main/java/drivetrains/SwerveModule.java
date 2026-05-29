@@ -14,6 +14,7 @@ import java.util.Locale;
 
 import drivetrains.constants.SwerveModuleConstants;
 
+// TODO: Use the Angle class for angles
 /**
  * A swerve module consists of a drive motor, a steering CRServo, and an analog encoder.
  * This should NOT be used directly as a drivetrain. It is meant to be used by the {@link Swerve}

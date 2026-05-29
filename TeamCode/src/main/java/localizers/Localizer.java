@@ -1,6 +1,6 @@
 package localizers;
 
-import util.Pose;
+import geometry.Pose;
 
 /**
  * Abstract Localizer class that all localizers should extend. This is used to define the basic structure of a localizer and to provide some common functionality.

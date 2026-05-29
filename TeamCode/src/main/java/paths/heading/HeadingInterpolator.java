@@ -1,7 +1,7 @@
 package paths.heading;
 
-import util.Angle;
-import util.Vector;
+import geometry.Angle;
+import geometry.Vector;
 import java.util.function.Function;
 
 /**
@@ -122,10 +122,10 @@ public class HeadingInterpolator {
                 return endHeading.copy();
 
             case TANGENT_FORWARD:
-                return new Angle(pathTangent.getTheta());
+                return pathTangent.getTheta();
 
             case TANGENT_CUSTOM:
-                return new Angle(pathTangent.getTheta()).plus(customOffset);
+                return pathTangent.getTheta().plus(customOffset);
 
             case TANGENT_OPTIMAL:
                 return calculateOptimalTangent(pathTangent);
@@ -153,8 +153,8 @@ public class HeadingInterpolator {
      * @return The optimal Angle to track (either the forward or backward tangent).
      */
     private Angle calculateOptimalTangent(Vector tangent) {
-        Angle forwardTangent = new Angle(tangent.getTheta());
-        Angle backwardTangent = forwardTangent.plus(new Angle(Math.PI));
+        Angle forwardTangent = tangent.getTheta();
+        Angle backwardTangent = forwardTangent.plus(Angle.fromRad(Math.PI));
 
         // Total rotation cost if drive forward
         double entryCostFwd = Math.abs(getShortestAngularDifference(startHeading, forwardTangent));
@@ -187,7 +187,7 @@ public class HeadingInterpolator {
         double diffRad = getShortestAngularDifference(startHeading, endHeading);
         double targetRad = startHeading.getRad() + (diffRad * profiledS);
 
-        return new Angle(targetRad);
+        return Angle.fromRad(targetRad);
     }
 
     /**

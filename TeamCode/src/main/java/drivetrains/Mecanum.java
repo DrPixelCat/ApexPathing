@@ -52,7 +52,6 @@ public class Mecanum extends Drivetrain {
      * @param brPower the power to set for the right rear motor
      */
     private void setPowers(double flPower, double blPower, double frPower, double brPower) {
-
         // Normalize powers from -maxPower to maxPower if any exceed the max
         double max = Math.max(0, Math.abs(flPower));
         max = Math.max(max, Math.abs(blPower));

@@ -13,8 +13,8 @@ import controllers.PDSController;
 import drivetrains.Drivetrain;
 import followers.constants.P2PFollowerConstants;
 import localizers.Localizer;
-import util.Distance;
-import util.Pose;
+import geometry.Dist;
+import geometry.Pose;
 
 /**
  * OpMode for tuning the axial (drive) controller with Panels. Hold X to move the robot 64 inches forward,
@@ -81,12 +81,12 @@ public class AxialTuner extends OpMode {
 
         double turn = 0;
         if (maintainHeading) {
-            turn = headingController.calculate(this.localizer.getPose().getHeading());
+            turn = headingController.calculate(this.localizer.getPose().getHeading().getRad());
         } else {
             headingController.reset(); // Prevent derivative kick when not maintaining heading
         }
 
-        this.rawOutput = controller.calculate( this.localizer.getPose().getX());
+        this.rawOutput = controller.calculate(this.localizer.getPose().getX().getIn());
         this.drivetrain.moveWithVectors(rawOutput, 0, turn);
     }
 
@@ -96,7 +96,7 @@ public class AxialTuner extends OpMode {
 
         controller.setCoefficients(new PDSCoefficients(kP, kD, kS, kSDeadzone));
         controller.setDeadzone(outputDeadzone);
-        controller.setTolerance(new Distance(tolerance)); // Inches
+        controller.setTolerance(Dist.fromIn(tolerance)); // Inches
 
         if (gamepad1.x) { // Move 64 inches forward when X is held
             moveToTarget(64);

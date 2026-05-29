@@ -17,9 +17,7 @@ public abstract class Drivetrain {
      * @param value the input value to apply the deadzone to
      * @return the value after applying the deadzone
      */
-    protected static double deadzone(double value) {
-        return Math.abs(value) < 0.03 ? 0.0 : value;
-    }
+    protected static double deadzone(double value) { return Math.abs(value) < 0.03 ? 0.0 : value; }
 
     /**
      * @return whether the drivetrain should use robot-centric controls (true) or field-centric controls (false)
@@ -79,7 +77,5 @@ public abstract class Drivetrain {
 
     @NonNull
     @Override
-    public String toString() {
-        return "The drivetrain type didn't implement toString()!";
-    }
+    public String toString() { return "The drivetrain type didn't implement toString()!"; }
 }

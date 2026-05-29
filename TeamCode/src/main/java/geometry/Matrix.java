@@ -1,4 +1,4 @@
-package paths.geometry;
+package geometry;
 
 /**
  * A generic class for matrix mathematics.

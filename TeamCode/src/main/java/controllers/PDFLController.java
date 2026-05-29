@@ -9,7 +9,6 @@ package controllers;
  * <li><b>kL</b> - minimum power (a constant power added in the error's direction to overcome static forces)</li>
  * </ul>
  *
- * @see followers.P2PFollower
  * @author Joel - 7842 Browncoats Alumni
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
