@@ -64,6 +64,7 @@ public class Constants extends ApexBuilder {
                 .setStrafeTolerance(Dist.fromIn(1.5))
                 .setMaxAxialPower(1)
                 .setStrafeTolerance(Dist.fromIn(1.5))
+                .setMaxStrafePower(1)
                 .setMaxTurnPower(1);
     }
 

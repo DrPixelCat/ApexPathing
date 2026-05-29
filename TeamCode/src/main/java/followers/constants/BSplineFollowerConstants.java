@@ -21,6 +21,7 @@ public class BSplineFollowerConstants extends FollowerConstants {
     public double headingTolerance = Math.toRadians(1.0);
     public double distanceTolerance = 0.5;
     public double tTolerance = 0.95;
+    public double maxLateralAccel = 0;
 
     public BSplineFollowerConstants() {}
 
