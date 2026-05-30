@@ -207,7 +207,7 @@ public class MovementFollower extends Follower {
 
             // --- 3. Tangent/Along-Track Power Allocation ---
 
-            // TODO: Implement properly with velocity limit in constants (Agents do not do this, humans do)!
+            // TODO: Implement properly with velocity limit in constants!
             double desiredVelocity = 10.0;
 
             // Cap the desired speed if the upcoming curve is too sharp
