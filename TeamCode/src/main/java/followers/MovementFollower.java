@@ -185,7 +185,7 @@ public class MovementFollower extends Follower {
             double distanceTravelled = segment.getLength_in() - distanceRemaining;
 
             // Updated this to use distanceRemaining as intended
-            Angle targetAngle = interpolator.getHeading(distanceTravelled / segment.getLength_in(), targetVel);
+            Angle targetAngle = interpolator.getHeading(distanceTravelled / segment.getLength_in(), targetVelocity);
             double targetHeading = targetAngle.getRad();
             double currentHeading = current.getHeading().getRad();
 
