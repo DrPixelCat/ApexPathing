@@ -25,6 +25,7 @@ import geometry.Dist;
  *
  * @author Dylan B. 18597 RoboClovers - Delta
  */
+
 public class Constants extends ApexBuilder {
     @Override
     public DrivetrainConstants setDrivetrainConstants() { // Any DrivetrainConstants
@@ -85,7 +86,7 @@ new TankConstants()
  */
 
 /* Swerve drivetrain constants
-new SwerveConstants()
+SwerveConstants()
                 .setFrontLeftModuleConstants(
                         new SwerveModuleConstants()
                                 .setMotorName("frontLeftMotor")
@@ -93,6 +94,8 @@ new SwerveConstants()
                                 .setEncoderName("flEncoder")
                                 .setMotorReversed(false)
                                 .setModuleAngleOffset(0) //degrees
+                                .setMaxEncoderVoltage(3.3)
+                                .setSteering_kP_val(0.1)
                 )
                 .setFrontRightModuleConstants(
                         new SwerveModuleConstants()
@@ -101,7 +104,8 @@ new SwerveConstants()
                                 .setEncoderName("frEncoder")
                                 .setMotorReversed(true)
                                 .setModuleAngleOffset(0) //degrees
-
+                                .setMaxEncoderVoltage(3.3)
+                                .setSteering_kP_val(0.1)
                 )
                 .setBackLeftModuleConstants(
                         new SwerveModuleConstants()
@@ -110,6 +114,8 @@ new SwerveConstants()
                                 .setEncoderName("blEncoder")
                                 .setMotorReversed(false)
                                 .setModuleAngleOffset(0) //degrees
+                                .setMaxEncoderVoltage(3.3)
+                                .setSteering_kP_val(0.1)
                 )
                 .setBackRightModuleConstants(
                         new SwerveModuleConstants()
@@ -118,6 +124,8 @@ new SwerveConstants()
                                 .setEncoderName("brEncoder")
                                 .setMotorReversed(true)
                                 .setModuleAngleOffset(0) //degrees
+                                .setMaxEncoderVoltage(3.3)
+                                .setSteering_kP_val(0.1)
                 )
                 .setMaxPower(1.0)
                 .setTrackWidth(Dist.fromMm(0))

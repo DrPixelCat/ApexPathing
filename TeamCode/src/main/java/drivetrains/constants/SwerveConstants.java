@@ -31,7 +31,13 @@ public class SwerveConstants extends DrivetrainConstants {
     public double maxCurrent = -1.0; // Max total motor current in amps, negative for no limit
     public boolean robotCentric = true; // Whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp
 
-    private double totalMaxCurrent = 8; //amps
+    private double totalMaxCurrent = -1; //amps
+
+    /**
+     * deadzone condition used in the SwerveModule class's update method to prevent jittery servos
+     * TODO: If your servos are jittery, increase the deadzone. If they aren't responding well, decrease this. Tune until your servo movement is just right
+     */
+    public static double deadzone = 2.0;
 
     /** Constructor for the SwerveConstants class */
     public SwerveConstants() {}
@@ -119,16 +125,6 @@ public class SwerveConstants extends DrivetrainConstants {
     }
 
     /**
-     * Sets the maximum power to apply to any module's drive motor.
-     * @param maxPower the maximum power, from 0 to 1
-     * @return this instance for chaining
-     */
-    public SwerveConstants setMaxPower(double maxPower) {
-        this.maxPower = maxPower;
-        return this;
-    }
-
-    /**
      * Sets whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp.
      * @param robotCentric whether to use robot-centric controls (true) or field-centric controls (false) in TeleOp
      * @return this instance for chaining
@@ -148,16 +144,6 @@ public class SwerveConstants extends DrivetrainConstants {
         this.blModuleConstants.steeringPGain = kP;
         this.frModuleConstants.steeringPGain = kP;
         this.brModuleConstants.steeringPGain = kP;
-        return this;
-    }
-
-    /**
-     * sets the maximum current limit for the drivetrain
-     * @param amperes is the current limit in amps
-     * @return this instance for chaining
-     */
-    public SwerveConstants setMaxCurrent(double amperes){
-        this.totalMaxCurrent = amperes;
         return this;
     }
 }
