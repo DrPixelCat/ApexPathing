@@ -101,24 +101,24 @@ public class ApexTuner extends AutoTuner {
             fileSaved = true;
         }
 
-        while (opModeIsActive()) {
+        while (opModeIsActive() && !isStopRequested()) {
             telemetry.addLine("ALL TUNING CYCLES COMPLETE");
             telemetry.addLine("Values automatically saved to: /sdcard/FIRST/PDSCoefficients.txt");
 
             if (headingRun) {
-                telemetry.addLine("\n--- Heading Coefficients ---");
+                telemetry.addLine("\n*** Heading Coefficients ***");
                 telemetry.addData("kP", headingCoeffs.kP);
                 telemetry.addData("kD", headingCoeffs.kD);
                 telemetry.addData("kS", headingCoeffs.kS);
             }
             if (strafeRun) {
-                telemetry.addLine("\n--- Strafe Coefficients ---");
+                telemetry.addLine("\n*** Strafe Coefficients ***");
                 telemetry.addData("kP", strafeCoeffs.kP);
                 telemetry.addData("kD", strafeCoeffs.kD);
                 telemetry.addData("kS", strafeCoeffs.kS);
             }
             if (axialRun) {
-                telemetry.addLine("\n--- Axial Coefficients ---");
+                telemetry.addLine("\n*** Axial Coefficients ***");
                 telemetry.addData("kP", axialCoeffs.kP);
                 telemetry.addData("kD", axialCoeffs.kD);
                 telemetry.addData("kS", axialCoeffs.kS);
