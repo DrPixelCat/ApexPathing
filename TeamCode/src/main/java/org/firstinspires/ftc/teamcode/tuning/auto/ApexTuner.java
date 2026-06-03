@@ -32,7 +32,7 @@ public class ApexTuner extends AutoTuner {
     private PDSCoefficients axialCoeffs = new PDSCoefficients();
 
     @Override
-    public void runOpMode() throws InterruptedException {
+    public void runOpMode() {
         phase = 1;
         fileSaved = false;
 
@@ -277,11 +277,11 @@ public class ApexTuner extends AutoTuner {
     public double getCurrentVelocity() {
         switch (currentState) {
             case HEADING:
-                return localizer.getVelocity().getHeading().getRad();
+                return localizer.getVel().getHeading().getRad();
             case STRAFE:
-                return localizer.getVelocity().getY().getIn();
+                return localizer.getVel().getY().getIn();
             case AXIAL:
-                return localizer.getVelocity().getX().getIn();
+                return localizer.getVel().getX().getIn();
             default:
                 return 0;
         }
