@@ -31,7 +31,7 @@ public abstract class AutoTuner extends LinearOpMode {
     // TODO: Adjust these constants based on testing
     final double HAS_MOVED_THRESHOLD = 0.025;
     final double BINARY_SEARCH_CONVERGENCE_THRESHOLD = 0.01;
-    final double INITIAL_MAX_KS_GUESS = 0.3;
+    final double INITIAL_MAX_KS_GUESS = 0.2;
     final double TIME_PER_GUESS_MS = 500;
     final long WAIT_TIME_BETWEEN_GUESSES_MS = 500;
     final double PD_TUNER_DURATION = 2000;

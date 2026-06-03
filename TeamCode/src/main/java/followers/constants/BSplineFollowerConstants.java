@@ -1,9 +1,12 @@
 package followers.constants;
 
+import controllers.PDSController;
 import controllers.PDSController.PDSCoefficients;
 import drivetrains.BaseDrivetrain;
 import followers.MovementFollower;
+import geometry.Dist;
 import localizers.BaseLocalizer;
+
 
 /**
  * B-Spline path follower constants class.
@@ -12,9 +15,14 @@ import localizers.BaseLocalizer;
  */
 public class BSplineFollowerConstants extends FollowerConstants {
 
-    public PDSCoefficients translationCoeffs = new PDSCoefficients();
-    public PDSCoefficients headingCoeffs = new PDSCoefficients();
-    public double velocityFF = 0.0;
+    // PDS Coefficients instead of flat primitives!
+    public PDSCoefficients translationCoeffs = new PDSController.PDSCoefficients(0.1, 0.0, 0.0, 0.0);
+    public PDSCoefficients headingCoeffs = new PDSController.PDSCoefficients(0.4, 0.0, 0.0, 0.0);
+    public PDSCoefficients velocityCoeffs = new PDSCoefficients();
+    public PDSCoefficients driveCoeffs = new PDSCoefficients();
+    public double kV = 0.01;
+    public double kA = 0.01;
+    public Dist velocityLimit = null;
 
     // Tolerances
     public double headingTolerance = Math.toRadians(1.0);
@@ -41,8 +49,18 @@ public class BSplineFollowerConstants extends FollowerConstants {
         return this;
     }
 
-    public BSplineFollowerConstants setVelocityFF(double velocityFF) {
-        this.velocityFF = velocityFF;
+    public BSplineFollowerConstants setkV(double kV) {
+        this.kV = kV;
+        return this;
+    }
+
+    public BSplineFollowerConstants setkA(double kA) {
+        this.kA = kA;
+        return this;
+    }
+
+    public BSplineFollowerConstants setVelocityLimit(Dist velocityLimit) {
+        this.velocityLimit = velocityLimit;
         return this;
     }
 
