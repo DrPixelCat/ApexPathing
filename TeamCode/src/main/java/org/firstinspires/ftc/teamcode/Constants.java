@@ -20,8 +20,13 @@ import util.MotorFactory;
  * your robot's hardware and tuning preferences.
  *
  * @author Dylan B. 18597 RoboClovers - Delta
+ * @author Sohum Arora 22985 Paraducks
  */
 public class Constants extends ApexConfig {
+    @Override
+    public FollowerConstants followerConfig() {
+        return new FollowerConstants();
+    }
     @Override
     public BaseDrivetrainConfig<?> drivetrainConfig() {
         return new Mecanum.Config()
@@ -40,21 +45,6 @@ public class Constants extends ApexConfig {
                 .setOffsets(0, 0, DistUnit.IN)
                 .setEncoderDirections(Pinpoint.EncoderDirection.FORWARD, Pinpoint.EncoderDirection.FORWARD)
                 .setEncoderResolution(Pinpoint.GoBildaPods.goBILDA_4_BAR_POD);
-    }
-
-    @Override
-    public FollowerConstants followerConfig() {
-        return new FollowerConstants()
-                .setHeadingCoeffs(new PDSController.PDSCoefficients())
-                .setLateralCoeffs(new PDSController.PDSCoefficients())
-                .setDriveCoeffs(new PDSController.PDSCoefficients())
-                .setVelocityCoeffs(new PDSController.PDSCoefficients())
-                .setFeedforwardCoeffs(0.0, 0.0)
-                .setVelocityLimit(Dist.fromIn(20))
-                .setHeadingTolerance(Angle.fromDeg(2.0))
-                .setDistanceTolerance(Dist.fromIn(1.0))
-                .setTTolerance(0.95)
-                .setMaxLateralAccel(10.0);
     }
 }
 
