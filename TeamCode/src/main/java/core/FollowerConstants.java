@@ -10,7 +10,8 @@ import java.io.FileReader;
 
 /**
  * Apex Pathing FollowerConstants class
- * Internally assigns the coefficient values determined through tuning directly.
+ * Internally assigns the coefficient values determined through tuning directly,
+ * thereby eliminating the need to manually tune and set the values in the Constants file!
  * @author Sohum Arora 22985 Paraducks
  */
 public class FollowerConstants {
@@ -28,8 +29,7 @@ public class FollowerConstants {
     public double tTolerance;
     public double maxLateralAccel;
 
-    public FollowerConstants() {
-        // Set Defaults
+    public FollowerConstants() { //Values 0 to begin with
         this.headingCoeffs = new PDSCoefficients();
         this.driveCoeffs = new PDSCoefficients();
         this.lateralCoeffs = new PDSCoefficients();
@@ -38,8 +38,6 @@ public class FollowerConstants {
         this.distanceTolerance = Dist.fromIn(0.5);
         this.tTolerance = 0.95;
         this.maxLateralAccel = 40.0;
-
-        // Perform actual loading
         loadValues();
     }
 
@@ -55,7 +53,6 @@ public class FollowerConstants {
 
                 JSONObject json = new JSONObject(sb.toString());
 
-                // Coefficients
                 this.headingCoeffs = new PDSCoefficients(
                         json.optDouble("headingP", 0),
                         json.optDouble("headingD", 0),
@@ -67,21 +64,17 @@ public class FollowerConstants {
                 this.driveCoeffs = new PDSCoefficients(tP, tD, tS, 0);
                 this.lateralCoeffs = new PDSCoefficients(tP, tD, tS, 0);
 
-                // Settings
                 this.lateralKV = json.optDouble("velocityFF", this.lateralKV);
                 this.maxLateralAccel = json.optDouble("maxLateralAccel", this.maxLateralAccel);
                 this.headingTolerance = Angle.fromDeg(json.optDouble("headingToleranceDeg", 1.0));
                 this.distanceTolerance = Dist.fromIn(json.optDouble("distanceToleranceIn", 0.5));
                 this.tTolerance = json.optDouble("tTolerance", 0.95);
 
-            } catch (Exception ignored) { }
+            } catch (Exception ignored) {
+                //defaults to 0 values everywhere
+            }
         }
     }
-
-    /**
-     * Kept for compatibility with FollowerTuner.java.
-     * Constructor already handles the logic; this simply returns the object.
-     */
     public FollowerConstants loadFromJson() {
         return this;
     }
