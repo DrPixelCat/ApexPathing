@@ -11,7 +11,7 @@ import util.AngleUnit;
 import util.DistUnit;
 import util.PoseFactory;
 
-public class ExamplePathAPIV3 {
+public class ExampleAutoPath {
     private DistUnit distUnit = DistUnit.IN;
     private AngleUnit angleUnit = AngleUnit.DEG;
     public PoseFactory pose = new PoseFactory(distUnit, angleUnit);
@@ -20,7 +20,7 @@ public class ExamplePathAPIV3 {
     public Path testPath;
     public Turn testTurn;
 
-    public ExamplePathAPIV3(PoseFactory.Mirror mirror) {
+    public ExampleAutoPath(PoseFactory.Mirror mirror) {
         pose.setMirror(mirror);
         startPose = Pose.Common.CENTER.get(); // (0, 0, 0)
         buildRoutine();
