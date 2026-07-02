@@ -13,21 +13,21 @@ public class LateralAccelerationPhase extends TuningPhase {
     private boolean testingPath;
     private double accelMaxError;
 
-    public LateralAccelerationPhase() {
-        super("LATERAL_ACCEL");
+    public LateralAccelerationPhase(TunerContext context) {
+        super(context, Phase.LATERAL_ACCEL);
     }
 
     @Override
-    protected void beginAutomatic(TunerContext context) {
+    protected void beginAutomatic() {
         driftDetected = false;
         testingPath = false;
         accelMaxError = 0;
     }
 
     @Override
-    protected boolean updateAutomatic(TunerContext context) throws InterruptedException {
+    protected boolean updateAutomatic() throws InterruptedException {
         if (testingPath) {
-            return updatePathTest(context);
+            return updatePathTest();
         }
 
         if (driftDetected || context.maxLateralAccel > 300) {
@@ -55,7 +55,7 @@ public class LateralAccelerationPhase extends TuningPhase {
         return false;
     }
 
-    private boolean updatePathTest(TunerContext context) throws InterruptedException {
+    private boolean updatePathTest() throws InterruptedException {
         context.follower().update();
         double err = context.follower().getPose().getPos().getMag().getIn();
         if (err > accelMaxError) {
@@ -79,12 +79,12 @@ public class LateralAccelerationPhase extends TuningPhase {
     }
 
     @Override
-    protected double currentManualValue(TunerContext context) {
+    protected double currentManualValue() {
         return context.maxLateralAccel;
     }
 
     @Override
-    protected void applyManualValue(TunerContext context, double value) {
+    protected void applyManualValue(double value) {
         context.maxLateralAccel = value;
     }
 
@@ -114,17 +114,17 @@ public class LateralAccelerationPhase extends TuningPhase {
     }
 
     @Override
-    protected void reportAutomaticResult(TunerContext context) {
+    protected void reportAutomaticResult() {
         context.telemetry().addData("Max Lateral Accel", context.maxLateralAccel);
     }
 
     @Override
-    protected void onAccepted(TunerContext context) {
+    protected void onAccepted() {
         context.saveConstantsToJson();
     }
 
     @Override
-    protected TuningPhase nextPhase(TunerContext context) {
+    protected TuningPhase nextPhase() {
         return null;
     }
 }

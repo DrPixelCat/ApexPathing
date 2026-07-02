@@ -1,33 +1,41 @@
 package org.firstinspires.ftc.teamcode.apexpathing.tuning;
 
 public abstract class TuningPhase {
-    private final String name;
+    public enum Phase {
+        HEADING,
+        TRANSLATION,
+        VELOCITY_FF,
+        LATERAL_ACCEL
+    }
+    protected final TunerContext context;
+    private final Phase phase;
     private boolean awaitingStart = true;
     private boolean confirming;
     private boolean readyToRerun;
     private boolean manualMode;
 
-    protected TuningPhase(String name) {
-        this.name = name;
+    protected TuningPhase(TunerContext context, Phase phase) {
+        this.context = context;
+        this.phase = phase;
     }
 
-    public final String name() {
-        return name;
+    public final Phase phase() {
+        return phase;
     }
 
     public final boolean isRunningAutomatic() {
         return !awaitingStart && !confirming;
     }
 
-    public void onResume(TunerContext context) {
+    public void onResume() {
     }
 
-    public final TuningPhase update(TunerContext context, TunerInput input) throws InterruptedException {
+    public final TuningPhase update(boolean aPressed, boolean bPressed) throws InterruptedException {
         if (awaitingStart) {
-            updateAwaitingStart(context, input);
+            updateAwaitingStart(aPressed, bPressed);
         } else if (confirming) {
-            return updateConfirmation(context, input);
-        } else if (updateAutomatic(context)) {
+            return updateConfirmation(aPressed, bPressed);
+        } else if (updateAutomatic()) {
             context.updateFollowerConfig();
             readyToRerun = false;
             confirming = true;
@@ -36,28 +44,28 @@ public abstract class TuningPhase {
         return this;
     }
 
-    private void updateAwaitingStart(TunerContext context, TunerInput input) throws InterruptedException {
-        context.telemetry().addLine(name + " phase initialized");
+    private void updateAwaitingStart(boolean aPressed, boolean bPressed) throws InterruptedException {
+        context.telemetry().addLine(phase + " phase initialized");
         context.telemetry().addLine("A - Toggle mode");
         context.telemetry().addLine("B - Start tuning");
         context.telemetry().addData("Selected Mode", modeName());
 
-        if (input.aPressed()) {
+        if (aPressed) {
             toggleMode();
-        } else if (input.bPressed()) {
+        } else if (bPressed) {
             if (manualMode) {
-                context.setManualGuess(currentManualValue(context));
+                context.setManualGuess(currentManualValue());
                 readyToRerun = false;
                 awaitingStart = false;
                 confirming = true;
             } else {
-                startAutomatic(context);
+                startAutomatic();
             }
         }
     }
 
-    private TuningPhase updateConfirmation(TunerContext context, TunerInput input) throws InterruptedException {
-        context.telemetry().addData("Current Phase", name);
+    private TuningPhase updateConfirmation(boolean aPressed, boolean bPressed) throws InterruptedException {
+        context.telemetry().addData("Current Phase", phase);
         context.telemetry().addData("Robot Pose", context.follower().getPose().toString());
 
         if (!readyToRerun) {
@@ -67,17 +75,17 @@ public abstract class TuningPhase {
             if (manualMode) {
                 context.telemetry().addLine("--- MANUAL TUNING ---");
                 context.telemetry().addLine(manualInstructions());
-                applyManualValue(context, context.manualGuess());
+                applyManualValue(context.manualGuess());
                 context.updateFollowerConfig();
-                context.telemetry().addData(manualTelemetryLabel(), currentManualValue(context));
+                context.telemetry().addData(manualTelemetryLabel(), currentManualValue());
             } else {
-                reportAutomaticResult(context);
+                reportAutomaticResult();
             }
 
-            if (input.aPressed()) {
-                onAccepted(context);
-                return nextPhase(context);
-            } else if (input.bPressed()) {
+            if (aPressed) {
+                onAccepted();
+                return nextPhase();
+            } else if (bPressed) {
                 readyToRerun = true;
             }
         } else {
@@ -85,17 +93,17 @@ public abstract class TuningPhase {
             context.telemetry().addLine(rerunExecutionPrompt());
             context.telemetry().addData("Selected Mode", modeName());
 
-            if (input.aPressed()) {
+            if (aPressed) {
                 toggleMode();
                 if (manualMode) {
-                    context.setManualGuess(currentManualValue(context));
+                    context.setManualGuess(currentManualValue());
                 }
-            } else if (input.bPressed()) {
+            } else if (bPressed) {
                 readyToRerun = false;
                 if (manualMode) {
                     confirming = true;
                 } else {
-                    startAutomatic(context);
+                    startAutomatic();
                 }
             }
         }
@@ -104,11 +112,11 @@ public abstract class TuningPhase {
         return this;
     }
 
-    private void startAutomatic(TunerContext context) throws InterruptedException {
+    private void startAutomatic() throws InterruptedException {
         readyToRerun = false;
         awaitingStart = false;
         confirming = false;
-        beginAutomatic(context);
+        beginAutomatic();
     }
 
     private void toggleMode() {
@@ -131,22 +139,234 @@ public abstract class TuningPhase {
         return "B - Rerun tuner";
     }
 
-    protected void onAccepted(TunerContext context) {
+    protected void onAccepted() {
     }
 
-    protected abstract void beginAutomatic(TunerContext context) throws InterruptedException;
+    protected abstract void beginAutomatic() throws InterruptedException;
 
-    protected abstract boolean updateAutomatic(TunerContext context) throws InterruptedException;
+    protected abstract boolean updateAutomatic() throws InterruptedException;
 
-    protected abstract double currentManualValue(TunerContext context);
+    protected abstract double currentManualValue();
 
-    protected abstract void applyManualValue(TunerContext context, double value);
+    protected abstract void applyManualValue(double value);
 
     protected abstract String manualInstructions();
 
     protected abstract String manualTelemetryLabel();
 
-    protected abstract void reportAutomaticResult(TunerContext context);
+    protected abstract void reportAutomaticResult();
 
-    protected abstract TuningPhase nextPhase(TunerContext context);
+    protected abstract TuningPhase nextPhase();
+
+    protected static class PDSRoutine {
+        private final TunerContext context;
+        private final boolean angular;
+        private KsSearchRoutine ksSearch;
+        private StepResponseRoutine stepResponse;
+
+        protected PDSRoutine(TunerContext context, boolean angular) {
+            this.context = context;
+            this.angular = angular;
+        }
+
+        protected void begin() {
+            ksSearch = new KsSearchRoutine(context, angular);
+            stepResponse = null;
+        }
+
+        protected void resume() {
+            if (stepResponse != null) {
+                stepResponse.resume();
+            }
+        }
+
+        protected boolean update() throws InterruptedException {
+            if (ksSearch != null) {
+                ksSearch.update();
+                if (!ksSearch.isComplete()) {
+                    return false;
+                }
+
+                onStaticFeedforwardFound(ksSearch.result());
+                stepResponse = new StepResponseRoutine(context, angular);
+                stepResponse.start();
+                ksSearch = null;
+                return false;
+            }
+
+            if (stepResponse == null || !stepResponse.update()) {
+                return false;
+            }
+
+            applyStepResult(stepResponse.result());
+            return true;
+        }
+
+        protected void onStaticFeedforwardFound(double value) {
+        }
+
+        protected void onStepResponseFound(double kP, double kD) {
+        }
+
+        private void applyStepResult(StepResult result) {
+            double kP = result.kP > 0 ? result.kP : 0.01;
+            double kD = result.kD > 0 ? result.kD : 0.001;
+
+            if (!angular) {
+                kP = Double.isFinite(result.kP) && result.kP > 0 ? result.kP : 0.01;
+                kD = Double.isFinite(result.kD) && result.kD > 0 ? result.kD : 0.001;
+            }
+
+            onStepResponseFound(kP, kD);
+        }
+    }
+
+    private static class KsSearchRoutine {
+        private final TunerContext context;
+        private final boolean angular;
+        private double max = 0.2;
+        private double min = 0.0;
+        private double guess = 0.0;
+        private double lastGuess = -1.0;
+        private double maxDeviation;
+        private boolean complete;
+
+        KsSearchRoutine(TunerContext context, boolean angular) {
+            this.context = context;
+            this.angular = angular;
+        }
+
+        void update() throws InterruptedException {
+            if (Math.abs(lastGuess - guess) <= 0.01) {
+                complete = true;
+                return;
+            }
+
+            context.resetPose();
+            context.follower().update();
+            guess = (max + min) / 2.0;
+            maxDeviation = 0.0;
+            context.timer.reset();
+
+            while (context.isActive() && context.timer.time(java.util.concurrent.TimeUnit.MILLISECONDS) < 500) {
+                context.follower().update();
+                double position = angular
+                        ? context.follower().getPose().getHeading().getRad()
+                        : context.follower().getPose().getPos().getX().getIn();
+                maxDeviation = Math.max(Math.abs(position), maxDeviation);
+
+                if (angular) {
+                    context.follower().teleOpDrive(0, 0, guess);
+                } else {
+                    context.follower().teleOpDrive(guess, 0, 0);
+                }
+            }
+
+            if (maxDeviation > 0.025) {
+                max = guess;
+            } else {
+                min = guess;
+            }
+
+            lastGuess = guess;
+            context.stopDrive();
+            context.sleep(500);
+        }
+
+        boolean isComplete() {
+            return complete;
+        }
+
+        double result() {
+            return guess;
+        }
+    }
+
+    private static class StepResponseRoutine {
+        private final TunerContext context;
+        private final boolean angular;
+        private double maxAccel;
+        private double lastVel;
+        private double lastTime;
+        private double startTime;
+        private double timeStamp;
+        private double velAtTimeStamp;
+        private StepResult result;
+
+        StepResponseRoutine(TunerContext context, boolean angular) {
+            this.context = context;
+            this.angular = angular;
+        }
+
+        void start() {
+            maxAccel = 0;
+            lastVel = 0;
+            timeStamp = 0;
+            velAtTimeStamp = 0;
+            lastTime = System.nanoTime();
+            startTime = System.nanoTime();
+            context.timer.reset();
+            context.resetPose();
+        }
+
+        void resume() {
+            lastTime = System.nanoTime();
+            context.timer.reset();
+        }
+
+        boolean update() throws InterruptedException {
+            if (context.timer.time(java.util.concurrent.TimeUnit.MILLISECONDS) >= 2000) {
+                context.stopDrive();
+                context.sleep(500);
+
+                double responseDelay = timeStamp - (velAtTimeStamp / maxAccel);
+                result = new StepResult(
+                        1.2 / (responseDelay * maxAccel),
+                        0.6 / maxAccel
+                );
+                return true;
+            }
+
+            context.follower().update();
+            double currentVel = angular
+                    ? context.follower().getVelocity().getHeading().getRad()
+                    : context.follower().getVelocity().getPos().getX().getIn();
+
+            double now = System.nanoTime();
+            double deltaT = (now - lastTime) / 1e9;
+            double deltaV = currentVel - lastVel;
+            double accel = deltaT > 1e-6 ? deltaV / deltaT : 0.0;
+
+            if (accel > maxAccel) {
+                maxAccel = accel;
+                timeStamp = (now - startTime) / 1e9;
+                velAtTimeStamp = currentVel;
+            }
+
+            lastVel = currentVel;
+            lastTime = now;
+
+            if (angular) {
+                context.follower().teleOpDrive(0, 0, 1.0);
+            } else {
+                context.follower().teleOpDrive(1.0, 0, 0);
+            }
+
+            return false;
+        }
+
+        StepResult result() {
+            return result;
+        }
+    }
+
+    private static class StepResult {
+        final double kP;
+        final double kD;
+
+        StepResult(double kP, double kD) {
+            this.kP = kP;
+            this.kD = kD;
+        }
+    }
 }

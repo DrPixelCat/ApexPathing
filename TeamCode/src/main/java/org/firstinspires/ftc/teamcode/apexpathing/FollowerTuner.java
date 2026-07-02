@@ -11,7 +11,6 @@ import drivetrains.BaseDrivetrainConfig;
 import localizers.BaseLocalizerConfig;
 import org.firstinspires.ftc.teamcode.apexpathing.tuning.HeadingPhase;
 import org.firstinspires.ftc.teamcode.apexpathing.tuning.TunerContext;
-import org.firstinspires.ftc.teamcode.apexpathing.tuning.TunerInput;
 import org.firstinspires.ftc.teamcode.apexpathing.tuning.TuningPhase;
 import org.firstinspires.ftc.teamcode.apexpathing.tuning.TranslationPhase;
 import org.firstinspires.ftc.teamcode.apexpathing.tuning.VelocityFeedforwardPhase;
@@ -32,8 +31,10 @@ public class FollowerTuner extends LinearOpMode {
     private final FollowerConstants followerConstants = new FollowerConstants();
     private final TunerContext tunerContext = new TunerContext(this, followerConstants);
 
-    private TuningPhase phase = new HeadingPhase();
-    private TunerInput input;
+    private TuningPhase phase = new HeadingPhase(tunerContext);
+    private boolean lastA;
+    private boolean lastB;
+    private boolean lastY;
     private boolean paused;
 
     @Override
@@ -62,12 +63,12 @@ public class FollowerTuner extends LinearOpMode {
             telemetry.addLine("WARNING: Do NOT run the tuners out of order");
 
             if (gamepad1.a) {
-                phase = new TranslationPhase();
+                phase = new TranslationPhase(tunerContext);
             } else if (gamepad1.b) {
-                phase = new VelocityFeedforwardPhase();
+                phase = new VelocityFeedforwardPhase(tunerContext);
             }
 
-            telemetry.addData("Selected Phase", phase.name());
+            telemetry.addData("Selected Phase", phase.phase());
             telemetry.update();
         }
 
@@ -75,22 +76,26 @@ public class FollowerTuner extends LinearOpMode {
         tunerContext.setFollower(new Follower(customConfig, hardwareMap));
 
         waitForStart();
-        input = new TunerInput(this);
+        captureCurrentButtons();
 
         while (opModeIsActive() && phase != null && !isStopRequested()) {
-            handlePause();
+            boolean aPressed = gamepad1.a && !lastA;
+            boolean bPressed = gamepad1.b && !lastB;
+            boolean yPressed = gamepad1.y && !lastY;
+
+            handlePause(yPressed);
 
             if (paused && phase.isRunningAutomatic()) {
                 tunerContext.stopDrive();
                 telemetry.addLine("Tuner Paused, Y to resume.");
-                input.captureCurrentAsPrevious();
+                captureCurrentButtons();
                 telemetry.update();
                 continue;
             }
 
-            phase = phase.update(tunerContext, input);
+            phase = phase.update(aPressed, bPressed);
 
-            input.captureCurrentAsPrevious();
+            captureCurrentButtons();
             telemetry.update();
         }
 
@@ -101,15 +106,21 @@ public class FollowerTuner extends LinearOpMode {
         }
     }
 
-    private void handlePause() {
-        if (!input.yPressed() || phase == null || !phase.isRunningAutomatic()) {
+    private void handlePause(boolean yPressed) {
+        if (!yPressed || phase == null || !phase.isRunningAutomatic()) {
             return;
         }
 
         paused = !paused;
         if (!paused) {
-            phase.onResume(tunerContext);
+            phase.onResume();
         }
+    }
+
+    private void captureCurrentButtons() {
+        lastA = gamepad1.a;
+        lastB = gamepad1.b;
+        lastY = gamepad1.y;
     }
 
     private final ApexConfig customConfig = new ApexConfig() {

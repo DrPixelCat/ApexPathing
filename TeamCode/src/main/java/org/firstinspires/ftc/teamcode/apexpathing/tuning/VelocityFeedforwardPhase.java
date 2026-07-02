@@ -1,16 +1,16 @@
 package org.firstinspires.ftc.teamcode.apexpathing.tuning;
 
 public class VelocityFeedforwardPhase extends TuningPhase {
-    public VelocityFeedforwardPhase() {
-        super("VELOCITY_FF");
+    public VelocityFeedforwardPhase(TunerContext context) {
+        super(context, Phase.VELOCITY_FF);
     }
 
     @Override
-    protected void beginAutomatic(TunerContext context) {
+    protected void beginAutomatic() {
     }
 
     @Override
-    protected boolean updateAutomatic(TunerContext context) throws InterruptedException {
+    protected boolean updateAutomatic() throws InterruptedException {
         context.follower().teleOpDrive(0, 1.0, 0);
         context.sleep(1500);
 
@@ -23,12 +23,12 @@ public class VelocityFeedforwardPhase extends TuningPhase {
     }
 
     @Override
-    protected double currentManualValue(TunerContext context) {
+    protected double currentManualValue() {
         return context.velocityFF;
     }
 
     @Override
-    protected void applyManualValue(TunerContext context, double value) {
+    protected void applyManualValue(double value) {
         context.velocityFF = value;
     }
 
@@ -43,7 +43,7 @@ public class VelocityFeedforwardPhase extends TuningPhase {
     }
 
     @Override
-    protected void reportAutomaticResult(TunerContext context) {
+    protected void reportAutomaticResult() {
         context.telemetry().addData("Velocity FF (kV)", context.velocityFF);
     }
 
@@ -53,12 +53,12 @@ public class VelocityFeedforwardPhase extends TuningPhase {
     }
 
     @Override
-    protected void onAccepted(TunerContext context) {
+    protected void onAccepted() {
         context.maxLateralAccel = 50.0;
     }
 
     @Override
-    protected TuningPhase nextPhase(TunerContext context) {
-        return new LateralAccelerationPhase();
+    protected TuningPhase nextPhase() {
+        return new LateralAccelerationPhase(context);
     }
 }
