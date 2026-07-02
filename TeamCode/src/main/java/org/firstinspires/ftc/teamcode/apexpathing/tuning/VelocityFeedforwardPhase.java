@@ -59,6 +59,6 @@ public class VelocityFeedforwardPhase extends TuningPhase {
 
     @Override
     protected TuningPhase nextPhase(TunerContext context) {
-        return null;
+        return new LateralAccelerationPhase();
     }
 }
