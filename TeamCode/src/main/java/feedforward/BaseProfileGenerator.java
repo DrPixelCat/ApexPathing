@@ -13,6 +13,11 @@ import paths.constraint.TranslationalConstraint;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 
+/**
+ * Shared path-parameterized profile generator.
+ * <p>
+ * Subclasses provide the drivetrain-specific power model through {@link #evaluatePoint}.
+ */
 public abstract class BaseProfileGenerator {
     private static final double UTILIZATION_LIMIT = 1.0;
     private static final double UTILIZATION_TOLERANCE = 1e-3;
@@ -30,6 +35,9 @@ public abstract class BaseProfileGenerator {
     protected abstract double calculateMaxTangentialVelocity(PathPoint point, Path path,
                                                              double maxAngVel, double maxAngAccel);
 
+    /**
+     * Evaluates normalized drivetrain utilization for the segment ending at {@code current}.
+     */
     protected abstract void evaluatePoint(
             Path path, PathPoint prev, PathPoint current,
             double v_prev, double v, double a_t,
@@ -44,6 +52,10 @@ public abstract class BaseProfileGenerator {
 
     // region Master Loop
 
+    /**
+     * Builds the first pass profile before the iterative pinning loop.
+     * Useful for comparing the raw constraint sweep against {@link #generate()}.
+     */
     public MotionParameters[] generateInitialProfile() {
         Path path = (Path) this.path;
         PathPoint[] points = path.getGeneratedPoints();
@@ -56,6 +68,9 @@ public abstract class BaseProfileGenerator {
         return outputParams;
     }
 
+    /**
+     * Generates a velocity profile and tightens any point that exceeds drivetrain utilization.
+     */
     public MotionParameters[] generate() {
         if (!(path instanceof Path)) {
             throw new IllegalArgumentException("BaseFeedforwardGen only handles Path movements.");
@@ -127,6 +142,7 @@ public abstract class BaseProfileGenerator {
                                                          Path path) {
         EvaluationResult currentEval = new EvaluationResult();
         ProfileEvaluation profileEval = new ProfileEvaluation();
+        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
         lut[0].setTangentialAccel(0.0);
         lut[0].setAngularVel(0.0);
         lut[0].setAngularAccel(0.0);
@@ -135,14 +151,13 @@ public abstract class BaseProfileGenerator {
             double ds = Math.abs(points[i].getDistanceToEnd_in() - points[i - 1].getDistanceToEnd_in());
             double v = lut[i].getTangentialVel();
             double v_prev = lut[i - 1].getTangentialVel();
-            double a_t = (ds < 1e-6) ? 0.0 : ((v * v) - (v_prev * v_prev)) / (2.0 * ds);
+            double a_t = (ds < EPSILON) ? 0.0 : ((v * v) - (v_prev * v_prev)) / (2.0 * ds);
 
             lut[i].setTangentialAccel(a_t);
 
             double s = points[i].getDistanceToEnd_in();
             double kappa = points[i].getSignedCurvature();
             double dKappa = points[i].getCurvatureDerivative();
-            Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
 
             double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
             double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa, finalTangent);
@@ -198,6 +213,7 @@ public abstract class BaseProfileGenerator {
         if (!path.isAccelBoosted()) {
             lut[0].setTangentialVel(0.0);
         }
+        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
 
         for (int i = 1; i < points.length; i++) {
             double ds =
@@ -209,13 +225,12 @@ public abstract class BaseProfileGenerator {
             double v = Math.min(lut[i].getTangentialVel(), maxReachableVel);
             lut[i].setTangentialVel(v);
 
-            double a_t = (ds < 1e-6) ? 0.0 : ((v * v) - (prevVel * prevVel)) / (2.0 * ds);
+            double a_t = (ds < EPSILON) ? 0.0 : ((v * v) - (prevVel * prevVel)) / (2.0 * ds);
             lut[i].setTangentialAccel(a_t);
 
             double s = points[i].getDistanceToEnd_in();
             double kappa = points[i].getSignedCurvature();
             double dKappa = points[i].getCurvatureDerivative();
-            Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
 
             double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa,
                     finalTangent);
@@ -275,6 +290,10 @@ public abstract class BaseProfileGenerator {
             double ds =
                     Math.abs(points[i + 1].getDistanceToEnd_in() - points[i].getDistanceToEnd_in());
             double nextVel = lut[i + 1].getTangentialVel();
+            if (ds <= EPSILON) {
+                lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), nextVel));
+                continue;
+            }
 
             double pctCompleted = 1.0 - (points[i + 1].getDistanceToEnd_in() / pathLength_in);
             double currentMaxAccel = Double.MAX_VALUE;
@@ -324,6 +343,10 @@ public abstract class BaseProfileGenerator {
             double ds =
                     Math.abs(points[i].getDistanceToEnd_in() - points[i - 1].getDistanceToEnd_in());
             double prevVel = lut[i - 1].getTangentialVel();
+            if (ds <= EPSILON) {
+                lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), prevVel));
+                continue;
+            }
 
             double pctCompleted = 1.0 - (points[i].getDistanceToEnd_in() / pathLength_in);
             double currentMaxAccel = Double.MAX_VALUE;

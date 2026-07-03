@@ -58,6 +58,8 @@ public class HolonomicInterpolator implements HeadingInterpolator {
         return finalBaseHeading.getShortestAngleTo(endHeading).getRad();
     }
 
+    // region Kinematic Evaluations
+
     @Override
     public Angle getHeadingTarg(double s, Vector pathTangent, Vector finalTangent) {
         Angle baseHeading;
@@ -69,6 +71,12 @@ public class HolonomicInterpolator implements HeadingInterpolator {
                 break;
             case CONSTANT_END_HEADING:
                 baseHeading = endHeading.copy();
+                break;
+            case SMOOTH_START_TO_END:
+                // Full-path cubic ease-in/ease-out interpolation
+                double smoothU = (3.0 * pctTraveled * pctTraveled) - (2.0 * Math.pow(pctTraveled, 3));
+                double diffRad = startHeading.getShortestAngleTo(endHeading).getRad();
+                baseHeading = Angle.fromRad(startHeading.getRad() + (diffRad * smoothU));
                 break;
             case TANGENT_FORWARD:
                 baseHeading = pathTangent.getTheta();
@@ -83,11 +91,12 @@ public class HolonomicInterpolator implements HeadingInterpolator {
                 throw new IllegalStateException("Unhandled HolonomicHeadingStyle");
         }
 
+        // Apply the 15-inch terminal blend if necessary
         double u = getBlendU(s);
-        if (u > 0.0) {
+        if (u > 0.0 && style != HolonomicInterpolationStyle.SMOOTH_START_TO_END) {
             double terminalError = getTerminalErrorRad(finalTangent);
-            double smoothU = (3.0 * u * u) - (2.0 * u * u * u);
-            return Angle.fromRad(baseHeading.getRad() + (terminalError * smoothU));
+            double blendSmoothU = (3.0 * u * u) - (2.0 * u * u * u);
+            return Angle.fromRad(baseHeading.getRad() + (terminalError * blendSmoothU));
         }
 
         return baseHeading;
@@ -100,15 +109,17 @@ public class HolonomicInterpolator implements HeadingInterpolator {
 
         if (style == HolonomicInterpolationStyle.TANGENT_FORWARD || style == HolonomicInterpolationStyle.TANGENT_CUSTOM) {
             basePrime = kappa;
+        } else if (style == HolonomicInterpolationStyle.SMOOTH_START_TO_END) {
+            // Chain rule: d(theta)/ds_traveled = d(theta)/d(pct) * (1 / pathLength)
+            double diffRad = startHeading.getShortestAngleTo(endHeading).getRad();
+            basePrime = diffRad * (6.0 * pctTraveled - 6.0 * pctTraveled * pctTraveled) / pathLength;
         } else if (style == HolonomicInterpolationStyle.NODE_BASED) {
-            // Chain rule: d(theta)/ds_traveled = d(theta)/d(pct) * d(pct)/ds_traveled
             basePrime = headingSpline.getFirstDerivative(pctTraveled) * (1.0 / pathLength);
         }
 
         double u = getBlendU(s);
-        if (u > 0.0) {
+        if (u > 0.0 && style != HolonomicInterpolationStyle.SMOOTH_START_TO_END) {
             double terminalError = getTerminalErrorRad(finalTangent);
-            // derivative of u with respect to s_traveled
             double dSmoothU = (6.0 * u - 6.0 * u * u) / blendWindow;
             return basePrime + (terminalError * dSmoothU);
         }
@@ -123,14 +134,16 @@ public class HolonomicInterpolator implements HeadingInterpolator {
 
         if (style == HolonomicInterpolationStyle.TANGENT_FORWARD || style == HolonomicInterpolationStyle.TANGENT_CUSTOM) {
             baseDoublePrime = dKappa;
+        } else if (style == HolonomicInterpolationStyle.SMOOTH_START_TO_END) {
+            // Chain rule: d2(theta)/ds_traveled2 = d2(theta)/d(pct)2 * (1 / pathLength)^2
+            double diffRad = startHeading.getShortestAngleTo(endHeading).getRad();
+            baseDoublePrime = diffRad * (6.0 - 12.0 * pctTraveled) / (pathLength * pathLength);
         } else if (style == HolonomicInterpolationStyle.NODE_BASED) {
-            // Chain rule: d2(theta)/ds_traveled2 = d2(theta)/d(pct)2 * (d(pct)/ds_traveled)^2
-            baseDoublePrime =
-                    headingSpline.getSecondDerivative(pctTraveled) * (1.0 / (pathLength * pathLength));
+            baseDoublePrime = headingSpline.getSecondDerivative(pctTraveled) * (1.0 / (pathLength * pathLength));
         }
 
         double u = getBlendU(s);
-        if (u > 0.0) {
+        if (u > 0.0 && style != HolonomicInterpolationStyle.SMOOTH_START_TO_END) {
             double terminalError = getTerminalErrorRad(finalTangent);
             double d2SmoothU = (6.0 - 12.0 * u) / (blendWindow * blendWindow);
             return baseDoublePrime + (terminalError * d2SmoothU);
@@ -138,4 +151,6 @@ public class HolonomicInterpolator implements HeadingInterpolator {
 
         return baseDoublePrime;
     }
+
+    // endregion
 }

@@ -6,22 +6,27 @@ import org.knowm.xchart.XYChartBuilder;
 import org.knowm.xchart.XYSeries;
 import org.knowm.xchart.style.Styler;
 
+import org.junit.Assert;
+
 import controllers.PDSController;
 import core.FollowerConstants;
 import feedforward.MotionParameters;
+import feedforward.holonomic.mecanum.MecanumProfileGenerator;
 import feedforward.holonomic.swerve.SwerveProfileGenerator;
+import feedforward.tank.TankProfileGenerator;
 import geometry.Angle;
 import geometry.Dist;
 import geometry.PathPoint;
 import paths.builders.HolonomicPathBuilder;
+import paths.builders.TankPathBuilder;
 import paths.heading.HolonomicInterpolationStyle;
+import paths.heading.TankInterpolationStyle;
 import paths.movements.Path;
 import util.AngleUnit;
 import util.DistUnit;
 import util.PoseFactory;
 
 public class PathProfileConvergenceTest {
-
     FollowerConstants dummyConstants = new FollowerConstants().inject(
             FollowerConstants.DrivetrainType.COAXIAL_SWERVE,
             new PDSController.PDSCoefficients(12, 0.8, 0.04, 0.0),
@@ -46,9 +51,10 @@ public class PathProfileConvergenceTest {
 
     Path path = new HolonomicPathBuilder(
             poseFac.of(0, -50, 90),
-            poseFac.arcPoseOf(0, 50, 10),
-            poseFac.of(100, 50, 0))
-            .interpolateWith(HolonomicInterpolationStyle.TANGENT_FORWARD)
+            poseFac.of(0, 50, -90))
+//            poseFac.of(100, 50, 0))
+            .addHeadingNode(0.25, Angle.fromDeg(180))
+            .addHeadingNode(0.5, Angle.fromDeg(0))
             .profiledBuild();
 
     SwerveProfileGenerator generator = new SwerveProfileGenerator(dummyConstants, path);
@@ -183,6 +189,27 @@ public class PathProfileConvergenceTest {
         }
     }
 
+    @Test
+    public void testMecanumAndTankProfilesGenerateFiniteOutput() {
+        Path mecanumPath = new HolonomicPathBuilder(
+                poseFac.of(0, -50, 90),
+                poseFac.arcPoseOf(0, 50, 30),
+                poseFac.of(100, 50, 0))
+                .interpolateWith(HolonomicInterpolationStyle.TANGENT_FORWARD)
+                .quickBuild();
+        MotionParameters[] mecanumProfile =
+                new MecanumProfileGenerator(dummyConstants, mecanumPath).generate();
+        assertUsableProfile("mecanum", mecanumProfile);
+
+        Path tankPath = new TankPathBuilder(
+                poseFac.of(0, -50, 90),
+                poseFac.arcPoseOf(0, 50, 30),
+                poseFac.of(100, 50, 0))
+                .quickBuild();
+        MotionParameters[] tankProfile = new TankProfileGenerator(dummyConstants, tankPath).generate();
+        assertUsableProfile("tank", tankProfile);
+    }
+
     private void styleChart(XYChart chart) {
         chart.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
         chart.getStyler().setMarkerSize(0);
@@ -223,5 +250,32 @@ public class PathProfileConvergenceTest {
             max = Math.max(max, value);
         }
         return max;
+    }
+
+    private void assertUsableProfile(String name, MotionParameters[] profile) {
+        Assert.assertTrue(name + " profile should contain samples", profile.length > 2);
+
+        double maxVelocity = 0.0;
+        double maxPower = 0.0;
+        for (MotionParameters point : profile) {
+            Assert.assertTrue(name + " velocity must be finite",
+                    Double.isFinite(point.getTangentialVel()));
+            Assert.assertTrue(name + " acceleration must be finite",
+                    Double.isFinite(point.getTangentialAccel()));
+            Assert.assertTrue(name + " angular velocity must be finite",
+                    Double.isFinite(point.getAngularVel()));
+            Assert.assertTrue(name + " angular acceleration must be finite",
+                    Double.isFinite(point.getAngularAccel()));
+            Assert.assertTrue(name + " motor power must be finite",
+                    Double.isFinite(point.getMotorPower()));
+            Assert.assertTrue(name + " velocity should not go negative",
+                    point.getTangentialVel() >= -1e-6);
+
+            maxVelocity = Math.max(maxVelocity, point.getTangentialVel());
+            maxPower = Math.max(maxPower, point.getMotorPower());
+        }
+
+        Assert.assertTrue(name + " should move", maxVelocity > 1.0);
+        Assert.assertTrue(name + " should stay near normalized power", maxPower <= 1.05);
     }
 }

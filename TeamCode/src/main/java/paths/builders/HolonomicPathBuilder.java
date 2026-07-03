@@ -302,6 +302,25 @@ public class HolonomicPathBuilder {
             currentStyle = HolonomicInterpolationStyle.TANGENT_FORWARD;
         }
 
+        if (currentStyle == HolonomicInterpolationStyle.TANGENT_OPTIMAL) {
+            if (!Double.isFinite(startH.getRad())) {
+                currentStyle = HolonomicInterpolationStyle.TANGENT_FORWARD;
+            } else {
+                Vector startTangent = curve.getFirstDerivative(0.0);
+                double fwdError =
+                        Math.abs(startH.getShortestAngleTo(startTangent.getTheta()).getRad());
+                double bwdError =
+                        Math.abs(startH.getShortestAngleTo(
+                                startTangent.getTheta().plus(Angle.fromRad(Math.PI))).getRad());
+                if (bwdError < fwdError) {
+                    currentStyle = HolonomicInterpolationStyle.TANGENT_CUSTOM;
+                    customOffset = Angle.fromRad(Math.PI);
+                } else {
+                    currentStyle = HolonomicInterpolationStyle.TANGENT_FORWARD;
+                }
+            }
+        }
+
         HolonomicInterpolator interpolator = new HolonomicInterpolator(currentStyle, startH, endH
                 , customOffset, spline);
         interpolator.setPathLength(curve.getLengthIn());

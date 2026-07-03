@@ -210,7 +210,7 @@ public class PathSegment {
     }
 
     /**
-     * Estimates the derivative of curvature with respect to the parameter 't' (dK/dt)
+     * Estimates the derivative of curvature with respect to arc length (dK/ds)
      * using a central finite difference method.
      * <p>
      * To prevent floating-point precision loss or computational instability on extremely
@@ -218,7 +218,7 @@ public class PathSegment {
      * physical length of the curve to evaluate across a consistent physical distance.
      *
      * @param t The parametric progression [0.0, 1.0].
-     * @return The estimated rate of change of signed curvature.
+     * @return The estimated rate of change of signed curvature in 1/in^2.
      */
     public double getCurvatureDerivative(double t) {
         final double targetPhysicalDelta_in = 0.1;
