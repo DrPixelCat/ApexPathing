@@ -132,17 +132,15 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConfig<T>> {
      */
     public void setPowers(double flPower, double frPower, double blPower, double brPower) {
         // Motor power limiting
-        if (config.maxPower > 0) {
-            double max = Math.max(0, Math.abs(flPower));
-            max = Math.max(max, Math.abs(frPower));
-            if (blMotor != null) max = Math.max(max, Math.abs(blPower));
-            if (brMotor != null) max = Math.max(max, Math.abs(brPower));
-            if (max > config.maxPower) {
-                flPower = (flPower / max) * config.maxPower;
-                frPower = (frPower / max) * config.maxPower;
-                if (blMotor != null) blPower = (blPower / max) * config.maxPower;
-                if (brMotor != null) brPower = (brPower / max) * config.maxPower;
-            }
+        double max = Math.max(0, Math.abs(flPower));
+        max = Math.max(max, Math.abs(frPower));
+        if (blMotor != null) max = Math.max(max, Math.abs(blPower));
+        if (brMotor != null) max = Math.max(max, Math.abs(brPower));
+        if (max > config.maxPower) {
+            flPower = (flPower / max) * config.maxPower;
+            frPower = (frPower / max) * config.maxPower;
+            if (blMotor != null) blPower = (blPower / max) * config.maxPower;
+            if (brMotor != null) brPower = (brPower / max) * config.maxPower;
         }
 
         // TODO: Add velocity and acceleration limiting
@@ -169,6 +167,5 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConfig<T>> {
     /**
      * Stop all drivetrain actuators
      */
-    public void stop() {setPowers(0, 0, 0, 0);}
-
+    public void stop() { setPowers(0, 0, 0, 0); };
 }

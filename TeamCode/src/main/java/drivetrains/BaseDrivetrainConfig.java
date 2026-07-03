@@ -33,7 +33,7 @@ public abstract class BaseDrivetrainConfig<T extends BaseDrivetrainConfig<T>> {
     public Angle angularVelocityLimit = Angle.zero();
     public Dist linearAccelerationLimit = Dist.zero();
     public Angle angularAccelerationLimit = Angle.zero();
-    public double maxPower = 0;
+    public double maxPower = 1.0;
 
     // Other constants
     public boolean robotCentric = true; // Robot or field centric control
@@ -82,12 +82,11 @@ public abstract class BaseDrivetrainConfig<T extends BaseDrivetrainConfig<T>> {
     }
 
     /**
-     * Set the maximum motor output limit for the drivetrain. The default is zero (disabled).
+     * Set the maximum motor output limit for the drivetrain. The default is 1.0.
      */
     @SuppressWarnings("unchecked")
     public T setMaxPower(double maxPower) {
-        this.maxPower = maxPower;
-        return (T) this;
+        this.maxPower = Math.max(Math.min(0.0, maxPower), 1.0); return (T) this;
     }
 
     /**
