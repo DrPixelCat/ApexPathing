@@ -25,8 +25,6 @@ public abstract class BaseDrivetrainConfig<T extends BaseDrivetrainConfig<T>> {
     public MotorFactory frMotorConfig = new MotorFactory();
     public MotorFactory blMotorConfig = null;
     public MotorFactory brMotorConfig = null;
-    // Servos (for locking mecanum and butterfly)
-    public Runnable toggleDriveServos = null;
 
     // Movement limits (zero = not enabled)
     public Dist linearVelocityLimit = Dist.zero();

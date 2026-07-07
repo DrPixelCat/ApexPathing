@@ -60,11 +60,16 @@ public class FollowerConstants {
 
                 JSONObject json = new JSONObject(sb.toString());
 
-                String dtString = json.optString("drivetrainType", "MECANUM");
+                String dtString = json.optString("drivetrainType", null);
+
+                if (dtString == null || dtString.equals("null") || dtString.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Missing drivetrain type!");
+                }
                 try {
-                    drivetrainType = DrivetrainType.valueOf(dtString.toUpperCase());
+                    // Specify Locale.ROOT to ensure consistent ASCII capitalization globally
+                    this.drivetrainType = DrivetrainType.valueOf(dtString.toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
-                    drivetrainType = DrivetrainType.MECANUM;
+                    throw new IllegalArgumentException("Invalid drivetrain type: " + dtString);
                 }
 
                 headingCoeffs = new PDSCoefficients(

@@ -22,7 +22,7 @@ public class Tank extends BaseDrivetrain<Tank.Config> {
 
     @Override
     public boolean isHolonomic() {
-        return true;
+        return false;
     }
 
     /**
