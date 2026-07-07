@@ -28,13 +28,13 @@ import util.PoseFactory;
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
-public class Pinpoint extends BaseLocalizer<Pinpoint.Config> {
+public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
     private final Driver pinpoint;
 
     public enum EncoderDirection { FORWARD, REVERSED }
     public enum GoBildaPods { goBILDA_SWINGARM_POD,  goBILDA_4_BAR_POD }
 
-    public Pinpoint(Pinpoint.Config config, HardwareMap hardwareMap) {
+    public Pinpoint(Constants config, HardwareMap hardwareMap) {
         super(config);
 
         pinpoint = hardwareMap.get(Pinpoint.Driver.class, config.name);
@@ -63,7 +63,7 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Config> {
     }
 
     /** Configuration class for goBILDA Pinpoint localizer. */
-    public static class Config extends BaseLocalizerConfig<Pinpoint.Config> {
+    public static class Constants extends BaseLocalizerConstants<Constants> {
         public String name = "defaultPinpointNName";
         public Vector offsets = Vector.zero();
         public EncoderDirection xPodDirection = EncoderDirection.FORWARD;
@@ -81,33 +81,33 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Config> {
         }
 
         /** Sets the name of the Pinpoint in the hardware map. */
-        public Config setName(String name) { this.name = name; return this; }
+        public Constants setName(String name) { this.name = name; return this; }
 
         /** Sets the X and Y pod offsets of the Pinpoint */
-        public Config setOffsets(double xOffset, double yOffset, DistUnit distanceUnit) {
+        public Constants setOffsets(double xOffset, double yOffset, DistUnit distanceUnit) {
             this.offsets = Vector.of(xOffset, yOffset, distanceUnit); return this;
         }
 
         /** Sets the X and Y pod offsets of the Pinpoint express as a Vector */
-        public Config setOffsets(Vector offsets) { this.offsets = offsets; return this; }
+        public Constants setOffsets(Vector offsets) { this.offsets = offsets; return this; }
 
         /** Sets the direction of the X and Y encoders of the Pinpoint. */
-        public Config setEncoderDirections(EncoderDirection xPodDirection, EncoderDirection yPodDirection) {
+        public Constants setEncoderDirections(EncoderDirection xPodDirection, EncoderDirection yPodDirection) {
             this.xPodDirection = xPodDirection; this.yPodDirection = yPodDirection; return this;
         }
 
         /** Sets the encoder resolution of the Pinpoint in ticks per mm using goBILDA pods. */
-        public Config setEncoderResolution(GoBildaPods encoderResolution) {
+        public Constants setEncoderResolution(GoBildaPods encoderResolution) {
             this.encoderResolution = encoderResolution; return this;
         }
 
         /** Sets the encoder resolution of the Pinpoint in ticks per mm. */
-        public Config setEncoderResolution(Dist customEncoderResolution) {
+        public Constants setEncoderResolution(Dist customEncoderResolution) {
             this.customEncoderResolution = customEncoderResolution; return this;
         }
 
         /** Sets the yaw scalar of the Pinpoint. It is not recommended to change this values. */
-        public Config setYawScalar(double yawScalar) {
+        public Constants setYawScalar(double yawScalar) {
             this.yawScalar = yawScalar; return this;
         }
     }

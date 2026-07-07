@@ -17,7 +17,7 @@ import util.DistUnit;
  *
  * @author Topher F. - 23571 alumni
  */
-public class TwoWheel extends BaseLocalizer<TwoWheel.Config> {
+public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
     private final OdometryPod strafePod;
     private final OdometryPod forwardPod;
     private final IMU imu;
@@ -57,7 +57,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Config> {
         forwardPod.resetEncoder();
     }
 
-    public static class Config extends BaseLocalizerConfig<TwoWheel.Config> {
+    public static class Constants extends BaseLocalizerConstants<Constants> {
         public String forwardPodName = "forwardPodName";
         public String strafePodName = "strafePodName";
         public String imuName = "imu";
@@ -88,7 +88,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Config> {
         imu.resetYaw();
     }
 
-    public TwoWheel(TwoWheel.Config config, HardwareMap hardwareMap) {
+    public TwoWheel(Constants config, HardwareMap hardwareMap) {
         super(config);
 
         strafePod = new OdometryPod(hardwareMap, config.strafePodName, config.inchConversion);

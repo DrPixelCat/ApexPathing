@@ -9,7 +9,7 @@ import geometry.Vector;
 import util.AngleUnit;
 import util.DistUnit;
 
-public class ThreeWheel extends BaseLocalizer<ThreeWheel.Config> {
+public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
     private final OdometryPod strafePod;
     private final OdometryPod forwardPodLeft;
     private final OdometryPod forwardPodRight;
@@ -44,7 +44,7 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Config> {
         forwardPodLeft.resetEncoder();
     }
 
-    public static class Config extends BaseLocalizerConfig<ThreeWheel.Config> {
+    public static class Constants extends BaseLocalizerConstants<Constants> {
         public String forwardPodLeftName = "forwardPodLeftName";
         public String forwardPodRightName = "forwardPodRightName";
         public String strafePodName = "strafePodName";
@@ -69,7 +69,7 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Config> {
         }
     }
 
-    public ThreeWheel(ThreeWheel.Config config, HardwareMap hardwareMap) {
+    public ThreeWheel(Constants config, HardwareMap hardwareMap) {
         super(config);
 
         strafePod = new OdometryPod(hardwareMap, config.strafePodName, config.inchConversion);

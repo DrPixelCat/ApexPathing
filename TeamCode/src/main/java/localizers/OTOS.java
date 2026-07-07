@@ -20,10 +20,10 @@ import util.PoseFactory;
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
-public class OTOS extends BaseLocalizer<OTOS.Config> {
+public class OTOS extends BaseLocalizer<OTOS.Constants> {
     private final Driver otos;
 
-    public OTOS(OTOS.Config config, HardwareMap hardwareMap) {
+    public OTOS(Constants config, HardwareMap hardwareMap) {
         super(config);
 
         otos = hardwareMap.get(OTOS.Driver.class, config.name);
@@ -47,7 +47,7 @@ public class OTOS extends BaseLocalizer<OTOS.Config> {
     }
 
     /** Configuration class for goBILDA Pinpoint localizer. */
-    public static class Config extends BaseLocalizerConfig<OTOS.Config> {
+    public static class Constants extends BaseLocalizerConstants<Constants> {
         public String name = "defaultOTOSNName";
         public Pose offset = Pose.zero();
         public double linearScalar = 1.0;
@@ -62,17 +62,17 @@ public class OTOS extends BaseLocalizer<OTOS.Config> {
         }
 
         /** Sets the name of the OTOS in the hardware map. */
-        public Config setName(String name) { this.name = name; return this; }
+        public Constants setName(String name) { this.name = name; return this; }
 
         /** Sets the offset of the OTOS from the center of the robot. */
-        public Config setOffset(Pose offset) { this.offset = offset; return this; }
+        public Constants setOffset(Pose offset) { this.offset = offset; return this; }
 
         /**
          * Sets the linear scalar for the OTOS. This is a multiplier applied to the linear position
          * and velocity estimates from the OTOS to correct for any systematic errors in the sensor.
          * The value must be between 0.872 and 1.127, which corresponds to a correction of +/- 12.7%.
          */
-        public Config setLinearScalar(double linearScalar) {
+        public Constants setLinearScalar(double linearScalar) {
             if (linearScalar < Driver.MIN_SCALAR || linearScalar > Driver.MAX_SCALAR) {
                 throw new IllegalArgumentException("Linear scalar must be between " + Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
             }
@@ -84,7 +84,7 @@ public class OTOS extends BaseLocalizer<OTOS.Config> {
          * and velocity estimates from the OTOS to correct for any systematic errors in the sensor.
          * The value must be between 0.872 and 1.127, which corresponds to a correction of +/- 12.7%.
          */
-        public Config setAngularScalar(double angularScalar) {
+        public Constants setAngularScalar(double angularScalar) {
             if (angularScalar < Driver.MIN_SCALAR || angularScalar > Driver.MAX_SCALAR) {
                 throw new IllegalArgumentException("Angular scalar must be between " + Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
             }

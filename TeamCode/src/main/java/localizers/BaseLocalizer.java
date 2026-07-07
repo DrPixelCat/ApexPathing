@@ -12,10 +12,10 @@ import geometry.Pose;
  * sensor data.
  * </p>
  *
- * @param <T> the type of localizer configuration this drivetrain uses, which must extend {@link BaseLocalizerConfig}
+ * @param <T> the type of localizer configuration this drivetrain uses, which must extend {@link BaseLocalizerConstants}
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
-public abstract class BaseLocalizer<T extends BaseLocalizerConfig<T>> {
+public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     protected T config;
 
     protected enum UpdateType { VELOCITY, ACCELERATION, BOTH }
@@ -33,7 +33,7 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConfig<T>> {
 
     /**
      * Your localizer class constructor should call this super constructor to store the configuration.
-     * @param config your localizer configuration object that is a child of {@link BaseLocalizerConfig}
+     * @param config your localizer configuration object that is a child of {@link BaseLocalizerConstants}
      */
     public BaseLocalizer(T config) { this.config = config; }
 

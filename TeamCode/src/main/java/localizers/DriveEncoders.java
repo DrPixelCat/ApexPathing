@@ -15,13 +15,13 @@ import util.AngleUnit;
  *
  * @author Topher F. - 23571 alumni
  */
-public class DriveEncoders extends BaseLocalizer<DriveEncoders.Config>{
+public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants>{
     private final OdometryPod frontLeft, frontRight, backLeft, backRight;
     private final IMU imu;
 
     private double correction = 0.0;
 
-    public DriveEncoders(DriveEncoders.Config config, HardwareMap hardwareMap) {
+    public DriveEncoders(Constants config, HardwareMap hardwareMap) {
         super(config);
 
         frontLeft = new OdometryPod(hardwareMap, config.frontLeftName, config.inchConversion);
@@ -69,7 +69,7 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Config>{
         imu.resetYaw();
     }
 
-    public static class Config extends BaseLocalizerConfig<DriveEncoders.Config> {
+    public static class Constants extends BaseLocalizerConstants<Constants> {
         public String frontLeftName = "fLName";
         public String frontRightName = "fRName";
         public String backLeftName = "bLName";
