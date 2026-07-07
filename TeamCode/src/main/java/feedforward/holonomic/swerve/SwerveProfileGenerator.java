@@ -18,7 +18,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
     /** Avoids divide-by-zero and unstable comparisons near flat derivatives. */
     private static final double EPSILON = 1e-6;
     /** Number of binary-search steps used for local velocity ceilings. */
-    private static final int VELOCITY_SEARCH_ITERATIONS = 10;
+    private static final int VELOCITY_SEARCH_ITERATIONS = 8;
 
     /** Tuned physical and feedforward limits for the robot. */
     private final FollowerConstants config;

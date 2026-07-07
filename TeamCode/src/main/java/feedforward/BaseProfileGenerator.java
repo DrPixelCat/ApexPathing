@@ -31,7 +31,7 @@ public abstract class BaseProfileGenerator {
     /** Shared tiny value used to avoid divide-by-zero and unstable comparisons. */
     private static final double EPSILON = 1e-6;
     /** Binary-search depth for local velocity caps. */
-    private static final int PIN_SEARCH_ITERATIONS = 24;
+    private static final int PIN_SEARCH_ITERATIONS = 8;
 
     /** Movement being profiled. This base class currently expects a {@link Path}. */
     protected FollowerMovement path;
