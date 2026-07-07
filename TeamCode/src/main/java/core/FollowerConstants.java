@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.util.Locale;
 
 import controllers.PDSController.PDSCoefficients;
 import geometry.Angle;
@@ -60,11 +61,14 @@ public class FollowerConstants {
 
                 JSONObject json = new JSONObject(sb.toString());
 
-                String dtString = json.optString("drivetrainType", "MECANUM");
+                String dtString = json.optString("drivetrainType", null);
+                if (dtString == null || dtString.equals("null") || dtString.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Missing drivetrain type!");
+                }
                 try {
-                    drivetrainType = DrivetrainType.valueOf(dtString.toUpperCase());
+                    this.drivetrainType = DrivetrainType.valueOf(dtString.toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
-                    drivetrainType = DrivetrainType.MECANUM;
+                    throw new IllegalArgumentException("Invalid drivetrain type: " + dtString);
                 }
 
                 headingCoeffs = new PDSCoefficients(
