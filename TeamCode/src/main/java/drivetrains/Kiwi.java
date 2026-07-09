@@ -14,10 +14,10 @@ import util.MotorFactory;
 public class Kiwi extends BaseDrivetrain<Kiwi.Constants> {
     private final double sqrt3over2 = Math.sqrt(3) / 2; // Precompute this constant for efficiency
 
-    public Kiwi(Constants config, HardwareMap hardwareMap) {
-        super(config, hardwareMap);
+    public Kiwi(Constants constants, HardwareMap hardwareMap) {
+        super(constants, hardwareMap, DrivetrainType.KIWI);
 
-        if (Objects.equals(config.blMotorConfig, null)) {
+        if (Objects.equals(constants.blMotorConfig, null)) {
             throw new IllegalArgumentException(
                     "Back motor configurations must be provided for a kiwi drivetrain"
             );
@@ -33,11 +33,6 @@ public class Kiwi extends BaseDrivetrain<Kiwi.Constants> {
                 -y - turn, // Back motor = back left motor in the drivetrain configuration
                 0 // Back right motor isn't used
         );
-    }
-
-    @Override
-    public boolean isHolonomic() {
-        return true;
     }
 
     /** Configuration class for Kiwi/Killough/Thee-Wheel Omni drivetrain. */

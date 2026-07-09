@@ -19,13 +19,13 @@ public class MotorFactory {
     private RunMode runMode = RunMode.RUN_WITHOUT_ENCODER;
 
     /**
-     * Creates a motor config with the given name and defaults (not reversed, brake mode, run
+     * Creates a motor constants with the given name and defaults (not reversed, brake mode, run
      * without encoder).
      */
     public MotorFactory(String name) {this.name = name;}
 
     /**
-     * Creates a default motor config ("defaultMotorName", not reversed, brake mode, run without
+     * Creates a default motor constants ("defaultMotorName", not reversed, brake mode, run without
      * encoder).
      */
     public MotorFactory() {this("defaultMotorName");}

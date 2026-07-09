@@ -56,7 +56,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         @Override
         public OTOS build(HardwareMap hardwareMap) {
             if (Objects.equals(this.name, "defaultOTOSName")) {
-                throw new IllegalArgumentException("OTOS name is not set in the localizer config.");
+                throw new IllegalArgumentException("OTOS name is not set in the localizer constants.");
             }
             return new OTOS(this, hardwareMap);
         }
@@ -206,10 +206,8 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
          * Calibrates the IMU on the OTOS, which removes the accelerometer and
          * gyroscope offsets. This will do the full 255 samples and wait until
          * he calibration is done, which takes about 612ms as of firmware v1.0)
-         *
-         * @return true if the calibration was successful, false otherwise
          */
-        public boolean calibrate() {
+        public void calibrate() {
             // Write 255 to the calibration register (take 255 samples)
             deviceClient.write8(REG_IMU_CALIB, 255);
 
@@ -218,12 +216,12 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
                 Thread.sleep(3);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return false;
+                return;
             }
 
             for (int numAttempts = 255; numAttempts > 0; numAttempts--) {
                 // Read the gyro calibration register value to check completion
-                if (deviceClient.read8(REG_IMU_CALIB) == 0) { return true; }
+                if (deviceClient.read8(REG_IMU_CALIB) == 0) { return; }
 
                 // Give a short delay between reads. As of firmware v1.0, samples take
                 // 2.4ms each, so 3ms should guarantee the next sample is done. This
@@ -232,11 +230,9 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
                     Thread.sleep(3);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    return false;
+                    return;
                 }
             }
-
-            return false; // Max number of attempts reached, calibration failed
         }
 
         /** Resets the position tracker to zero. */

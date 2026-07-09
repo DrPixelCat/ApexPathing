@@ -7,7 +7,6 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.util.Locale;
 
 import controllers.PDSController.PDSCoefficients;
 import geometry.Angle;
@@ -19,135 +18,115 @@ import geometry.Dist;
  *
  * @author Sohum Arora 22985 Paraducks
  * @author Dylan B. 18597 RoboClovers - Delta
+ * @author DrPixelCat
  */
 public class FollowerConstants {
-
-    public enum DrivetrainType {
-        COAXIAL_SWERVE,
-        DUAL_ACTUATED,
-        KIWI,
-        MECANUM,
-        TANK
-    }
-
-    public DrivetrainType drivetrainType = DrivetrainType.MECANUM;
-
+    /*
+     * Note to developers:
+     * If you want to add new constants, create the variable here and add it to the loadValues() and
+     * toJson() methods. This will ensure that the new constants are loaded from the JSON file and
+     * saved back to it.
+     */
     public PDSCoefficients headingCoeffs = new PDSCoefficients();
     public PDSCoefficients translationalCoeffs = new PDSCoefficients();
+
     public double velocityFeedbackGain = 0.0;
     public double translationalKV = 0.0, translationalKA = 0.0;
     public double angularKV = 0.0, angularKA = 0.0;
     public double Kcentripetal = 0.0;
+
     public Dist forwardVelocityLimit = Dist.fromIn(0);
     public Dist forwardAccelerationLimit = Dist.fromIn(0);
     public Dist strafeVelocityLimit = Dist.fromIn(0);
     public Dist strafeAccelerationLimit = Dist.fromIn(0);
-    public Angle angularVelocityLimit = Angle.fromDeg(0);
-    public Angle angularAccelerationLimit = Angle.fromDeg(0);
-    public Angle headingTolerance = Angle.fromDeg(1.0);
-    public Dist distanceTolerance = Dist.fromIn(0.5);
+    public Angle angularVelocityLimit = Angle.fromRad(0);
+    public Angle angularAccelerationLimit = Angle.fromRad(0);
 
     public FollowerConstants() {
-        File file = new File(Environment.getExternalStorageDirectory().getPath() +
-                "/FIRST/ApexPathing/constants.json");
-        if (file.exists()) {
-            try {
-                BufferedReader reader = new BufferedReader(new FileReader(file));
-                StringBuilder sb = new StringBuilder();
+        loadValues();
+    }
 
-                String line;
-                while ((line = reader.readLine()) != null) sb.append(line);
-                reader.close();
-
-                JSONObject json = new JSONObject(sb.toString());
-
-                String dtString = json.optString("drivetrainType", null);
-                if (dtString == null || dtString.equals("null") || dtString.trim().isEmpty()) {
-                    throw new IllegalArgumentException("Missing drivetrain type!");
-                }
-                try {
-                    // Specify Locale.ROOT to ensure consistent ASCII capitalization globally
-                    this.drivetrainType = DrivetrainType.valueOf(dtString.toUpperCase(Locale.ROOT));
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("Invalid drivetrain type: " + dtString);
-                }
-
-                headingCoeffs = new PDSCoefficients(
-                        json.optDouble("headingP", 0),
-                        json.optDouble("headingD", 0),
-                        json.optDouble("headingS", 0), 0);
-
-                double tP = json.optDouble("translationP", 0);
-                double tD = json.optDouble("translationD", 0);
-                double tS = json.optDouble("translationS", 0);
-                translationalCoeffs = new PDSCoefficients(tP, tD, tS, 0);
-
-                translationalKV = json.optDouble("translationKV", translationalKV);
-                translationalKA = json.optDouble("translationKA", translationalKA);
-                angularKV = json.optDouble("angularKV", angularKV);
-                angularKA = json.optDouble("angularKA", angularKA);
-                Kcentripetal = json.optDouble("KC", Kcentripetal);
-                headingTolerance = Angle.fromDeg(json.optDouble("headingToleranceDeg", 1.0));
-                distanceTolerance = Dist.fromIn(json.optDouble("distanceToleranceIn", 0.5));
-
-                forwardVelocityLimit = Dist.fromIn(json.optDouble(
-                        "forwardVelocityLimitInPerSec", 0));
-                forwardAccelerationLimit = Dist.fromIn(json.optDouble(
-                        "forwardVelocityLimitInPerSec2", 0));
-                strafeVelocityLimit = Dist.fromIn(json.optDouble(
-                        "strafeVelocityLimitInPerSec", 0));
-                strafeAccelerationLimit = Dist.fromIn(json.optDouble(
-                        "strafeAccelerationLimitInPerSec2", 0));
-                angularVelocityLimit = Angle.fromDeg(json.optDouble(
-                        "angularVelocityLimitRadPerSec", 0));
-                angularAccelerationLimit = Angle.fromDeg(json.optDouble(
-                        "angularAccelerationLimitRadPerSec2", 0));
-            } catch (Exception ignored) {
-                // defaults to 0 values everywhere
-            }
+    private double loadDouble(JSONObject json, String key) {
+        try {
+            return json.getDouble(key);
+        } catch (Exception e) {
+            return 0.0;
         }
     }
 
-    public FollowerConstants inject(
-            DrivetrainType drivetrainType,
-            PDSCoefficients headingCoeffs,
-            PDSCoefficients translationalCoeffs,
-            double velocityFeedbackGain,
-            double translationalKV,
-            double translationalKA,
-            double angularKV,
-            double angularKA,
-            double Kcentripetal,
-            Dist forwardVelocityLimit,
-            Dist forwardAccelerationLimit,
-            Dist strafeVelocityLimit,
-            Dist strafeAccelerationLimit,
-            Angle angularVelocityLimit,
-            Angle angularAccelerationLimit,
-            Angle headingTolerance,
-            Dist distanceTolerance
-    ) {
-        this.drivetrainType = drivetrainType;
-        this.headingCoeffs = headingCoeffs;
-        this.translationalCoeffs = translationalCoeffs;
-        this.velocityFeedbackGain = velocityFeedbackGain;
-        this.translationalKV = translationalKV;
-        this.translationalKA = translationalKA;
-        this.angularKV = angularKV;
-        this.angularKA = angularKA;
-        this.Kcentripetal = Kcentripetal;
-        this.forwardVelocityLimit = forwardVelocityLimit;
-        this.forwardAccelerationLimit = forwardAccelerationLimit;
-        this.strafeVelocityLimit = strafeVelocityLimit;
-        this.strafeAccelerationLimit = strafeAccelerationLimit;
-        this.angularVelocityLimit = angularVelocityLimit;
-        this.angularAccelerationLimit = angularAccelerationLimit;
-        this.headingTolerance = headingTolerance;
-        this.distanceTolerance = distanceTolerance;
-        return this;
+    private void loadValues() {
+        File file = new File(
+                Environment.getExternalStorageDirectory().getPath() +
+                        "/FIRST/ApexPathing/constants.json"
+        );
+        if (file.exists()) {
+            JSONObject json;
+            try {
+                BufferedReader reader = new BufferedReader(new FileReader(file));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+                json = new JSONObject(sb.toString());
+            } catch (Exception e) {
+                return;
+            }
+
+            headingCoeffs.setkP(loadDouble(json, "headingP"));
+            headingCoeffs.setkD(loadDouble(json, "headingD"));
+            headingCoeffs.setkS((loadDouble(json, "headingS")));
+
+            translationalCoeffs.setkP(loadDouble(json, "translationalP"));
+            translationalCoeffs.setkD(loadDouble(json, "translationalD"));
+            translationalCoeffs.setkS(loadDouble(json, "translationalS"));
+
+            translationalKV = loadDouble(json, "translationKV");
+            translationalKA = loadDouble(json, "translationKA");
+            angularKV = loadDouble(json, "angularKV");
+            angularKA = loadDouble(json, "angularKA");
+            Kcentripetal = loadDouble(json, "Kcentripetal");
+
+            forwardVelocityLimit = Dist.fromIn(loadDouble(
+                    json, "forwardVelocityLimitInPerSec"));
+            forwardAccelerationLimit = Dist.fromIn(loadDouble(
+                    json, "forwardVelocityLimitInPerSec2"));
+            strafeVelocityLimit = Dist.fromIn(loadDouble(
+                    json, "strafeVelocityLimitInPerSec"));
+            strafeAccelerationLimit = Dist.fromIn(loadDouble(
+                    json, "strafeAccelerationLimitInPerSec2"));
+            angularVelocityLimit = Angle.fromRad(loadDouble(
+                    json, "angularVelocityLimitRadPerSec"));
+            angularAccelerationLimit = Angle.fromRad(loadDouble(
+                    json, "angularAccelerationLimitRadPerSec2"));
+        }
     }
 
-    public FollowerConstants getConstants() {
-        return this;
+    public JSONObject toJson() {
+        JSONObject json = new JSONObject();
+        try {
+            json.put("headingP", headingCoeffs.kP);
+            json.put("headingD", headingCoeffs.kD);
+            json.put("headingS", headingCoeffs.kS);
+
+            json.put("translationalP", translationalCoeffs.kP);
+            json.put("translationalD", translationalCoeffs.kD);
+            json.put("translationalS", translationalCoeffs.kS);
+
+            json.put("translationKV", translationalKV);
+            json.put("translationKA", translationalKA);
+            json.put("angularKV", angularKV);
+            json.put("angularKA", angularKA);
+            json.put("Kcentripetal", Kcentripetal);
+
+            json.put("forwardVelocityLimitInPerSec", forwardVelocityLimit.getIn());
+            json.put("forwardVelocityLimitInPerSec2", forwardAccelerationLimit.getIn());
+            json.put("strafeVelocityLimitInPerSec", strafeVelocityLimit.getIn());
+            json.put("strafeAccelerationLimitInPerSec2", strafeAccelerationLimit.getIn());
+            json.put("angularVelocityLimitRadPerSec", angularVelocityLimit.getRad());
+            json.put("angularAccelerationLimitRadPerSec2", angularAccelerationLimit.getRad());
+        } catch (Exception e) {
+            // Handle exception if needed
+        }
+        return json;
     }
 }

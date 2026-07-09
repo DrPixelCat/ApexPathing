@@ -19,49 +19,59 @@ import java.util.Objects;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
-    protected T config;
+    protected T constants;
+
+    public enum DrivetrainType {
+        COAXIAL_SWERVE,
+        DUAL_ACTUATED,
+        KIWI,
+        MECANUM,
+        TANK
+    }
+
+    private DrivetrainType drivetrainType;
+    private boolean isHolonomic;
 
     // Note: front motors are guaranteed to be non-null, but rear motors may be null if not needed
     protected DcMotorEx flMotor, frMotor, blMotor, brMotor;
 
     // Power change deadzone to prevent unnecessary motor updates
     private static final double POWER_TOLERANCE = 0.005;
-    private double lastFlPower = 0;
-    private double lastFrPower = 0;
-    private double lastBlPower = 0;
-    private double lastBrPower = 0;
+    private double lastFlPower, lastFrPower, lastBlPower, lastBrPower = 0.0;
 
     /**
      * Your drivetrain class constructor should call this super constructor to initialize motors and
      * store the configuration.
      *
-     * @param config your drivetrain configuration object that is a child of {@link BaseDrivetrainConstants}
+     * @param constants your drivetrain configuration object that is a child of {@link BaseDrivetrainConstants}
      * @param hardwareMap the hardware map to use for initializing motors
      */
-    public BaseDrivetrain(T config, HardwareMap hardwareMap) {
-        if (Objects.equals(config.flMotorConfig.getName(), "defaultMotorName")) {
-            throw new IllegalArgumentException("Front left motor configuration is not set in the drivetrain config.");
+    public BaseDrivetrain(T constants, HardwareMap hardwareMap, DrivetrainType drivetrainType) {
+        if (Objects.equals(constants.flMotorConfig.getName(), "defaultMotorName")) {
+            throw new IllegalArgumentException("Front left motor configuration is not set in the drivetrain constants.");
         }
-        if (Objects.equals(config.frMotorConfig.getName(), "defaultMotorName")) {
-            throw new IllegalArgumentException("Front right motor configuration is not set in the drivetrain config.");
+        if (Objects.equals(constants.frMotorConfig.getName(), "defaultMotorName")) {
+            throw new IllegalArgumentException("Front right motor configuration is not set in the drivetrain constants.");
         }
-        flMotor = config.flMotorConfig.build(hardwareMap);
-        frMotor = config.frMotorConfig.build(hardwareMap);
+        flMotor = constants.flMotorConfig.build(hardwareMap);
+        frMotor = constants.frMotorConfig.build(hardwareMap);
 
-        if (config.blMotorConfig != null) {
-            if (Objects.equals(config.blMotorConfig.getName(), "defaultMotorName")) {
-                throw new IllegalArgumentException("Back left motor configuration is not set in the drivetrain config.");
+        if (constants.blMotorConfig != null) {
+            if (Objects.equals(constants.blMotorConfig.getName(), "defaultMotorName")) {
+                throw new IllegalArgumentException("Back left motor configuration is not set in the drivetrain constants.");
             }
-            blMotor = config.blMotorConfig.build(hardwareMap);
+            blMotor = constants.blMotorConfig.build(hardwareMap);
         }
-        if (config.brMotorConfig != null) {
-            if (Objects.equals(config.brMotorConfig.getName(), "defaultMotorName")) {
-                throw new IllegalArgumentException("Back right motor configuration is not set in the drivetrain config.");
+        if (constants.brMotorConfig != null) {
+            if (Objects.equals(constants.brMotorConfig.getName(), "defaultMotorName")) {
+                throw new IllegalArgumentException("Back right motor configuration is not set in the drivetrain constants.");
             }
-            brMotor = config.brMotorConfig.build(hardwareMap);
+            brMotor = constants.brMotorConfig.build(hardwareMap);
         }
 
-        this.config = config;
+        this.constants = constants;
+        this.drivetrainType = drivetrainType;
+        this.isHolonomic = drivetrainType != DrivetrainType.TANK;
     }
 
     /**
@@ -88,7 +98,7 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      */
     public void drive(double x, double y, double turn, double robotHeadingRad) {
         double adjX, adjY;
-        if (!config.robotCentric) { // Field centric
+        if (!constants.robotCentric) { // Field centric
             double cos = Math.cos(-robotHeadingRad);
             double sin = Math.sin(-robotHeadingRad);
             adjX = x * cos - y * sin;
@@ -111,8 +121,15 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      */
     public void drive(double x, double y, double turn) { drive(x, y, turn, 0); }
 
+    /** @return the drivetrain type of this drivetrain */
+    public DrivetrainType getDrivetrainType() {
+        return drivetrainType;
+    }
+
     /** @return Whether the drivetrain is currently in a holonomic state or not */
-    public abstract boolean isHolonomic();
+    public boolean isHolonomic() {
+        return isHolonomic;
+    }
 
     /**
      * Sets the power for each drivetrain motor, applying limits from the configurations. If your
@@ -124,14 +141,12 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
         max = Math.max(max, Math.abs(frPower));
         if (blMotor != null) max = Math.max(max, Math.abs(blPower));
         if (brMotor != null) max = Math.max(max, Math.abs(brPower));
-        if (max > config.maxPower) {
-            flPower = (flPower / max) * config.maxPower;
-            frPower = (frPower / max) * config.maxPower;
-            if (blMotor != null) blPower = (blPower / max) * config.maxPower;
-            if (brMotor != null) brPower = (brPower / max) * config.maxPower;
+        if (max > constants.maxPower) {
+            flPower = (flPower / max) * constants.maxPower;
+            frPower = (frPower / max) * constants.maxPower;
+            if (blMotor != null) blPower = (blPower / max) * constants.maxPower;
+            if (brMotor != null) brPower = (brPower / max) * constants.maxPower;
         }
-
-        // TODO: Add velocity and acceleration limiting
 
         // Write to motors only if the change exceeds the tolerance
         if (Math.abs(flPower - lastFlPower) > POWER_TOLERANCE) {
@@ -155,5 +170,5 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
     /**
      * Stop all drivetrain actuators
      */
-    public void stop() { setPowers(0, 0, 0, 0); };
+    public void stop() { setPowers(0, 0, 0, 0); }
 }

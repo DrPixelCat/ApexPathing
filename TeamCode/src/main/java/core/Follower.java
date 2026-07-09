@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.util.Range;
 import controllers.MecanumDriveController;
 import controllers.PDSController;
 import drivetrains.BaseDrivetrain;
+import drivetrains.BaseDrivetrainConstants;
 import drivetrains.CoaxialSwerve;
 import drivetrains.DualActuated;
 import drivetrains.Tank;
@@ -56,12 +57,14 @@ public class Follower {
 
     /** Constructs the drivetrain, localizer, and follower from the given {@link ApexConstants}. */
     public Follower(ApexConstants constants, HardwareMap hardwareMap) {
-        this.drivetrain = constants.drivetrainConstants().build(hardwareMap);
+        BaseDrivetrainConstants<?> drivetrainConstants = constants.drivetrainConstants();
+
+        this.drivetrain = drivetrainConstants.build(hardwareMap);
         this.localizer = constants.localizerConstants().build(hardwareMap);
         this.constants = new FollowerConstants();
 
-        this.headingTol = this.constants.headingTolerance.getRad();
-        this.distanceTol = this.constants.distanceTolerance.getIn();
+        this.headingTol = drivetrainConstants.headingTolerance.getRad();
+        this.distanceTol = drivetrainConstants.distanceTolerance.getIn();
 
         this.headingController = new PDSController(this.constants.headingCoeffs);
         this.headingController.setAngularController();
@@ -70,7 +73,7 @@ public class Follower {
                 this.constants.forwardVelocityLimit,
                 this.constants.strafeVelocityLimit,
                 this.constants.translationalCoeffs,
-                Dist.fromIn(0.25)
+                Dist.fromIn(0.25) // TODO: remove this hardcode ??
         );
         velocityFeedbackGain = this.constants.velocityFeedbackGain;
     }

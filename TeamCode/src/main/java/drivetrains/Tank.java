@@ -10,7 +10,9 @@ import util.MotorFactory;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class Tank extends BaseDrivetrain<Tank.Constants> {
-    public Tank(Constants config, HardwareMap hardwareMap) { super(config, hardwareMap); }
+    public Tank(Constants constants, HardwareMap hardwareMap) {
+        super(constants, hardwareMap, DrivetrainType.TANK);
+    }
 
     @Override
     public void moveWithVectors(double x, double y, double turn) {
@@ -18,11 +20,6 @@ public class Tank extends BaseDrivetrain<Tank.Constants> {
         // For FTC, not in depth, but shows simple code: https://www.youtube.com/watch?v=pREkiGl9yi0
         // 2 motor tank uses the front motors only, 4 motor tank uses all motors with the same power
         setPowers(x - turn, x + turn, x - turn, x + turn);
-    }
-
-    @Override
-    public boolean isHolonomic() {
-        return false;
     }
 
     /** Configuration class for Tank drivetrain. */

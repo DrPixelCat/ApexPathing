@@ -11,12 +11,11 @@ import util.MotorFactory;
 
 /**
  * Drivetrain class that physically actuates between holonomic and high-traction kinematics.
- * Supports Butterfly, Locking Mecanum, or similar drivetrains.
+ * Supports Butterfly, locking mecanum, and similar drivetrains.
  *
  * @author DrPixelCat - 7842 Alum
  */
-public class DualActuated extends BaseDrivetrain<DualActuated.Config> {
-
+public class DualActuated extends BaseDrivetrain<DualActuated.Constants> {
     public enum DriveState {
         TANK,  // Locked rollers or deployed traction wheels (Tank kinematics)
         HOLONOMIC  // Unlocked rollers or retracted traction wheels (Mecanum kinematics)
@@ -25,10 +24,10 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Config> {
     private DriveState state;
     private final List<Actuator> actuators = new ArrayList<>();
 
-    public DualActuated(Config config, HardwareMap hardwareMap) {
-        super(config, hardwareMap);
+    public DualActuated(Constants constants, HardwareMap hardwareMap) {
+        super(constants, hardwareMap, DrivetrainType.DUAL_ACTUATED);
 
-        if (Objects.equals(config.blMotorConfig, null) || Objects.equals(config.brMotorConfig,
+        if (Objects.equals(this.constants.blMotorConfig, null) || Objects.equals(this.constants.brMotorConfig,
                 null)) {
             throw new IllegalArgumentException(
                     "Back left and right motor configurations must be provided for an Actuated " +
@@ -36,13 +35,13 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Config> {
             );
         }
 
-        for (Config.ServoConfig sc : config.servoConfigs) {
-            Servo servo = hardwareMap.get(Servo.class, sc.name);
-            actuators.add(new Actuator(servo, sc.tractionPos, sc.holonomicPos));
+        for (Actuator actuator : this.constants.actuators) {
+            actuator.init(hardwareMap);
+            actuators.add(actuator);
         }
 
         // Apply the initial state defined in the configuration
-        forceApplyState(config.initialState);
+        applyState(this.constants.initialState);
     }
 
     @Override
@@ -62,126 +61,86 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Config> {
         return state != DriveState.TANK;
     }
 
-    /**
-     * Sets the configuration to the TRACTION state
-     */
+    /** Sets the configuration to the TRACTION state */
     public void activateTractionState() {
         if (this.state != DriveState.TANK) {
-            forceApplyState(DriveState.TANK);
+            applyState(DriveState.TANK);
         }
     }
 
-    /**
-     * Sets the configuration to the HOLONOMIC state
-     */
+    /** Sets the configuration to the HOLONOMIC state */
     public void activateHolonomicState() {
         if (this.state != DriveState.HOLONOMIC) {
-            forceApplyState(DriveState.HOLONOMIC);
+            applyState(DriveState.HOLONOMIC);
         }
     }
 
+    /** @return the current state of the drivetrain (TANK or HOLONOMIC) */
     public DriveState getDriveState() {
         return state;
     }
 
-    private void forceApplyState(DriveState newState) {
+    private void applyState(DriveState newState) {
         this.state = newState;
         for (Actuator actuator : actuators) {
             actuator.servo.setPosition(state == DriveState.TANK ? actuator.tankPos :
                     actuator.holonomicPos);
         }
-        applyStateLimits();
     }
 
-    /**
-     * Copies the tuning limits from the active sub-configuration into the root config.
-     * This ensures BaseDrivetrain applies the correct constraints.
-     */
-    private void applyStateLimits() {
-        BaseDrivetrainConfig<?> activeConfig = (state == DriveState.TANK) ?
-                config.tractionConfig : config.holonomicConfig;
-
-        this.config.maxPower = activeConfig.maxPower;
-        this.config.linearVelocityLimit = activeConfig.linearVelocityLimit;
-        this.config.angularVelocityLimit = activeConfig.angularVelocityLimit;
-        this.config.linearAccelerationLimit = activeConfig.linearAccelerationLimit;
-        this.config.angularAccelerationLimit = activeConfig.angularAccelerationLimit;
-        this.config.robotCentric = activeConfig.robotCentric;
-    }
-
-    /**
-     * Helper class to create servo and store states
-     */
-    private static class Actuator {
-        final Servo servo;
+    /** Helper class to create servo and store states */
+    public static class Actuator {
+        Servo servo;
+        final String name;
         final double tankPos;
         final double holonomicPos;
 
-        Actuator(Servo servo, double tankPos, double holonomicPos) {
-            this.servo = servo;
+        Actuator(String name, double tankPos, double holonomicPos) {
+            this.name = name;
             this.tankPos = tankPos;
             this.holonomicPos = holonomicPos;
+        }
+
+        public void init(HardwareMap hardwareMap) {
+            this.servo = hardwareMap.get(Servo.class, name);
         }
     }
 
     /**
      * Configuration class for an Actuated Dual Drivetrain.
      */
-    public static class Config extends BaseDrivetrainConfig<Config> {
-        // Sub-configurations for behavioral limits
-        public BaseDrivetrainConfig<?> holonomicConfig = new Mecanum.Config();
-        public BaseDrivetrainConfig<?> tractionConfig = new Tank.Config();
-
+    public static class Constants extends BaseDrivetrainConstants<Constants> {
         // Define the initial startup state (defaults to Holonomic)
         public DriveState initialState = DriveState.HOLONOMIC;
-
-        public final List<ServoConfig> servoConfigs = new ArrayList<>();
+        public final List<Actuator> actuators = new ArrayList<>();
 
         @Override
         public DualActuated build(HardwareMap hardwareMap) {
             return new DualActuated(this, hardwareMap);
         }
 
-        /**
-         * Sets the initial startup state of the drivetrain
-         */
-        public Config setInitialState(DriveState initialState) {
+        /** Sets the initial startup state of the drivetrain */
+        public Constants setInitialState(DriveState initialState) {
             this.initialState = initialState;
             return this;
         }
 
-        /**
-         * Sets the stored configuration for the Mecanum state.
-         */
-        public Config setHolonomicConfig(BaseDrivetrainConfig<?> holonomicConfig) {
-            this.holonomicConfig = holonomicConfig;
-            return this;
-        }
-
-        /**
-         * Sets the stored configuration for the Traction (locked/Tank) state.
-         */
-        public Config setTractionConfig(BaseDrivetrainConfig<?> tractionConfig) {
-            this.tractionConfig = tractionConfig;
-            return this;
-        }
-
-        public Config setFrontLeftMotor(MotorFactory motorFactory) {
+        public Constants setFrontLeftMotor(MotorFactory motorFactory) {
             this.flMotorConfig = motorFactory;
             return this;
         }
 
-        public Config setFrontRightMotor(MotorFactory motorFactory) {
+        public Constants setFrontRightMotor(MotorFactory motorFactory) {
             this.frMotorConfig = motorFactory;
             return this;
         }
 
-        public Config setBackLeftMotor(MotorFactory motorFactory) {
+        public Constants setBackLeftMotor(MotorFactory motorFactory) {
             this.blMotorConfig = motorFactory;
             return this;
         }
 
-        public Config setBackRightMotor(MotorFactory motorFactory) {
+        public Constants setBackRightMotor(MotorFactory motorFactory) {
             this.brMotorConfig = motorFactory;
             return this;
         }
@@ -195,21 +154,10 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Config> {
          * @param holonomicPosition The physical servo position for the holonomic state (e.g.
          *                          unlocked or wheel retracted)
          */
-        public Config addActuator(String name, double tractionPosition, double holonomicPosition) {
-            servoConfigs.add(new ServoConfig(name, tractionPosition, holonomicPosition));
+        public Constants addActuator(String name, double tractionPosition,
+                                     double holonomicPosition) {
+            actuators.add(new Actuator(name, tractionPosition, holonomicPosition));
             return this;
-        }
-
-        public static class ServoConfig {
-            public final String name;
-            public final double tractionPos;
-            public final double holonomicPos;
-
-            public ServoConfig(String name, double tractionPos, double holonomicPos) {
-                this.name = name;
-                this.tractionPos = tractionPos;
-                this.holonomicPos = holonomicPos;
-            }
         }
     }
 }

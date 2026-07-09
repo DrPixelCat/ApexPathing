@@ -75,7 +75,7 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         @Override
         public Pinpoint build(HardwareMap hardwareMap) {
             if (Objects.equals(this.name, "defaultPinpointName")) {
-                throw new IllegalArgumentException("Pinpoint name is not set in the localizer config.");
+                throw new IllegalArgumentException("Pinpoint name is not set in the localizer constants.");
             }
             return new Pinpoint(this, hardwareMap);
         }

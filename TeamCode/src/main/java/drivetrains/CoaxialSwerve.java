@@ -31,44 +31,44 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
     private double lastFlError = 0, lastFrError = 0, lastBlError = 0, lastBrError = 0;
 
-    public CoaxialSwerve(Constants config, HardwareMap hardwareMap) {
-        super(config, hardwareMap);
+    public CoaxialSwerve(Constants constants, HardwareMap hardwareMap) {
+        super(constants, hardwareMap, DrivetrainType.COAXIAL_SWERVE);
 
         // Make sure all motors, servos, and encoders are configured (front motors are checked in super())
-        if (Objects.equals(config.blMotorConfig, null) || Objects.equals(config.brMotorConfig, null)) {
+        if (Objects.equals(constants.blMotorConfig, null) || Objects.equals(constants.brMotorConfig, null)) {
             throw new IllegalArgumentException(
                     "Back left and right motor configurations must be provided for a coaxial swerve drivetrain"
             );
         }
-        if (Objects.equals(config.flServoName, null) || Objects.equals(config.frServoName, null) ||
-                Objects.equals(config.blServoName, null) || Objects.equals(config.brServoName, null)) {
+        if (Objects.equals(constants.flServoName, null) || Objects.equals(constants.frServoName, null) ||
+                Objects.equals(constants.blServoName, null) || Objects.equals(constants.brServoName, null)) {
             throw new IllegalArgumentException(
                     "Servo names must be provided for all 4 modules in a coaxial swerve drivetrain"
             );
         }
-        if (Objects.equals(config.flEncoderName, null) || Objects.equals(config.frEncoderName, null) ||
-                Objects.equals(config.blEncoderName, null) || Objects.equals(config.brEncoderName, null)) {
+        if (Objects.equals(constants.flEncoderName, null) || Objects.equals(constants.frEncoderName, null) ||
+                Objects.equals(constants.blEncoderName, null) || Objects.equals(constants.brEncoderName, null)) {
             throw new IllegalArgumentException(
                     "Encoder names must be provided for all 4 modules in a coaxial swerve drivetrain"
             );
         }
 
-        flServo = hardwareMap.get(CRServo.class, config.flServoName);
-        frServo = hardwareMap.get(CRServo.class, config.frServoName);
-        blServo = hardwareMap.get(CRServo.class, config.blServoName);
-        brServo = hardwareMap.get(CRServo.class, config.brServoName);
-        flEncoder = hardwareMap.get(AnalogInput.class, config.flEncoderName);
-        frEncoder = hardwareMap.get(AnalogInput.class, config.frEncoderName);
-        blEncoder = hardwareMap.get(AnalogInput.class, config.blEncoderName);
-        brEncoder = hardwareMap.get(AnalogInput.class, config.brEncoderName);
+        flServo = hardwareMap.get(CRServo.class, constants.flServoName);
+        frServo = hardwareMap.get(CRServo.class, constants.frServoName);
+        blServo = hardwareMap.get(CRServo.class, constants.blServoName);
+        brServo = hardwareMap.get(CRServo.class, constants.brServoName);
+        flEncoder = hardwareMap.get(AnalogInput.class, constants.flEncoderName);
+        frEncoder = hardwareMap.get(AnalogInput.class, constants.frEncoderName);
+        blEncoder = hardwareMap.get(AnalogInput.class, constants.blEncoderName);
+        brEncoder = hardwareMap.get(AnalogInput.class, constants.brEncoderName);
 
-        flSteerController = new PDSController(config.steeringCoefficients);
-        frSteerController = new PDSController(config.steeringCoefficients);
-        blSteerController = new PDSController(config.steeringCoefficients);
-        brSteerController = new PDSController(config.steeringCoefficients);
+        flSteerController = new PDSController(constants.steeringCoefficients);
+        frSteerController = new PDSController(constants.steeringCoefficients);
+        blSteerController = new PDSController(constants.steeringCoefficients);
+        brSteerController = new PDSController(constants.steeringCoefficients);
 
         voltageToRad = (2 * Math.PI) / flEncoder.getMaxVoltage();
-        offsetAngleRad = config.offsetAngle.getRad();
+        offsetAngleRad = constants.offsetAngle.getRad();
     }
 
     @Override
@@ -77,10 +77,10 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         // https://www.chiefdelphi.com/t/paper-4-wheel-independent-drive-independent-steering-swerve/107383
         turn *= -1; // Clockwise turn angle
 
-        double strafeFront = y + turn * config.wheelbaseRatio;
-        double strafeRear = y - turn * config.wheelbaseRatio;
-        double forwardLeft = x + turn * config.trackWidthRatio;
-        double forwardRight = x - turn * config.trackWidthRatio;
+        double strafeFront = y + turn * constants.wheelbaseRatio;
+        double strafeRear = y - turn * constants.wheelbaseRatio;
+        double forwardLeft = x + turn * constants.trackWidthRatio;
+        double forwardRight = x - turn * constants.trackWidthRatio;
 
         double flPower = Math.sqrt(Math.pow(strafeFront, 2) + Math.pow(forwardLeft, 2));
         double frPower = Math.sqrt(Math.pow(strafeFront, 2) + Math.pow(forwardRight, 2));
@@ -138,11 +138,6 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         }
 
         setPowers(flPower, frPower, blPower, brPower);
-    }
-
-    @Override
-    public boolean isHolonomic() {
-        return true;
     }
 
     /** @return the error wrapped to the range [-pi, pi] to ensure the shortest path is taken */

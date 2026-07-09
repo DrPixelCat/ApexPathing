@@ -12,10 +12,11 @@ import util.MotorFactory;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
-    public Mecanum(Constants config, HardwareMap hardwareMap) {
-        super(config, hardwareMap);
+    public Mecanum(Constants constants, HardwareMap hardwareMap) {
+        super(constants, hardwareMap, DrivetrainType.MECANUM);
 
-        if (Objects.equals(config.blMotorConfig, null) || Objects.equals(config.brMotorConfig, null)) {
+        if (Objects.equals(constants.blMotorConfig, null) ||
+                Objects.equals(constants.brMotorConfig, null)) {
             throw new IllegalArgumentException(
                     "Back left and right motor configurations must be provided for a mecanum drivetrain"
             );
@@ -28,11 +29,6 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
         setPowers(x - y - turn, x + y + turn,
                 x + y - turn, x - y + turn
         );
-    }
-
-    @Override
-    public boolean isHolonomic() {
-        return true;
     }
 
     /** Configuration class for Mecanum drivetrain. */
