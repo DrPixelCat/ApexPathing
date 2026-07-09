@@ -114,13 +114,13 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Config> {
             for (int i = 0; i < 360; i++) {
                 double theta = Math.toRadians(i);
 
-                // X is lateral (Strafe), Y is forward (Drive)
-                double absX = Math.abs(Math.cos(theta));
-                double absY = Math.abs(Math.sin(theta));
+                // Local X matches forward drive power in moveWithVectors; local Y is strafe.
+                double absForward = Math.abs(Math.cos(theta));
+                double absStrafe = Math.abs(Math.sin(theta));
 
                 // Absolute physical velocity caps
-                double maxVel = 1.0 / ((absY / maxFwdVel) + (absX / maxSfeVel));
-                double maxAccel = 1.0 / ((absY / maxFwdAccel) + (absX / maxSfeAccel));
+                double maxVel = 1.0 / ((absForward / maxFwdVel) + (absStrafe / maxSfeVel));
+                double maxAccel = 1.0 / ((absForward / maxFwdAccel) + (absStrafe / maxSfeAccel));
 
                 // Calculate the boost factors relative to pure forward motion
                 double velMultiplier = maxFwdVel / maxVel;
@@ -137,12 +137,30 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Config> {
             }
 
             Vector localVector = globalDriveVector.rotate(currentHeading.times(-1.0));
-            double rads = localVector.getTheta().getRad();
+            double degrees = Math.toDegrees(localVector.getTheta().getRad());
+            degrees = ((degrees % 360.0) + 360.0) % 360.0;
 
-            int degrees = (int) Math.round(Math.toDegrees(rads));
-            degrees = ((degrees % 360) + 360) % 360;
+            int lowIndex = (int) Math.floor(degrees);
+            int highIndex = (lowIndex + 1) % 360;
+            double t = degrees - lowIndex;
 
-            return lut[degrees];
+            if (t < 1e-9) {
+                return lut[lowIndex];
+            }
+
+            DirectionalKinematics low = lut[lowIndex];
+            DirectionalKinematics high = lut[highIndex];
+
+            return new DirectionalKinematics(
+                    interpolate(low.maxVel, high.maxVel, t),
+                    interpolate(low.maxAccel, high.maxAccel, t),
+                    interpolate(low.velMultiplier, high.velMultiplier, t),
+                    interpolate(low.accelMultiplier, high.accelMultiplier, t)
+            );
+        }
+
+        private double interpolate(double low, double high, double t) {
+            return low + ((high - low) * t);
         }
     }
 }

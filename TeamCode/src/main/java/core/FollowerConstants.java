@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.util.Locale;
 
 import controllers.PDSController.PDSCoefficients;
 import geometry.Angle;
