@@ -8,7 +8,7 @@ import util.AngleUnit;
 import util.DistUnit;
 import util.PoseFactory;
 
-public class LateralAccelerationPhase extends TuningPhase {
+public class MovementLimitsPhase extends TuningPhase {
     private TuningPhase.BinarySearch binarySearch;
     private boolean forwardPathRunning;
     private double maxLateralError; // Inches
@@ -17,7 +17,7 @@ public class LateralAccelerationPhase extends TuningPhase {
     private Path forwardCurve;
     private Path backwardCurve;
 
-    public LateralAccelerationPhase(TunerContext context) {
+    public MovementLimitsPhase(TunerContext context) {
         super(context);
         binarySearch = new TuningPhase.BinarySearch(10, 200, 5);
     }

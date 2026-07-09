@@ -45,8 +45,8 @@ public abstract class TuningPhase {
                 }
                 break;
             case COMPLETE:
-                boolean exit = endLoop(bPressed);
-                if (exit) {
+                endLoop();
+                if (bPressed) {
                     return true;
                 }
                 break;
@@ -81,16 +81,11 @@ public abstract class TuningPhase {
         return false;
     }
 
-    /**
-     * @return true when the user has exited the phase.
-     */
-    private boolean endLoop(boolean bWasPressed) {
-        context.getTelemetry().addLine(getPhaseName() + " phase complete with these results:");
+    private void endLoop() {
+        context.getTelemetry().addLine(getPhaseName() + " phase complete with results:");
         reportResults();
-        context.getTelemetry().addLine("B - Exit phase");
+        context.getTelemetry().addLine("B - Exit");
         context.getTelemetry().update();
-
-        return bWasPressed;
     }
 
     /**

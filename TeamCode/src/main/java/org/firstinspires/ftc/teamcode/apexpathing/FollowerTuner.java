@@ -9,7 +9,7 @@ import tuning.TuningPhase;
 import tuning.HeadingPhase;
 import tuning.TranslationalPhase;
 import tuning.VelocityFeedforwardPhase;
-import tuning.LateralAccelerationPhase;
+import tuning.MovementLimitsPhase;
 
 import core.Follower;
 import geometry.Pose;
@@ -29,12 +29,12 @@ public class FollowerTuner extends LinearOpMode {
     private int selectedPhaseIndex = 0;
     private TuningPhase runningPhase = null;
 
-    enum Phase { HEADING_PDS, TRANSLATIONAL_PDS, VELOCITY_FEEDFORWARD, LATERAL_ACCELERATION }
+    enum Phase { HEADING_PDS, TRANSLATIONAL_PDS, VELOCITY_FEEDFORWARD, MOVEMENT_LIMITS }
     private static final Phase[] phases = {
             Phase.HEADING_PDS,
             Phase.TRANSLATIONAL_PDS,
             Phase.VELOCITY_FEEDFORWARD,
-            Phase.LATERAL_ACCELERATION
+            Phase.MOVEMENT_LIMITS
     };
 
     @Override
@@ -42,31 +42,34 @@ public class FollowerTuner extends LinearOpMode {
         context.setFollower(new Follower(new Constants(), hardwareMap));
         resetPhaseSelectionData(); // Initialize the phase selector statuses
 
-        telemetry.addLine("Welcome to the Apex Pathing Follower Tuner!");
-        telemetry.addLine("Press the start button to open the selector menu, the robot will not move.");
-        telemetry.update();
+        while (opModeInInit() && runningPhase == null) {
+            TuningPhase selectedPhase = phaseSelector(); // Will remain null until a phase is selected
+            if (selectedPhase != null) {
+                runningPhase = selectedPhase;
+            }
+        }
+
+        if (runningPhase != null) {
+            context.getFollower().setPose(Pose.zero());
+            telemetry.addLine("Press the start button to run the tuner");
+            telemetry.addLine("Make sure you have adequate space to run the robot safely!");
+            telemetry.update();
+        } else {
+            requestOpModeStop(); // The OpMode was started without a phase, so we stop it
+        }
 
         waitForStart();
 
         while (opModeIsActive()) {
-            context.getFollower().update();
             if (runningPhase == null) {
-                TuningPhase selectedPhase = phaseSelector(); // Will remain null until a phase is selected
-                if (selectedPhase != null) {
-                    context.getFollower().setPose(Pose.zero());
-                    runningPhase = selectedPhase;
-                }
-            } else {
-                boolean complete = runningPhase.update(gamepad1.aWasPressed(), gamepad1.bWasPressed());
-                if (complete) {
-                    runningPhase = null;
-                    context.saveConstants();
-
-                    // Update the follower with the latest constants
-                    context.setFollower(new Follower(new Constants(), hardwareMap));
-                    context.getFollower().stop(); // Stop the follower in case it was moving
-                    resetPhaseSelectionData(); // Update selector with new constants
-                }
+                continue; // OpMode stop was requested already, do nothing
+            }
+            context.getFollower().update();
+            boolean complete = runningPhase.update(gamepad1.aWasPressed(), gamepad1.bWasPressed());
+            if (complete) {
+                runningPhase = null;
+                context.saveConstants();
+                requestOpModeStop();
             }
         }
     }
@@ -75,13 +78,15 @@ public class FollowerTuner extends LinearOpMode {
         boolean headingIsTuned = context.constants.headingCoeffs.kP != 0.0;
         boolean translationalIsTuned = context.constants.translationalCoeffs.kP != 0.0;
         boolean velocityFFIsTuned = context.constants.translationalKV != 0.0;
-        boolean maxAccelIsTuned = context.constants.maxTranslationalAccel != 0.0;
+        boolean movementLimitsIsTuned = context.constants.strafeAccelerationLimit.getIn() != 0.0;
 
         String headingStatus = headingIsTuned ? "[✓]" : "[ ]"; // Heading is always available to tune first.
         String transStatus = translationalIsTuned ? "[✓]" : (headingIsTuned ? "[ ]" : "[X]");
         String velStatus = velocityFFIsTuned ? "[✓]" : (translationalIsTuned ? "[ ]" : "[X]");
-        String accelStatus = maxAccelIsTuned ? "[✓]" : (velocityFFIsTuned ? "[ ]" : "[X]");
-        this.phaseSelectorStatuses = new String[]{headingStatus, transStatus, velStatus, accelStatus};
+        String movementStatus = movementLimitsIsTuned ? "[✓]" : (velocityFFIsTuned ? "[ ]" : "[X]");
+        this.phaseSelectorStatuses = new String[]{
+                headingStatus, transStatus, velStatus, movementStatus
+        };
 
         this.selectedPhaseIndex = 0;
     }
@@ -122,8 +127,8 @@ public class FollowerTuner extends LinearOpMode {
                     return new TranslationalPhase(context);
                 case VELOCITY_FEEDFORWARD:
                     return new VelocityFeedforwardPhase(context);
-                case LATERAL_ACCELERATION:
-                    return new LateralAccelerationPhase(context);
+                case MOVEMENT_LIMITS:
+                    return new MovementLimitsPhase(context);
             }
         }
 
