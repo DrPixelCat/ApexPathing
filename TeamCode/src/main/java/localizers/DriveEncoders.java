@@ -3,12 +3,12 @@ package localizers;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import geometry.Angle;
 import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
-import util.AngleUnit;
 
 /**
  * This is the localizer for 4 drive encoders and an IMU
@@ -40,9 +40,9 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Config> {
         double deltaX =
                 (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() + backLeft.getDeltaInches() - backRight.getDeltaInches()) / 4.0;
 
-        double oldYaw = pose.getHeading(AngleUnit.RAD);
+        double oldYaw = pose.getHeading(util.AngleUnit.RAD);
         double currentYaw =
-                Angle.normalize(imu.getRobotYawPitchRollAngles().getYaw(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.RADIANS) - correction);
+                Angle.normalize(imu.getRobotYawPitchRollAngles().getYaw() - correction);
         double deltaYaw = Angle.normalize(currentYaw - oldYaw);
         double avgYaw = oldYaw + deltaYaw / 2.0;
 
@@ -61,7 +61,7 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Config> {
     @Override
     public void setPose(Pose newPose) {
         correction =
-                imu.getRobotYawPitchRollAngles().getYaw(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.RADIANS) - newPose.getHeading(util.AngleUnit.RAD);
+                imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - newPose.getHeading(util.AngleUnit.RAD);
         pose = newPose;
         backLeft.resetEncoder();
         frontLeft.resetEncoder();
