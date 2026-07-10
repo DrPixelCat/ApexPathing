@@ -8,6 +8,7 @@ import util.AngleUnit;
 import util.DistUnit;
 import util.PoseFactory;
 
+// TODO: We gotta figure out how to measure lateral error and also add stuff for the other axes
 public class MovementLimitsPhase extends TuningPhase {
     private final TuningPhase.BinarySearch binarySearch;
     private boolean forwardPathRunning;

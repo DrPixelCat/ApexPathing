@@ -18,7 +18,8 @@ public class TranslationalPhase extends TuningPhase {
 
     @Override
     protected void init() {
-        routine = new PDSRoutine(context, PDSRoutine.Axis.STRAFE);
+        // Moving the robot forward because this controller does all positional movement
+        routine = new PDSRoutine(context, PDSRoutine.Axis.DRIVE);
         routine.start();
     }
 
