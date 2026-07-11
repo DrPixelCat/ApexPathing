@@ -5,7 +5,6 @@ import geometry.Pose;
 import geometry.Vector;
 import paths.builders.TankPathBuilder;
 import paths.heading.HolonomicInterpolationStyle;
-import paths.heading.TankInterpolationStyle;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 import paths.movements.Turn;

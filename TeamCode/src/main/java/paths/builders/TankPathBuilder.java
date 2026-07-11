@@ -14,7 +14,7 @@ import geometry.Pose;
 import geometry.Vector;
 import paths.callbacks.Callback;
 import paths.constraint.PathConstraint;
-import paths.heading.TankInterpolationStyle;
+import paths.heading.InterpolationStyle;
 import paths.heading.TankInterpolator;
 import paths.movements.Path;
 
@@ -25,36 +25,34 @@ import paths.movements.Path;
  *
  * @author DrPixelCat
  */
-public class TankPathBuilder implements PathBuilder {
-    public Path path;
-    private final Pose[] rawPoses;
-    private TankInterpolationStyle style = TankInterpolationStyle.TANGENT_FORWARD;
-    private final List<Runnable> buildTasks = new ArrayList<>();
+public class TankPathBuilder extends PathBuilder {
 
     /**
      * Creates a new TankPathBuilder using the provided poses.
      *
-     * @param poses A sequence of Pose objects defining the path. Must contain at least two poses
-     *              . Endpoints cannot be ArcPoses.
+     * @param poses A sequence of Pose objects defining the path. Must contain at least two poses.
+     *              Endpoints cannot be ArcPoses.
      */
     public TankPathBuilder(Pose... poses) {
-        this.path = new Path(Path.PathType.TANK);
-        if (poses.length < 2) {
-            throw new IllegalArgumentException("A B-Spline must be created with > 1 points!");
-        }
-        if (poses[0] instanceof ArcPose || poses[poses.length - 1] instanceof ArcPose) {
-            throw new IllegalArgumentException("Endpoints can't be arcs!");
-        }
-        this.rawPoses = poses;
+        super(Path.PathType.TANK, poses);
     }
 
     /**
-     * Overrides the default interpolation style for the tank drive.
+     * Overrides the default (TANGENT_FORWARD) interpolation with a different
+     * {@link InterpolationStyle}. Tank drives can only use tangent-based interpolation styles, so
+     * this method will throw an IllegalArgumentException if a non-tangent style is provided.
      *
-     * @param style The TankInterpolationStyle to apply.
+     * @param style The InterpolationStyle to apply.
      * @return The current TankPathBuilder instance for method chaining.
      */
-    public TankPathBuilder interpolateWith(TankInterpolationStyle style) {
+    public TankPathBuilder interpolateWith(InterpolationStyle style) throws IllegalArgumentException {
+        if (!style.supportsTank()) {
+            throw new IllegalArgumentException(
+                    "Selected interpolation style is not supported for tank drives! "  +
+                            "Use TANGENT_FORWARD, TANGENT_BACKWARD, or TANGENT_OPTIMAL." +
+                            "Check the Apex Pathing documentation for more details."
+            );
+        }
         this.style = style;
         return this;
     }
@@ -66,36 +64,31 @@ public class TankPathBuilder implements PathBuilder {
      * @return The current TankPathBuilder instance for method chaining.
      */
     public TankPathBuilder addConstraint(PathConstraint constraint) {
-        if (constraint.getS() >= 1.0 || constraint.getS() < 0.0) {
-            constraint.setS(Math.min(Math.max(constraint.getS(), 0.0), 0.9));
-            path.addWarning("s must be within [0, 1) bounds! Normalized to " + constraint.getS() +
-                    " for safety.");
-        }
-        path.addConstraint(constraint);
+        super.addConstraintInternal(constraint);
         return this;
     }
 
     /**
      * Attaches an executable callback based on the physical distance percentage.
      *
-     * @param s      The physical distance percentage [0.0, 1.0].
-     * @param action The code to execute.
+     * @param s The physical distance percentage [0.0, 1.0].
+     * @param action The method to execute when the robot reaches the specified distance.
      * @return The current TankPathBuilder instance for method chaining.
      */
     public TankPathBuilder addDistanceCallback(double s, Runnable action) {
-        buildTasks.add(() -> path.addCallback(new Callback(s, action)));
+        super.addDistanceCallbackInternal(s, action);
         return this;
     }
 
     /**
      * Attaches an executable callback based on the robot reaching a target heading.
      *
-     * @param angle  The Angle at which the callback should trigger.
-     * @param action The code to execute.
+     * @param angle The Angle at which the callback should trigger.
+     * @param action The method to execute when the robot reaches the specified heading.
      * @return The current TankPathBuilder instance for method chaining.
      */
     public TankPathBuilder addAngularCallback(Angle angle, Runnable action) {
-        buildTasks.add(() -> path.addCallback(new Callback(angle, action)));
+        this.buildTasks.add(() -> path.addCallback(new Callback(angle, action)));
         return this;
     }
 
@@ -154,17 +147,17 @@ public class TankPathBuilder implements PathBuilder {
         PathSegment curve = new PathSegment(new BSpline(vectors));
         path.setParametricPath(curve);
 
-        TankInterpolationStyle resolvedStyle = style;
+        InterpolationStyle resolvedStyle = style;
         Vector startTangent = curve.getFirstDerivative(0.0);
 
-        if (resolvedStyle == TankInterpolationStyle.TANGENT_OPTIMAL) {
+        if (resolvedStyle == InterpolationStyle.TANGENT_OPTIMAL) {
             Angle startHeading = rawPoses[0].getHeading();
             double fwdError =
                     Math.abs(startHeading.getShortestAngleTo(startTangent.getTheta()).getRad());
             double bwdError =
                     Math.abs(startHeading.getShortestAngleTo(startTangent.getTheta().plus(Angle.fromRad(Math.PI))).getRad());
-            resolvedStyle = (bwdError < fwdError) ? TankInterpolationStyle.TANGENT_BACKWARD :
-                    TankInterpolationStyle.TANGENT_FORWARD;
+            resolvedStyle = (bwdError < fwdError) ? InterpolationStyle.TANGENT_BACKWARD :
+                    InterpolationStyle.TANGENT_FORWARD;
         }
 
         TankInterpolator interpolator = new TankInterpolator(resolvedStyle);
@@ -173,7 +166,7 @@ public class TankPathBuilder implements PathBuilder {
         Vector finalVec = vectors[vectors.length - 1];
         Vector finalTangent = curve.getFirstDerivative(1.0);
         Angle finalHeading = finalTangent.getTheta();
-        if (resolvedStyle == TankInterpolationStyle.TANGENT_BACKWARD) {
+        if (resolvedStyle == InterpolationStyle.TANGENT_BACKWARD) {
             finalHeading = finalHeading.plus(Angle.fromRad(Math.PI));
         }
 

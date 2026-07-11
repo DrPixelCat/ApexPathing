@@ -8,10 +8,10 @@ import geometry.Vector;
  */
 public class TankInterpolator implements HeadingInterpolator {
 
-    private final TankInterpolationStyle style;
+    private final InterpolationStyle style;
 
-    public TankInterpolator(TankInterpolationStyle style) {
-        if (style == TankInterpolationStyle.TANGENT_OPTIMAL) {
+    public TankInterpolator(InterpolationStyle style) {
+        if (style == InterpolationStyle.TANGENT_OPTIMAL) {
             throw new IllegalArgumentException("TANGENT_OPTIMAL must be resolved to FORWARD or " +
                     "BACKWARD before runtime instantiation.");
         }
@@ -25,7 +25,7 @@ public class TankInterpolator implements HeadingInterpolator {
 
     @Override
     public Angle getHeadingTarg(double s, Vector pathTangent, Vector finalTangent) {
-        if (style == TankInterpolationStyle.TANGENT_BACKWARD) {
+        if (style == InterpolationStyle.TANGENT_BACKWARD) {
             return pathTangent.getTheta().plus(Angle.fromRad(Math.PI));
         }
         return pathTangent.getTheta();
