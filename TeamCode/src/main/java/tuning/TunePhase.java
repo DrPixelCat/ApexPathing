@@ -6,12 +6,12 @@ package tuning;
  * @author Sohum Arora - 22985 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
-public abstract class TuningPhase {
+public abstract class TunePhase {
     private State state = State.INIT;
-    protected final TunerContext context;
+    protected final TuneContext context;
     private boolean manualMode;
 
-    protected TuningPhase(TunerContext context) { this.context = context; }
+    protected TunePhase(TuneContext context) { this.context = context; }
 
     enum State { INIT, RUNNING, COMPLETE }
 
@@ -21,7 +21,7 @@ public abstract class TuningPhase {
     public final boolean update(boolean aWasPressed, boolean bPressed) {
         switch (state) {
             case INIT:
-                boolean initialized = initLoop(aWasPressed, bPressed);
+                boolean initialized = showStart(aWasPressed, bPressed);
                 if (initialized) {
                     state = State.RUNNING;
                 }
@@ -29,9 +29,9 @@ public abstract class TuningPhase {
             case RUNNING:
                 boolean complete;
                 if (manualMode) {
-                    complete = manualUpdate(aWasPressed, bPressed);
+                    complete = runManual(aWasPressed, bPressed);
                 } else {
-                    complete = automaticUpdate();
+                    complete = runAuto(aWasPressed, bPressed);
                 }
 
                 if (complete) {
@@ -39,7 +39,7 @@ public abstract class TuningPhase {
                 }
                 break;
             case COMPLETE:
-                endLoop();
+                showEnd();
                 if (bPressed) {
                     return true;
                 }
@@ -52,10 +52,10 @@ public abstract class TuningPhase {
     /**
      * @return true when initialization is complete and the tuning phase should begin running.
      */
-    private boolean initLoop(boolean aWasPressed, boolean bPressed) {
-        context.getTelemetry().addLine(getPhaseName() + " phase initialized");
+    private boolean showStart(boolean aWasPressed, boolean bPressed) {
+        context.getTelemetry().addLine(name() + " phase initialized");
 
-        if (manualTuneIsPossible() && autoTuneIsPossible()) {
+        if (hasManual() && hasAuto()) {
             if (aWasPressed) {
                 manualMode = !manualMode;
             }
@@ -67,16 +67,16 @@ public abstract class TuningPhase {
         context.getTelemetry().update();
 
         if (bPressed) {
-            init();
+            start();
             return true;
         }
 
         return false;
     }
 
-    private void endLoop() {
-        context.getTelemetry().addLine(getPhaseName() + " phase complete with results:");
-        reportResults();
+    private void showEnd() {
+        context.getTelemetry().addLine(name() + " phase complete with results:");
+        showResults();
         context.getTelemetry().addLine("B - Exit");
         context.getTelemetry().update();
     }
@@ -84,29 +84,29 @@ public abstract class TuningPhase {
     /**
      * @return the name of this phase as a string for display purposes.
      */
-    protected abstract String getPhaseName();
+    protected abstract String name();
 
     /**
      * @return true if manual tuning is possible for this phase, false otherwise.
      */
-    protected abstract boolean manualTuneIsPossible();
+    protected abstract boolean hasManual();
 
     /**
      * @return true if automatic tuning is possible for this phase, false otherwise.
      */
-    protected abstract boolean autoTuneIsPossible();
+    protected abstract boolean hasAuto();
 
     /** Initializes the tuning phase (for automatic or manual) */
-    protected abstract void init();
+    protected abstract void start();
 
     /**
      * This method should perform manual tuning updates. It will be called repeatedly until it
      * returns true.
      * @return true if the manual tuning is complete, false otherwise
      */
-    protected abstract boolean manualUpdate(boolean aWasPressed, boolean bWasPressed);
+    protected abstract boolean runManual(boolean aWasPressed, boolean bWasPressed);
 
-    protected final boolean isManualMode() { return manualMode; }
+    protected final boolean isManual() { return manualMode; }
 
     /**
      * This method should perform automatic tuning updates. It will be called repeatedly until it
@@ -114,11 +114,11 @@ public abstract class TuningPhase {
      *
      * @return true if the automatic tuning is complete, false otherwise
      */
-    protected abstract boolean automaticUpdate();
+    protected abstract boolean runAuto(boolean aWasPressed, boolean bWasPressed);
 
     /**
      * This method should use the telemetry (context.getTelemetry()) to report the results of
      * the tuning phase. It will be called repeatedly until the user exits the phase.
      */
-    protected abstract void reportResults();
+    protected abstract void showResults();
 }

@@ -2,39 +2,39 @@ package tuning;
 
 import controllers.PDSController.PDSCoefficients;
 
-public class StrafeCharacterizationPhase extends AxisCharacterizationPhase {
-    public StrafeCharacterizationPhase(TunerContext context) {
-        super(context, CharacterizationAxis.STRAFE);
+public class StrafePhase extends DrivePhase {
+    public StrafePhase(TuneContext context) {
+        super(context, TuneAxis.STRAFE);
     }
 
     @Override
-    protected void applyResult(FeedforwardFit.Result result, double safeVelocity,
+    protected void saveResult(FeedforwardCalc.Result result, double safeVelocity,
                                double safeAcceleration) {
-        context.constants.lateralCoeffs = positionGains(result);
+        context.constants.lateralCoeffs = makeGains(result);
         context.constants.strafeVelLimitIn = safeVelocity;
         context.constants.strafeAccelLimitIn = safeAcceleration;
     }
 
     @Override
-    protected ManualParameter[] createManualParameters() {
+    protected TuneValue[] values() {
         PDSCoefficients pds = context.constants.lateralCoeffs;
-        return new ManualParameter[]{
-                new ManualParameter("Lateral kP", () -> pds.kP, value -> pds.kP = value,
+        return new TuneValue[]{
+                new TuneValue("Lateral kP", () -> pds.kP, value -> pds.kP = value,
                         0.001, 0.0, 2.0),
-                new ManualParameter("Lateral kD", () -> pds.kD, value -> pds.kD = value,
+                new TuneValue("Lateral kD", () -> pds.kD, value -> pds.kD = value,
                         0.0005, 0.0, 2.0),
-                new ManualParameter("Lateral kS", () -> pds.kS, value -> pds.kS = value,
+                new TuneValue("Lateral kS", () -> pds.kS, value -> pds.kS = value,
                         0.002, 0.0, 0.5),
-                new ManualParameter("Strafe velocity limit", () -> context.constants.strafeVelLimitIn,
+                new TuneValue("Strafe velocity limit", () -> context.constants.strafeVelLimitIn,
                         value -> context.constants.strafeVelLimitIn = value,
                         1.0, 1.0, 150.0),
-                new ManualParameter("Strafe acceleration limit", () -> context.constants.strafeAccelLimitIn,
+                new TuneValue("Strafe acceleration limit", () -> context.constants.strafeAccelLimitIn,
                         value -> context.constants.strafeAccelLimitIn = value,
                         2.0, 1.0, 400.0)
         };
     }
 
-    @Override protected PDSCoefficients manualPositionCoefficients() {
+    @Override protected PDSCoefficients manualGains() {
         return context.constants.lateralCoeffs;
     }
 
@@ -48,10 +48,10 @@ public class StrafeCharacterizationPhase extends AxisCharacterizationPhase {
         return context.constants.translationalKV;
     }
 
-    @Override protected double manualVelocityFeedbackGain() {
+    @Override protected double velocityGain() {
         return context.constants.velocityFeedbackGain;
     }
-    @Override protected double manualVelocityLimit() {
+    @Override protected double speedLimit() {
         return context.constants.strafeVelLimitIn;
     }
 }

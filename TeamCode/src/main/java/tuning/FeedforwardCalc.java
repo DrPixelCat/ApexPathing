@@ -9,7 +9,7 @@ import controllers.PDSController.PDSCoefficients;
 /**
  *
  */
-public class FeedforwardFit {
+public class FeedforwardCalc {
     public static final class Sample {
         final double power;
         final double velocity;
@@ -53,7 +53,7 @@ public class FeedforwardFit {
         }
 
         /** Velocity error gain for the requested closed-loop time constant. */
-        public double velocityFeedbackGain(double timeConstantSeconds) {
+        public double velocityGain(double timeConstantSeconds) {
             return Math.max(0.0, (kA / timeConstantSeconds) - kV);
         }
     }
@@ -79,7 +79,7 @@ public class FeedforwardFit {
 
         double[] beta = null;
         for (int iteration = 0; iteration < 5; iteration++) {
-            beta = weightedLeastSquares(weights);
+            beta = fitModel(weights);
             if (beta == null) {
                 return new Result(Double.NaN, Double.NaN, Double.NaN, 0, samples.size());
             }
@@ -111,19 +111,19 @@ public class FeedforwardFit {
         return new Result(Math.abs(beta[0]), beta[1], beta[2], rSquared, samples.size());
     }
 
-    public double percentileAbsoluteVelocity(double percentile) {
+    public double speedAt(double percentile) {
         List<Double> values = new ArrayList<>();
         for (Sample sample : samples) values.add(Math.abs(sample.velocity));
         return percentile(values, percentile);
     }
 
-    public double percentileAbsoluteAcceleration(double percentile) {
+    public double accelAt(double percentile) {
         List<Double> values = new ArrayList<>();
         for (Sample sample : samples) values.add(Math.abs(sample.acceleration));
         return percentile(values, percentile);
     }
 
-    private double[] weightedLeastSquares(double[] weights) {
+    private double[] fitModel(double[] weights) {
         double[][] normal = new double[3][3];
         double[] rhs = new double[3];
         for (int i = 0; i < samples.size(); i++) {

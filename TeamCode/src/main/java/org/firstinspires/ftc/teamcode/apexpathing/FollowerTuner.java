@@ -4,14 +4,19 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import tuning.TunerContext;
-import tuning.TuningPhase;
-import tuning.AngularCharacterizationPhase;
-import tuning.ForwardCharacterizationPhase;
-import tuning.PreflightPhase;
-import tuning.StrafeCharacterizationPhase;
+import tuning.TuneContext;
+import tuning.TunePhase;
+import tuning.CheckPhase;
+import tuning.TurnPhase;
+import tuning.ForwardPhase;
+import tuning.LocalizerPhase;
+import tuning.MotorPhase;
+import tuning.SetupPhase;
+import tuning.StrafePhase;
+import tuning.SwervePhase;
 
 import core.Follower;
+import drivetrains.CoaxialSwerve;
 import geometry.Pose;
 
 /**
@@ -23,34 +28,32 @@ import geometry.Pose;
 @Configurable
 @TeleOp(name = "Follower Tuner", group = "Apex Pathing Tuning")
 public class FollowerTuner extends LinearOpMode {
-    private final TunerContext context = new TunerContext(this);
+    private final TuneContext context = new TuneContext(this);
 
-    private String[] phaseSelectorStatuses;
-    private int selectedPhaseIndex = 0;
-    private TuningPhase runningPhase = null;
+    private String[] phaseStatus;
+    private int selectedPhase;
+    private TunePhase phase;
 
-    enum Phase { PREFLIGHT, FORWARD_CHARACTERIZATION, STRAFE_CHARACTERIZATION,
-        ANGULAR_CHARACTERIZATION }
+    enum Phase { MOTOR, SETUP, LOCALIZER, FORWARD, STRAFE, TURN, SWERVE, CHECK }
     private static final Phase[] phases = {
-            Phase.PREFLIGHT,
-            Phase.FORWARD_CHARACTERIZATION,
-            Phase.STRAFE_CHARACTERIZATION,
-            Phase.ANGULAR_CHARACTERIZATION
+            Phase.MOTOR,
+            Phase.SETUP,
+            Phase.LOCALIZER,
+            Phase.FORWARD,
+            Phase.STRAFE,
+            Phase.TURN,
+            Phase.SWERVE,
+            Phase.CHECK
     };
 
     @Override
     public void runOpMode() {
         context.setFollower(new Follower(new Constants(), hardwareMap));
-        resetPhaseSelectionData(); // Initialize the phase selector statuses
+        loadStatus(); // Initialize the phase selector statuses
 
-        while (opModeInInit() && runningPhase == null) {
-            TuningPhase selectedPhase = phaseSelector(); // Will remain null until a phase is selected
-            if (selectedPhase != null) {
-                runningPhase = selectedPhase;
-            }
-        }
+        while (opModeInInit() && phase == null) phase = selectPhase();
 
-        if (runningPhase != null) {
+        if (phase != null) {
             context.getFollower().setPose(Pose.zero());
             telemetry.addLine("Press the start button to run the tuner");
             telemetry.addLine("Make sure you have adequate space to run the robot safely!");
@@ -62,15 +65,15 @@ public class FollowerTuner extends LinearOpMode {
         waitForStart();
 
         while (opModeIsActive()) {
-            if (runningPhase == null) {
+            if (phase == null) {
                 continue; // OpMode stop was requested already, do nothing
             }
             telemetry.clearAll();
             context.getFollower().update();
-            boolean complete = runningPhase.update(gamepad1.aWasPressed(), gamepad1.bWasPressed());
+            boolean complete = phase.update(gamepad1.aWasPressed(), gamepad1.bWasPressed());
             telemetry.update();
             if (complete) {
-                runningPhase = null;
+                phase = null;
                 context.constants.drivetrainType = context.getFollower().getDrivetrain()
                         .getDrivetrainType();
                 context.saveConstants();
@@ -79,7 +82,7 @@ public class FollowerTuner extends LinearOpMode {
         }
     }
 
-    private void resetPhaseSelectionData() {
+    private void loadStatus() {
         boolean forwardIsTuned = context.constants.translationalKV > 0.0 &&
                 context.constants.translationalKA > 0.0 &&
                 context.constants.forwardVelLimitIn > 0.0;
@@ -89,24 +92,29 @@ public class FollowerTuner extends LinearOpMode {
                 context.constants.angularKA > 0.0 &&
                 context.constants.angularVelLimitRad > 0.0;
         boolean holonomic = context.getFollower().getDrivetrain().isHolonomic();
+        boolean swerve = context.getFollower().getDrivetrain() instanceof CoaxialSwerve;
 
-        this.phaseSelectorStatuses = new String[]{
+        phaseStatus = new String[]{
+                "[ ]",
+                "[ ]",
                 "[ ]",
                 forwardIsTuned ? "[✓]" : "[ ]",
                 holonomic ? (strafeIsTuned ? "[✓]" : "[ ]") : "[N/A]",
-                angularIsTuned ? "[✓]" : "[ ]"
+                angularIsTuned ? "[✓]" : "[ ]",
+                swerve ? "[ ]" : "[N/A]",
+                "[ ]"
         };
 
-        this.selectedPhaseIndex = 0;
-        for (int i = 0; i < phaseSelectorStatuses.length; i++) {
-            if (phaseSelectorStatuses[i].equals("[ ]")) {
-                this.selectedPhaseIndex = i;
+        selectedPhase = 0;
+        for (int i = 0; i < phaseStatus.length; i++) {
+            if (phaseStatus[i].equals("[ ]")) {
+                selectedPhase = i;
                 break;
             }
         }
     }
 
-    private TuningPhase phaseSelector() {
+    private TunePhase selectPhase() {
         telemetry.addLine(
                 "The Apex Pathing tuners are listed in order of execution below."
         );
@@ -120,34 +128,41 @@ public class FollowerTuner extends LinearOpMode {
         telemetry.addLine();
 
         for (int i = 0; i < phases.length; i++) {
-            String cursor = (i == selectedPhaseIndex) ? " <" : "";
-            telemetry.addLine(phaseSelectorStatuses[i] + " " +
+            String cursor = (i == selectedPhase) ? " <" : "";
+            telemetry.addLine(phaseStatus[i] + " " +
                     phases[i].toString().replace("_", " ") + cursor);
         }
         telemetry.update();
 
         if (gamepad1.dpadUpWasPressed()) {
-            selectedPhaseIndex = (selectedPhaseIndex - 1 + phases.length) % phases.length;
+            selectedPhase = (selectedPhase - 1 + phases.length) % phases.length;
             // Don't allow selection of unavailable phases
-            while (!isSelectable(selectedPhaseIndex)) {
-                selectedPhaseIndex = (selectedPhaseIndex - 1 + phases.length) % phases.length;
+            while (!isSelectable(selectedPhase)) {
+                selectedPhase = (selectedPhase - 1 + phases.length) % phases.length;
             }
         } else if (gamepad1.dpadDownWasPressed()) {
-            selectedPhaseIndex = (selectedPhaseIndex + 1) % phases.length;
-            while (!isSelectable(selectedPhaseIndex)) {
-                selectedPhaseIndex = (selectedPhaseIndex + 1) % phases.length;
+            selectedPhase = (selectedPhase + 1) % phases.length;
+            while (!isSelectable(selectedPhase)) {
+                selectedPhase = (selectedPhase + 1) % phases.length;
             }
         } else if (gamepad1.bWasPressed()) {
-            Phase selectedPhase = phases[selectedPhaseIndex];
-            switch (selectedPhase) {
-                case PREFLIGHT:
-                    return new PreflightPhase(context);
-                case FORWARD_CHARACTERIZATION:
-                    return new ForwardCharacterizationPhase(context);
-                case STRAFE_CHARACTERIZATION:
-                    return new StrafeCharacterizationPhase(context);
-                case ANGULAR_CHARACTERIZATION:
-                    return new AngularCharacterizationPhase(context);
+            switch (phases[selectedPhase]) {
+                case MOTOR:
+                    return new MotorPhase(context);
+                case SETUP:
+                    return new SetupPhase(context);
+                case LOCALIZER:
+                    return new LocalizerPhase(context);
+                case FORWARD:
+                    return new ForwardPhase(context);
+                case STRAFE:
+                    return new StrafePhase(context);
+                case TURN:
+                    return new TurnPhase(context);
+                case SWERVE:
+                    return new SwervePhase(context);
+                case CHECK:
+                    return new CheckPhase(context);
             }
         }
 
@@ -155,6 +170,6 @@ public class FollowerTuner extends LinearOpMode {
     }
 
     private boolean isSelectable(int index) {
-        return !phaseSelectorStatuses[index].equals("[N/A]");
+        return !phaseStatus[index].equals("[N/A]");
     }
 }

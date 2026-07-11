@@ -9,33 +9,33 @@ import geometry.Pose;
  * Localizer verification before commencing tuning
  * @author Sohum Arora 22985 Paraducks
  */
-public class PreflightPhase extends TuningPhase {
+public class SetupPhase extends TunePhase {
     private static final double TEST_POWER = 0.22;
     private static final double TEST_SECONDS = 0.45;
     private static final double MINIMUM_DELTA = 0.05;
 
     private final ElapsedTime timer = new ElapsedTime();
-    private CharacterizationAxis[] axes;
+    private TuneAxis[] axes;
     private int index;
     private Pose start;
     private String failure;
-    private boolean manualPreflight;
+    private boolean manualCheck;
 
-    public PreflightPhase(TunerContext context) { super(context); }
+    public SetupPhase(TuneContext context) { super(context); }
 
-    @Override protected String getPhaseName() { return "Hardware / Localizer Preflight"; }
-    @Override protected boolean manualTuneIsPossible() { return true; }
-    @Override protected boolean autoTuneIsPossible() { return true; }
+    @Override protected String name() { return "Setup Check"; }
+    @Override protected boolean hasManual() { return true; }
+    @Override protected boolean hasAuto() { return true; }
     @Override
-    protected void init() {
+    protected void start() {
         axes = context.getFollower().getDrivetrain().isHolonomic()
-                ? new CharacterizationAxis[]{CharacterizationAxis.FORWARD,
-                CharacterizationAxis.STRAFE, CharacterizationAxis.ANGULAR}
-                : new CharacterizationAxis[]{CharacterizationAxis.FORWARD,
-                CharacterizationAxis.ANGULAR};
+                ? new TuneAxis[]{TuneAxis.FORWARD,
+                TuneAxis.STRAFE, TuneAxis.ANGULAR}
+                : new TuneAxis[]{TuneAxis.FORWARD,
+                TuneAxis.ANGULAR};
         index = 0;
         failure = null;
-        manualPreflight = isManualMode();
+        manualCheck = isManual();
         context.getFollower().disableControllers();
         context.getFollower().stop();
         context.getFollower().setPose(Pose.zero());
@@ -44,7 +44,7 @@ public class PreflightPhase extends TuningPhase {
     }
 
     @Override
-    protected boolean manualUpdate(boolean aWasPressed, boolean bWasPressed) {
+    protected boolean runManual(boolean aWasPressed, boolean bWasPressed) {
         Gamepad gamepad = context.getGamepad();
         if (bWasPressed) {
             context.getFollower().getDrivetrain().stop();
@@ -72,25 +72,25 @@ public class PreflightPhase extends TuningPhase {
     }
 
     @Override
-    protected boolean automaticUpdate() {
-        CharacterizationAxis axis = axes[index];
-        context.driveOpenLoop(axis, TEST_POWER);
-        context.getTelemetry().addData("Testing", axis.displayName());
+    protected boolean runAuto(boolean aWasPressed, boolean bWasPressed) {
+        TuneAxis axis = axes[index];
+        context.driveAxis(axis, TEST_POWER);
+        context.getTelemetry().addData("Testing", axis.label());
 
         if (timer.seconds() < TEST_SECONDS) return false;
 
         context.getFollower().getDrivetrain().stop();
         Pose delta = context.getFollower().getPose().minus(start);
         double expected = axis.position(delta);
-        double largestOther = largestOtherAxis(axis, delta);
+        double largestOther = otherMovement(axis, delta);
         if (expected <= MINIMUM_DELTA) {
-            failure = axis.displayName() + " command did not produce a positive " +
-                    axis.displayName().toLowerCase() + " localizer delta. Check motor/encoder " +
+            failure = axis.label() + " command did not produce a positive " +
+                    axis.label().toLowerCase() + " localizer delta. Check motor/encoder " +
                     "directions and the X-forward/Y-left convention.";
             return true;
         }
         if (largestOther > Math.abs(expected) * 0.75) {
-            failure = axis.displayName() + " command was reported primarily on another axis. " +
+            failure = axis.label() + " command was reported primarily on another axis. " +
                     "Fix localizer axis assignment before tuning.";
             return true;
         }
@@ -103,9 +103,9 @@ public class PreflightPhase extends TuningPhase {
         return false;
     }
 
-    private double largestOtherAxis(CharacterizationAxis expected, Pose delta) {
+    private double otherMovement(TuneAxis expected, Pose delta) {
         double largest = 0.0;
-        for (CharacterizationAxis candidate : CharacterizationAxis.values()) {
+        for (TuneAxis candidate : TuneAxis.values()) {
             if (candidate == expected) continue;
             largest = Math.max(largest, Math.abs(candidate.position(delta)));
         }
@@ -113,8 +113,8 @@ public class PreflightPhase extends TuningPhase {
     }
 
     @Override
-    protected void reportResults() {
-        if (manualPreflight) {
+    protected void showResults() {
+        if (manualCheck) {
             context.getTelemetry().addLine("Manual preflight finished. Confirm every commanded " +
                     "axis moved in the matching positive and negative pose direction.");
             return;

@@ -12,7 +12,7 @@ import geometry.Pose;
  * Bidirectional ramp and step characterization for one drivetrain axis. This replaces the unsafe
  * single-step Ziegler-Nichols routine and identifies kS, kV, and kA from many samples.
  */
-public abstract class AxisCharacterizationPhase extends TuningPhase {
+public abstract class DrivePhase extends TunePhase {
     private static final double RAMP_SECONDS = 3.0;
     private static final double RAMP_MAX_POWER = 0.70;
     private static final double STEP_SECONDS = 1.25;
@@ -24,42 +24,42 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         STEP_POSITIVE, SETTLE_3, STEP_NEGATIVE, FINISHED
     }
 
-    protected final CharacterizationAxis axis;
+    protected final TuneAxis axis;
     private final ElapsedTime timer = new ElapsedTime();
-    private final FeedforwardFit fit = new FeedforwardFit();
+    private final FeedforwardCalc fit = new FeedforwardCalc();
     private TestState state;
     private long lastSampleNanos;
     private double lastVelocity;
     private double filteredAcceleration;
     private double accumulatedTravel;
-    private FeedforwardFit.Result result;
+    private FeedforwardCalc.Result result;
     private double safeVelocity;
     private double safeAcceleration;
     private String failure;
-    private ManualParameter[] manualParameters;
-    private int selectedManualParameter;
+    private TuneValue[] manualParameters;
+    private int selectedTuneValue;
     private PDSController manualPositionController;
     private boolean manualDriving;
     private double manualOutput;
 
-    protected AxisCharacterizationPhase(TunerContext context, CharacterizationAxis axis) {
+    protected DrivePhase(TuneContext context, TuneAxis axis) {
         super(context);
         this.axis = axis;
     }
 
-    @Override protected String getPhaseName() { return axis.displayName() + " Characterization"; }
-    @Override protected boolean manualTuneIsPossible() { return true; }
-    @Override protected boolean autoTuneIsPossible() { return true; }
+    @Override protected String name() { return axis.label() + " Tune"; }
+    @Override protected boolean hasManual() { return true; }
+    @Override protected boolean hasAuto() { return true; }
     @Override
-    protected void init() {
+    protected void start() {
         context.getFollower().disableControllers();
         context.getFollower().stop();
         context.getFollower().setPose(Pose.zero());
-        if (isManualMode()) {
-            manualParameters = createManualParameters();
-            selectedManualParameter = 0;
-            manualPositionController = new PDSController(manualPositionCoefficients());
-            if (axis == CharacterizationAxis.ANGULAR) {
+        if (isManual()) {
+            manualParameters = values();
+            selectedTuneValue = 0;
+            manualPositionController = new PDSController(manualGains());
+            if (axis == TuneAxis.ANGULAR) {
                 manualPositionController.setAngularController();
             }
             manualDriving = false;
@@ -75,7 +75,7 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
     }
 
     @Override
-    protected boolean manualUpdate(boolean aWasPressed, boolean bWasPressed) {
+    protected boolean runManual(boolean aWasPressed, boolean bWasPressed) {
         Gamepad gamepad = context.getGamepad();
         if (bWasPressed) {
             context.getFollower().getDrivetrain().stop();
@@ -83,18 +83,18 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         }
 
         if (gamepad.dpadLeftWasPressed()) {
-            selectedManualParameter = (selectedManualParameter - 1 + manualParameters.length) %
+            selectedTuneValue = (selectedTuneValue - 1 + manualParameters.length) %
                     manualParameters.length;
         } else if (gamepad.dpadRightWasPressed()) {
-            selectedManualParameter = (selectedManualParameter + 1) % manualParameters.length;
+            selectedTuneValue = (selectedTuneValue + 1) % manualParameters.length;
         }
 
         double adjustmentScale = gamepad.right_bumper ? 10.0 :
                 (gamepad.left_bumper ? 0.1 : 1.0);
         if (gamepad.dpadUpWasPressed()) {
-            manualParameters[selectedManualParameter].adjust(1, adjustmentScale);
+            manualParameters[selectedTuneValue].adjust(1, adjustmentScale);
         } else if (gamepad.dpadDownWasPressed()) {
-            manualParameters[selectedManualParameter].adjust(-1, adjustmentScale);
+            manualParameters[selectedTuneValue].adjust(-1, adjustmentScale);
         }
 
         if (aWasPressed) {
@@ -110,18 +110,18 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         boolean velocityTest = Math.abs(triggerCommand) > 0.05;
 
         if (velocityTest) {
-            double velocityLimit = Math.max(manualMinimumTestVelocity(), manualVelocityLimit());
+            double velocityLimit = Math.max(minTestSpeed(), speedLimit());
             double targetVelocity = triggerCommand * velocityLimit * 0.35;
-            manualOutput = (Math.signum(targetVelocity) * manualPositionCoefficients().kS) +
+            manualOutput = (Math.signum(targetVelocity) * manualGains().kS) +
                     (manualKV() * targetVelocity) +
-                    (manualVelocityFeedbackGain() * (targetVelocity - currentVelocity));
-            context.driveOpenLoop(axis, Range.clip(manualOutput, -0.70, 0.70));
+                    (velocityGain() * (targetVelocity - currentVelocity));
+            context.driveAxis(axis, Range.clip(manualOutput, -0.70, 0.70));
             manualDriving = true;
         } else if (positionTest) {
-            double target = gamepad.x ? manualPositionTarget() : -manualPositionTarget();
+            double target = gamepad.x ? testTarget() : -testTarget();
             if (!manualDriving) manualPositionController.reset();
             manualOutput = manualPositionController.calculateFromError(target - currentPosition);
-            context.driveOpenLoop(axis, Range.clip(manualOutput, -0.70, 0.70));
+            context.driveAxis(axis, Range.clip(manualOutput, -0.70, 0.70));
             manualDriving = true;
         } else {
             context.getFollower().getDrivetrain().stop();
@@ -130,7 +130,7 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
             manualOutput = 0.0;
         }
 
-        context.getTelemetry().addLine("MANUAL " + axis.displayName().toUpperCase() + " TUNING");
+        context.getTelemetry().addLine("MANUAL " + axis.label().toUpperCase() + " TUNING");
         context.getTelemetry().addLine("D-pad Left/Right - select value");
         context.getTelemetry().addLine("D-pad Up/Down - increase/decrease");
         context.getTelemetry().addLine("Left bumper = fine, Right bumper = coarse");
@@ -138,7 +138,7 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         context.getTelemetry().addLine("Triggers - test positive/negative velocity");
         context.getTelemetry().addLine("A - reset pose, B - save and finish");
         for (int i = 0; i < manualParameters.length; i++) {
-            String marker = i == selectedManualParameter ? "> " : "  ";
+            String marker = i == selectedTuneValue ? "> " : "  ";
             context.getTelemetry().addData(marker + manualParameters[i].getName(),
                     "%.6f", manualParameters[i].get());
         }
@@ -149,24 +149,24 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
     }
 
     @Override
-    protected boolean automaticUpdate() {
-        if (state == TestState.FINISHED) return finishFit();
+    protected boolean runAuto(boolean aWasPressed, boolean bWasPressed) {
+        if (state == TestState.FINISHED) return finishAuto();
 
         double elapsed = timer.seconds();
-        double command = commandForState(elapsed);
-        context.driveOpenLoop(axis, command);
+        double command = testPower(elapsed);
+        context.driveAxis(axis, command);
         sample(command);
 
-        context.getTelemetry().addData("Axis", axis.displayName());
+        context.getTelemetry().addData("Axis", axis.label());
         context.getTelemetry().addData("Test", state);
         context.getTelemetry().addData("Command", "%.3f", command);
         context.getTelemetry().addData("Samples", fit.size());
         context.getTelemetry().addData("Travel", "%.2f", accumulatedTravel);
 
-        double stateDuration = durationForState();
-        boolean travelLimitReached = accumulatedTravel >= axis.maximumTestTravel();
-        if (elapsed >= stateDuration || (travelLimitReached && isPoweredState())) {
-            advanceState();
+        double stateDuration = testTime();
+        boolean travelLimitReached = accumulatedTravel >= axis.maxTravel();
+        if (elapsed >= stateDuration || (travelLimitReached && isDriving())) {
+            nextTest();
         }
         return false;
     }
@@ -180,9 +180,9 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
                 double rawAcceleration = (velocity - lastVelocity) / dt;
                 filteredAcceleration = (0.82 * filteredAcceleration) + (0.18 * rawAcceleration);
                 accumulatedTravel += Math.abs(velocity) * dt;
-                if (isPoweredState()) {
+                if (isDriving()) {
                     fit.add(command, velocity, filteredAcceleration,
-                            axis.minimumSampleVelocity());
+                            axis.minSpeed());
                 }
             }
         }
@@ -190,7 +190,7 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         lastSampleNanos = now;
     }
 
-    private double commandForState(double elapsed) {
+    private double testPower(double elapsed) {
         switch (state) {
             case RAMP_POSITIVE: return RAMP_MAX_POWER * Math.min(1.0, elapsed / RAMP_SECONDS);
             case RAMP_NEGATIVE: return -RAMP_MAX_POWER * Math.min(1.0, elapsed / RAMP_SECONDS);
@@ -200,12 +200,12 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         }
     }
 
-    private boolean isPoweredState() {
+    private boolean isDriving() {
         return state == TestState.RAMP_POSITIVE || state == TestState.RAMP_NEGATIVE ||
                 state == TestState.STEP_POSITIVE || state == TestState.STEP_NEGATIVE;
     }
 
-    private double durationForState() {
+    private double testTime() {
         switch (state) {
             case RAMP_POSITIVE:
             case RAMP_NEGATIVE: return RAMP_SECONDS;
@@ -215,7 +215,7 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         }
     }
 
-    private void advanceState() {
+    private void nextTest() {
         context.getFollower().getDrivetrain().stop();
         state = TestState.values()[state.ordinal() + 1];
         timer.reset();
@@ -226,11 +226,11 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         if (state != TestState.FINISHED) context.getFollower().setPose(Pose.zero());
     }
 
-    private boolean finishFit() {
+    private boolean finishAuto() {
         context.getFollower().getDrivetrain().stop();
         result = fit.solve();
-        safeVelocity = fit.percentileAbsoluteVelocity(0.90) * 0.90;
-        safeAcceleration = fit.percentileAbsoluteAcceleration(0.90) * 0.80;
+        safeVelocity = fit.speedAt(0.90) * 0.90;
+        safeAcceleration = fit.accelAt(0.90) * 0.80;
         if (!result.isUsable()) {
             failure = String.format(
                     "Rejected fit: samples=%d, R^2=%.3f, kS=%.5f, kV=%.5f, kA=%.5f",
@@ -238,42 +238,42 @@ public abstract class AxisCharacterizationPhase extends TuningPhase {
         } else if (safeVelocity <= 0.0 || safeAcceleration <= 0.0) {
             failure = "Rejected fit: the localizer did not report usable velocity/acceleration.";
         } else {
-            applyResult(result, safeVelocity, safeAcceleration);
+            saveResult(result, safeVelocity, safeAcceleration);
         }
         return true;
     }
 
-    protected abstract void applyResult(FeedforwardFit.Result result,
+    protected abstract void saveResult(FeedforwardCalc.Result result,
                                         double safeVelocity, double safeAcceleration);
 
-    protected abstract ManualParameter[] createManualParameters();
+    protected abstract TuneValue[] values();
 
-    protected abstract PDSCoefficients manualPositionCoefficients();
+    protected abstract PDSCoefficients manualGains();
 
     protected abstract double manualKV();
 
-    protected abstract double manualVelocityFeedbackGain();
+    protected abstract double velocityGain();
 
-    protected abstract double manualVelocityLimit();
+    protected abstract double speedLimit();
 
-    protected double manualPositionTarget() {
-        return axis == CharacterizationAxis.ANGULAR ? Math.toRadians(90.0) : 24.0;
+    protected double testTarget() {
+        return axis == TuneAxis.ANGULAR ? Math.toRadians(90.0) : 24.0;
     }
 
-    protected double manualMinimumTestVelocity() {
-        return axis == CharacterizationAxis.ANGULAR ? 1.0 : 12.0;
+    protected double minTestSpeed() {
+        return axis == TuneAxis.ANGULAR ? 1.0 : 12.0;
     }
 
-    protected PDSCoefficients positionGains(FeedforwardFit.Result result) {
-        double settlingSeconds = axis == CharacterizationAxis.ANGULAR ? 0.75 : 1.00;
+    protected PDSCoefficients makeGains(FeedforwardCalc.Result result) {
+        double settlingSeconds = axis == TuneAxis.ANGULAR ? 0.75 : 1.00;
         return result.positionGains(settlingSeconds);
     }
 
     @Override
-    protected void reportResults() {
-        if (isManualMode()) {
+    protected void showResults() {
+        if (isManual()) {
             context.getTelemetry().addLine("Manual values saved:");
-            for (ManualParameter parameter : manualParameters) {
+            for (TuneValue parameter : manualParameters) {
                 context.getTelemetry().addData(parameter.getName(), "%.6f", parameter.get());
             }
             return;

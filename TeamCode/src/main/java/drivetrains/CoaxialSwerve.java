@@ -93,7 +93,7 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         double blAngleTarget = Math.atan2(strafeRear, forwardLeft);
         double brAngleTarget = Math.atan2(strafeRear, forwardRight);
 
-        double[] moduleAngles = getModuleAnglesRad();
+        double[] moduleAngles = moduleAngles();
         double flAngle = moduleAngles[0];
         double frAngle = moduleAngles[1];
         double blAngle = moduleAngles[2];
@@ -138,7 +138,7 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         return errorRaw - (pi2 * Math.round(errorRaw / pi2));
     }
 
-    public double[] getRawModuleAnglesRad() {
+    public double[] rawAngles() {
         return new double[]{
                 Angle.normalize(flEncoder.getVoltage() * voltageToRad),
                 Angle.normalize(frEncoder.getVoltage() * voltageToRad),
@@ -147,15 +147,19 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         };
     }
 
-    public double[] getModuleAnglesRad() {
-        double[] raw = getRawModuleAnglesRad();
+    public double[] moduleAngles() {
+        double[] raw = rawAngles();
         for (int i = 0; i < raw.length; i++) raw[i] = Angle.normalize(raw[i] + offsetAnglesRad[i]);
         return raw;
     }
 
+    public PDSCoefficients getSteeringGains() {
+        return constants.steeringCoefficients;
+    }
+
     /** Holds every module at one angle with drive motors disabled; intended only for tuning. */
-    public void steerModulesForTuning(Angle target) {
-        double[] angles = getModuleAnglesRad();
+    public void aimModules(Angle target) {
+        double[] angles = moduleAngles();
         PDSController[] controllers = {flSteerController, frSteerController,
                 blSteerController, brSteerController};
         CRServo[] servos = {flServo, frServo, blServo, brServo};

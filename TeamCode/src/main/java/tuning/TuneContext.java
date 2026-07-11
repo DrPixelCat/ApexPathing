@@ -23,12 +23,12 @@ import core.FollowerConstants;
  * @author Sohum Arora - 22985 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
-public class TunerContext {
+public class TuneContext {
     private final LinearOpMode opMode;
     private Follower follower;
     public FollowerConstants constants;
 
-    public TunerContext(LinearOpMode opMode) { this.opMode = opMode; }
+    public TuneContext(LinearOpMode opMode) { this.opMode = opMode; }
 
     public void setFollower(Follower follower) {
         this.follower = follower;
@@ -39,7 +39,7 @@ public class TunerContext {
     public Telemetry getTelemetry() { return opMode.telemetry; }
     public Gamepad getGamepad() { return opMode.gamepad1; }
 
-    public void driveOpenLoop(CharacterizationAxis axis, double power) {
+    public void driveAxis(TuneAxis axis, double power) {
         switch (axis) {
             case FORWARD:
                 follower.getDrivetrain().moveWithVectors(power, 0, 0);

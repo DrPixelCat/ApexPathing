@@ -7,7 +7,7 @@ import java.util.function.DoubleSupplier;
  * One bounded value exposed by a manual tuning phase.
  * @author Sohum Arora 22985 Paraducks
  */
-public class ManualParameter {
+public class TuneValue {
     private final String name;
     private final DoubleSupplier getter;
     private final DoubleConsumer setter;
@@ -15,7 +15,7 @@ public class ManualParameter {
     private final double minimum;
     private final double maximum;
 
-    public ManualParameter(String name, DoubleSupplier getter, DoubleConsumer setter, double increment, double minimum, double maximum) {
+    public TuneValue(String name, DoubleSupplier getter, DoubleConsumer setter, double increment, double minimum, double maximum) {
         this.name = name;
         this.getter = getter;
         this.setter = setter;
