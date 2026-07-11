@@ -35,9 +35,15 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants>{
 
     @Override
     public void update() {
-        double deltaY = (frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
+        frontLeft.update();
+        frontRight.update();
+        backLeft.update();
+        backRight.update();
+
+        // Apex convention: +X is forward and +Y is left/strafe.
+        double deltaX = (frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
                 backLeft.getDeltaInches() + backRight.getDeltaInches()) / 4.0;
-        double deltaX = (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
+        double deltaY = (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
                 backLeft.getDeltaInches() - backRight.getDeltaInches()) / 4.0;
 
         double oldYaw = pose.getHeading(util.AngleUnit.RAD);

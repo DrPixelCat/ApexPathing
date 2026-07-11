@@ -16,12 +16,16 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
 
     @Override
     public void update() {
+        strafePod.update();
+        forwardPodLeft.update();
+        forwardPodRight.update();
+
         double oldYaw = pose.getHeading(AngleUnit.RAD);
 
         double deltaYaw =
                 (forwardPodLeft.getDeltaInches() - forwardPodRight.getDeltaInches()) / config.DPar.get(DistUnit.IN);
-        double deltaX = strafePod.getDeltaInches() - deltaYaw * config.DPerp.get(DistUnit.IN);
-        double deltaY = (forwardPodLeft.getDeltaInches() + forwardPodRight.getDeltaInches()) / 2.0;
+        double deltaX = (forwardPodLeft.getDeltaInches() + forwardPodRight.getDeltaInches()) / 2.0;
+        double deltaY = strafePod.getDeltaInches() - deltaYaw * config.DPerp.get(DistUnit.IN);
 
         double yaw = Angle.normalize(oldYaw + deltaYaw);
         double avgYaw = oldYaw + deltaYaw / 2.0;

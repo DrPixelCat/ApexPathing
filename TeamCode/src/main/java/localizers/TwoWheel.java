@@ -31,6 +31,9 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
 
     @Override
     public void update() {
+        strafePod.update();
+        forwardPod.update();
+
         double oldYaw = pose.getHeading(util.AngleUnit.RAD);
         double currentYaw =
                 Angle.normalize(imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction);

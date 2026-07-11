@@ -2,6 +2,7 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import java.util.Objects;
 
@@ -34,6 +35,7 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
 
     // Note: front motors are guaranteed to be non-null, but rear motors may be null if not needed
     protected DcMotorEx flMotor, frMotor, blMotor, brMotor;
+    private VoltageSensor voltageSensor;
 
     // Power change deadzone to prevent unnecessary motor updates
     private static final double POWER_TOLERANCE = 0.005;
@@ -72,6 +74,12 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
         this.constants = constants;
         this.drivetrainType = drivetrainType;
         this.isHolonomic = drivetrainType != DrivetrainType.TANK;
+        for (VoltageSensor candidate : hardwareMap.voltageSensor) {
+            if (candidate.getVoltage() > 1.0) {
+                voltageSensor = candidate;
+                break;
+            }
+        }
     }
 
     /**
@@ -136,6 +144,17 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      * drivetrain class does not use all 4 motors, just pass 0 for the motors you don't use.
      */
     public void setPowers(double flPower, double frPower, double blPower, double brPower) {
+        if (constants.voltageCompensationEnabled && voltageSensor != null) {
+            double batteryVoltage = voltageSensor.getVoltage();
+            if (Double.isFinite(batteryVoltage) && batteryVoltage > 1.0) {
+                double correction = constants.nominalVoltage / batteryVoltage;
+                flPower *= correction;
+                frPower *= correction;
+                blPower *= correction;
+                brPower *= correction;
+            }
+        }
+
         // Motor power limiting
         double max = Math.max(0, Math.abs(flPower));
         max = Math.max(max, Math.abs(frPower));
