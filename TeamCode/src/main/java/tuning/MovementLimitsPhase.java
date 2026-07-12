@@ -1,7 +1,7 @@
 package tuning;
 
 import geometry.Pose;
-import paths.heading.HolonomicInterpolationStyle;
+import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import geometry.AngleUnit;
 import geometry.DistUnit;
@@ -36,16 +36,19 @@ public class MovementLimitsPhase extends TuningPhase {
         forwardPathRunning = true;
         maxLateralError = 0;
 
-        GeometryFactory poseFactory = new GeometryFactory(DistUnit.IN, AngleUnit.DEG);
+        GeometryFactory factory = new GeometryFactory(context.getFollower())
+                .setDistUnit(DistUnit.IN)
+                .setAngleUnit(AngleUnit.DEG);
+
         Pose startPose = context.getFollower().getPose();
-        Pose midPose = startPose.plus(poseFactory.of(40, 20));
-        Pose endPose = startPose.plus(poseFactory.of(60, 0));
-        // TODO: Don't hardcode holonomicPath once the new path builder is implemented
-        forwardCurve = Builder.holonomicPath(startPose, midPose, endPose)
-                .interpolateWith(HolonomicInterpolationStyle.TANGENT_FORWARD)
+        Pose midPose = startPose.plus(factory.pose(40, 20));
+        Pose endPose = startPose.plus(factory.pose(60, 0));
+
+        forwardCurve = factory.path(startPose, midPose, endPose)
+                .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .quickBuild();
-        backwardCurve = Builder.holonomicPath(endPose, midPose, startPose)
-                .interpolateWith(HolonomicInterpolationStyle.TANGENT_FORWARD)
+        backwardCurve = factory.path(endPose, midPose, startPose)
+                .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .quickBuild();
 
         maxLateralAccel = binarySearch.getGuess();

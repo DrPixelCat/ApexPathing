@@ -594,7 +594,7 @@ public class Follower {
     }
 
     /**
-     * Retrieves the robots current factory estimate from the localizer.
+     * Retrieves the robots current pose estimate from the localizer.
      *
      * @return The current global position and heading.
      */
@@ -608,7 +608,7 @@ public class Follower {
     public boolean isBusy() { return currentMovement != null; }
 
     /**
-     * Forcibly overrides the localizers current factory estimate.
+     * Forcibly overrides the localizers current pose estimate.
      *
      * @param pose The new global position and heading.
      */
