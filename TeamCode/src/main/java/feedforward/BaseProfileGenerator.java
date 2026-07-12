@@ -20,7 +20,7 @@ import paths.movements.Path;
  * The shared algorithm does the drivetrain-independent work: sample the path, apply velocity
  * ceilings, run acceleration/deceleration sweeps, then iteratively lower any samples that still
  * exceed normalized power utilization.
- * 
+ *
  * @author DrPixelCat24
  */
 public abstract class BaseProfileGenerator {
@@ -611,14 +611,14 @@ public abstract class BaseProfileGenerator {
 
         double low = Math.min(prevVel, upperVel);
         double high = upperVel;
-        if (isForwardTransitionFeasible(path, prevPoint, currentPoint, prevVel, high,
+        if (isForwardTransitionFeasible(path, prevPoint, currentPoint, high, prevVel,
                 maxAccel, ds)) {
             return high;
         }
 
         for (int i = 0; i < PIN_SEARCH_ITERATIONS; i++) {
             double candidate = (low + high) / 2.0;
-            if (isForwardTransitionFeasible(path, prevPoint, currentPoint, prevVel, candidate,
+            if (isForwardTransitionFeasible(path, prevPoint, currentPoint, candidate, prevVel,
                     maxAccel, ds)) {
                 low = candidate;
             } else {
@@ -646,8 +646,8 @@ public abstract class BaseProfileGenerator {
      * Checks an accelerating transition from {@code prevVel} to {@code nextVel}.
      */
     private boolean isForwardTransitionFeasible(Path path, PathPoint prevPoint,
-                                                PathPoint currentPoint, double prevVel,
-                                                double nextVel, double maxAccel, double ds) {
+                                                PathPoint currentPoint, double nextVel, double prevVel,
+                                                double maxAccel, double ds) {
         double accel = calculateTangentialAccel(prevVel, nextVel, ds);
         if (accel > maxAccel + EPSILON) {
             return false;

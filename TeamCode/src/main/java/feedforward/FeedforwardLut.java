@@ -2,6 +2,7 @@ package feedforward;
 
 import androidx.annotation.NonNull;
 
+
 /**
  * Linear lookup table for generated feedforward states.
  * <p>
@@ -23,7 +24,7 @@ public class FeedforwardLut {
             throw new IllegalArgumentException("A feedforward LUT requires at least one sample.");
         }
         for (int i = 1; i < generatedParams.length; i++) {
-            if (generatedParams[i].getProgression() < generatedParams[i - 1].getProgression()) {
+            if (generatedParams[i].getProgression() < generatedParams[i-1].getProgression()) {
                 throw new IllegalArgumentException(
                         "Feedforward LUT progression keys must be ordered from low to high."
                 );
@@ -48,7 +49,7 @@ public class FeedforwardLut {
             return copyOf(params[0]);
         }
 
-        MotionParameters last = params[params.length - 1];
+        MotionParameters last = params[params.length - 1 ];
         if (progression >= last.getProgression()) {
             return copyOf(last);
         }
