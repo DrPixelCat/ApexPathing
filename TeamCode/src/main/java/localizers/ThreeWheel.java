@@ -6,8 +6,8 @@ import geometry.Angle;
 import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
-import util.AngleUnit;
-import util.DistUnit;
+import geometry.AngleUnit;
+import geometry.DistUnit;
 
 public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
     private final OdometryPod strafePod;

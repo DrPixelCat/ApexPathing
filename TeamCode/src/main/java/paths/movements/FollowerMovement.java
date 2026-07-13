@@ -14,7 +14,7 @@ public abstract class FollowerMovement {
     private boolean ended = false;
 
     /**
-     * Gets the expected final pose of the robot after this movement is completed.
+     * Gets the expected final factory of the robot after this movement is completed.
      * This is critical for linking sequential builders together!
      *
      * @return The final Pose.

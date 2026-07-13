@@ -8,7 +8,7 @@ import geometry.Angle;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
-import util.DistUnit;
+import geometry.DistUnit;
 
 /**
  * Generates holonomic profiles for mecanum drives, including direction-specific limits.

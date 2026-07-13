@@ -6,7 +6,6 @@ import java.util.Objects;
 
 import geometry.Angle;
 import geometry.Vector;
-import util.MotorFactory;
 
 /**
  * Mecanum drivetrain controller
@@ -40,26 +39,26 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
         public Mecanum build(HardwareMap hardwareMap) { return new Mecanum(this, hardwareMap); }
 
         /** Sets the front left motor configuration. */
-        public Constants setFrontLeftMotor(MotorFactory motorFactory) {
-            this.flMotorConfig = motorFactory;
+        public Constants setFrontLeftMotor(Motor Motor) {
+            this.flMotorConfig = Motor;
             return this;
         }
 
         /** Sets the front right motor configuration. */
-        public Constants setFrontRightMotor(MotorFactory motorFactory) {
-            this.frMotorConfig = motorFactory;
+        public Constants setFrontRightMotor(Motor Motor) {
+            this.frMotorConfig = Motor;
             return this;
         }
 
         /** Sets the back left motor configuration. */
-        public Constants setBackLeftMotor(MotorFactory motorFactory) {
-            this.blMotorConfig = motorFactory;
+        public Constants setBackLeftMotor(Motor Motor) {
+            this.blMotorConfig = Motor;
             return this;
         }
 
         /** Sets the back right motor configuration. */
-        public Constants setBackRightMotor(MotorFactory motorFactory) {
-            this.brMotorConfig = motorFactory;
+        public Constants setBackRightMotor(Motor Motor) {
+            this.brMotorConfig = Motor;
             return this;
         }
     }

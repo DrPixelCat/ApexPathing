@@ -40,7 +40,7 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants>{
         double deltaX = (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
                 backLeft.getDeltaInches() - backRight.getDeltaInches()) / 4.0;
 
-        double oldYaw = pose.getHeading(util.AngleUnit.RAD);
+        double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
                 imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction
         );
@@ -62,7 +62,7 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants>{
     @Override
     public void setPose(Pose newPose) {
         correction = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) -
-                newPose.getHeading(util.AngleUnit.RAD);
+                newPose.getHeading(geometry.AngleUnit.RAD);
         pose = newPose;
         backLeft.resetEncoder();
         frontLeft.resetEncoder();

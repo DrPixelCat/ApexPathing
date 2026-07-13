@@ -4,7 +4,6 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import geometry.Angle;
 import geometry.Dist;
-import util.MotorFactory;
 
 /**
  * Abstract class implemented by all drivetrain configuration classes
@@ -21,10 +20,10 @@ import util.MotorFactory;
 public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<T>> {
     // Motors (only 2 motors are guaranteed, others are optional and may be null)
     // Child classes should handle setting these up as needed
-    public MotorFactory flMotorConfig = new MotorFactory();
-    public MotorFactory frMotorConfig = new MotorFactory();
-    public MotorFactory blMotorConfig = null;
-    public MotorFactory brMotorConfig = null;
+    public Motor flMotorConfig = new Motor();
+    public Motor frMotorConfig = new Motor();
+    public Motor blMotorConfig = null;
+    public Motor brMotorConfig = null;
 
     public double maxPower = 1.0;
     public Angle headingTolerance = Angle.fromDeg(1.0);
@@ -79,20 +78,20 @@ public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<
     /**
      * Get the motor configuration for the front left motor.
      */
-    public MotorFactory getFlMotorConfig() { return flMotorConfig; }
+    public Motor getFlMotorConfig() { return flMotorConfig; }
 
     /**
      * Get the motor configuration for the front right motor.
      */
-    public MotorFactory getFrMotorConfig() { return frMotorConfig; }
+    public Motor getFrMotorConfig() { return frMotorConfig; }
 
     /**
      * Get the motor configuration for the back left motor. May be null if not set.
      */
-    public MotorFactory getBlMotorConfig() { return blMotorConfig; }
+    public Motor getBlMotorConfig() { return blMotorConfig; }
 
     /**
      * Get the motor configuration for the back right motor. May be null if not set.
      */
-    public MotorFactory getBrMotorConfig() { return brMotorConfig; }
+    public Motor getBrMotorConfig() { return brMotorConfig; }
 }

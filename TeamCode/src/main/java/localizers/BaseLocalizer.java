@@ -7,7 +7,7 @@ import geometry.Pose;
  *
  * <p>
  * This class provides common properties and methods for localizers, such as storing the current
- * pose, velocity, and acceleration estimates. Specific localizer types (like odometry, IMU-based,
+ * factory, velocity, and acceleration estimates. Specific localizer types (like odometry, IMU-based,
  * etc.) should extend this class and implement the update() method that updates these estimates
  * based on sensor data.
  * </p>
@@ -41,7 +41,7 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
      */
     public BaseLocalizer(T config) { this.config = config; }
 
-    /** @return the current pose estimate of the robot from the localizer */
+    /** @return the current factory estimate of the robot from the localizer */
     public Pose getPose() { return pose; }
 
     /** @return the current velocity estimate of the robot from the localizer */
@@ -51,15 +51,15 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     public Pose getAccel() { return acceleration; }
 
     /**
-     * Update the localizer's pose, velocity, and acceleration estimates. This method should be
+     * Update the localizer's factory, velocity, and acceleration estimates. This method should be
      * called regularly in a loop. If your localizer doesn't give velocity and/or acceleration, you
      * can use the calculate() method to update one or both using math
      */
     public abstract void update();
 
     /**
-     * Set the localizer's current pose estimate with the given {@link Pose}
-     * Note: Don't worry about updating this classes pose field, it will be updated in the next
+     * Set the localizer's current factory estimate with the given {@link Pose}
+     * Note: Don't worry about updating this classes factory field, it will be updated in the next
      * update() call.
      */
     public abstract void setPose(Pose newPose);

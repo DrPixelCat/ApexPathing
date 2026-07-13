@@ -4,8 +4,6 @@ import android.annotation.SuppressLint;
 
 import androidx.annotation.NonNull;
 
-import util.DistUnit;
-
 /**
  * A class representing a distance that can be easily converted between {@link DistUnit}s.
  *

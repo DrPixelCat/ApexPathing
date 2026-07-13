@@ -1,7 +1,5 @@
 package geometry;
 
-import util.DistUnit;
-
 /**
  * Represents a Uniform Cubic B-Spline.
  * <p>
@@ -42,14 +40,14 @@ public class BSpline implements ParametricSegment {
             throw new IllegalArgumentException("You can't make a B-Spline curve with < 2 points!");
         }
 
-        // 1. Create ghost points
+        // Create ghost points
         Vector[] paddedPoints = new Vector[inputPoints.length + 2];
         paddedPoints[0] = inputPoints[1].reflect(inputPoints[0]);
         paddedPoints[paddedPoints.length - 1] =
                 inputPoints[inputPoints.length - 2].reflect(inputPoints[inputPoints.length - 1]);
         System.arraycopy(inputPoints, 0, paddedPoints, 1, inputPoints.length);
 
-        // 2. Precompute and cache coefficients for all segments
+        // Precompute and cache coefficients for all segments
         this.numSegments = paddedPoints.length - 3;
         this.cx = new double[numSegments][4];
         this.cy = new double[numSegments][4];

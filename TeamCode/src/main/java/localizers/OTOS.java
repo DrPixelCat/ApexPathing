@@ -11,9 +11,9 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import geometry.Pose;
-import util.AngleUnit;
-import util.DistUnit;
-import util.PoseFactory;
+import geometry.AngleUnit;
+import geometry.DistUnit;
+import geometry.GeometryFactory;
 
 /**
  * SparkFun OTOS (Optical Tracking Odometry Sensor) localizer (uses custom driver class)
@@ -118,7 +118,8 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             description = "SparkFun Qwiic Optical Tracking Odometry Sensor, optimized for Apex Pathing"
     )
     private static class Driver extends I2cDeviceSynchDevice<I2cDeviceSynch> {
-        private final PoseFactory pose = new PoseFactory(DistUnit.M, AngleUnit.RAD);
+        private final GeometryFactory pose = new GeometryFactory()
+                .setDistUnit(DistUnit.M).setAngleUnit(AngleUnit.RAD);
         private float xPosition = 0;
         private float yPosition = 0;
         private float hOrientation = 0;
@@ -203,9 +204,9 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         public boolean isConnected() { return deviceClient.read8(REG_PRODUCT_ID) == PRODUCT_ID; }
 
         /**
-         * Calibrates the IMU on the OTOS, which removes the accelerometer and
-         * gyroscope offsets. This will do the full 255 samples and wait until
-         * he calibration is done, which takes about 612ms as of firmware v1.0)
+         * Calibrates the IMU on the OTOS, which removes the accelerometer and gyroscope offsets.
+         * This will do the full 255 samples and wait until he calibration is done, which takes
+         * about 612ms as of firmware v1.0).
          */
         public void calibrate() {
             // Write 255 to the calibration register (take 255 samples)
@@ -236,15 +237,13 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         }
 
         /** Resets the position tracker to zero. */
-        public void resetTracking() {
-            deviceClient.write(REG_POS_XL, new byte[6]);
-        }
+        public void resetTracking() { deviceClient.write(REG_POS_XL, new byte[6]); }
 
-        /** Sets the position tracker to the specified pose. */
+        /** Sets the position tracker to the specified factory. */
         public void setPosition(Pose pose) {
             byte[] rawData = new byte[6]; // Store raw data in a temporary buffer
 
-            // Convert pose units to raw data
+            // Convert factory units to raw data
             short rawX = (short) (pose.getX().getM() * METER_TO_INT16);
             short rawY = (short) (pose.getY().getM() * METER_TO_INT16);
             short rawH = (short) (pose.getHeading().getRad() * RAD_TO_INT16);
@@ -288,7 +287,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         public void setOffset(Pose pose) {
             byte[] rawData = new byte[6]; // Store raw data in a temporary buffer
 
-            // Convert pose units to raw data
+            // Convert factory units to raw data
             short rawX = (short) (pose.getX().getM() * METER_TO_INT16);
             short rawY = (short) (pose.getY().getM() * METER_TO_INT16);
             short rawH = (short) (pose.getHeading().getRad() * RAD_TO_INT16);
@@ -326,13 +325,13 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             hAcceleration = (float) (data.getShort(16) * INT16_TO_RPSS);
         }
 
-        /** @return the current pose estimate of the robot from the OTOS */
-        public Pose getPose() { return pose.of(xPosition, yPosition, hOrientation); }
+        /** @return the current factory estimate of the robot from the OTOS */
+        public Pose getPose() { return pose.pose(xPosition, yPosition, hOrientation); }
 
         /** @return the current velocity estimate of the robot from the OTOS */
-        public Pose getVel() { return pose.of(xVelocity, yVelocity, hVelocity); }
+        public Pose getVel() { return pose.pose(xVelocity, yVelocity, hVelocity); }
 
         /** @return the current acceleration estimate of the robot from the OTOS */
-        public Pose getAccel() { return pose.of(xAcceleration, yAcceleration, hAcceleration); }
+        public Pose getAccel() { return pose.pose(xAcceleration, yAcceleration, hAcceleration); }
     }
 }

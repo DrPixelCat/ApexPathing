@@ -4,8 +4,6 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import java.util.Objects;
 
-import util.MotorFactory;
-
 /**
  * Kiwi (also known as Killough or Three-Wheel Omni) drivetrain controller
  *
@@ -41,20 +39,20 @@ public class Kiwi extends BaseDrivetrain<Kiwi.Constants> {
         public Kiwi build(HardwareMap hardwareMap) { return new Kiwi(this, hardwareMap); }
 
         /** Sets the front left motor configuration. */
-        public Constants setFrontLeftMotor(MotorFactory motorFactory) {
-            this.flMotorConfig = motorFactory;
+        public Constants setFrontLeftMotor(Motor Motor) {
+            this.flMotorConfig = Motor;
             return this;
         }
 
         /** Sets the front right motor configuration. */
-        public Constants setFrontRightMotor(MotorFactory motorFactory) {
-            this.frMotorConfig = motorFactory;
+        public Constants setFrontRightMotor(Motor Motor) {
+            this.frMotorConfig = Motor;
             return this;
         }
 
         /** Sets the back motor configuration. */
-        public Constants setBackMotor(MotorFactory motorFactory) {
-            this.blMotorConfig = motorFactory;
+        public Constants setBackMotor(Motor Motor) {
+            this.blMotorConfig = Motor;
             return this; // Uses the back left motor object
         }
     }

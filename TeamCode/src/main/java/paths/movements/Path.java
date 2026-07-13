@@ -100,13 +100,13 @@ public class Path extends FollowerMovement {
     }
 
     /**
-     * Sets the final target pose (coordinates and heading) of this path.
+     * Sets the final target factory (coordinates and heading) of this path.
      * * @param endPose The geometric terminus of the route.
      */
     public void setEndPose(Pose endPose) {this.endPose = endPose;}
 
     /**
-     * Retrieves the final target pose of this path.
+     * Retrieves the final target factory of this path.
      * * @return The geometric terminus of the route.
      */
     public Pose getEndPose() {return endPose;}

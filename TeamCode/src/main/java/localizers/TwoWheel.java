@@ -10,7 +10,7 @@ import geometry.Angle;
 import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
-import util.DistUnit;
+import geometry.DistUnit;
 
 /**
  * This is the localizer for 2 dead wheel odometry featuring 1 parallel and 1 perpendicular wheel
@@ -31,7 +31,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
 
     @Override
     public void update() {
-        double oldYaw = pose.getHeading(util.AngleUnit.RAD);
+        double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw =
                 Angle.normalize(imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction);
         double deltaYaw = Angle.normalize(currentYaw - oldYaw);
@@ -54,7 +54,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
     @Override
     public void setPose(Pose newPose) {
         correction =
-                imu.getRobotYawPitchRollAngles().getYaw(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.RADIANS) - newPose.getHeading(util.AngleUnit.RAD);
+                imu.getRobotYawPitchRollAngles().getYaw(org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.RADIANS) - newPose.getHeading(geometry.AngleUnit.RAD);
         pose = newPose;
         strafePod.resetEncoder();
         forwardPod.resetEncoder();

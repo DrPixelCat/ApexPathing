@@ -7,8 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import util.MotorFactory;
-
 /**
  * Drivetrain class that physically actuates between holonomic and high-traction kinematics.
  * Supports Butterfly, locking mecanum, and similar drivetrains.
@@ -125,23 +123,23 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Constants> {
             return this;
         }
 
-        public Constants setFrontLeftMotor(MotorFactory motorFactory) {
-            this.flMotorConfig = motorFactory;
+        public Constants setFrontLeftMotor(Motor Motor) {
+            this.flMotorConfig = Motor;
             return this;
         }
 
-        public Constants setFrontRightMotor(MotorFactory motorFactory) {
-            this.frMotorConfig = motorFactory;
+        public Constants setFrontRightMotor(Motor Motor) {
+            this.frMotorConfig = Motor;
             return this;
         }
 
-        public Constants setBackLeftMotor(MotorFactory motorFactory) {
-            this.blMotorConfig = motorFactory;
+        public Constants setBackLeftMotor(Motor Motor) {
+            this.blMotorConfig = Motor;
             return this;
         }
 
-        public Constants setBackRightMotor(MotorFactory motorFactory) {
-            this.brMotorConfig = motorFactory;
+        public Constants setBackRightMotor(Motor Motor) {
+            this.brMotorConfig = Motor;
             return this;
         }
 

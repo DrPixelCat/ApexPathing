@@ -30,7 +30,7 @@ public class Turn extends FollowerMovement {
      */
     public Turn(Pose startPose, Angle targetHeading) {
         this.startPose = startPose;
-        // The end pose shares the same X/Y, but updates the heading
+        // The end factory shares the same X/Y, but updates the heading
         this.endPose = new Pose(startPose.getVec(), targetHeading);
     }
 

@@ -13,9 +13,13 @@ import paths.movements.Turn;
 
 /**
  * A builder class designed to construct a {@link Turn} fluently.
+ *
  * <p>
  * This handles stationary point-turns, allowing users to inject mechanical
  * callbacks at specific angles during the rotation.
+ * </p>
+ *
+ * @author DrPixelCat
  */
 public class TurnBuilder {
     private final Pose startPose;

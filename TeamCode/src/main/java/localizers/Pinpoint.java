@@ -19,9 +19,9 @@ import java.util.Objects;
 import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
-import util.AngleUnit;
-import util.DistUnit;
-import util.PoseFactory;
+import geometry.AngleUnit;
+import geometry.DistUnit;
+import geometry.GeometryFactory;
 
 /**
  * goBILDA Pinpoint Odometry Computer localizer (uses custom driver class)
@@ -126,7 +126,7 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
      * <a href="https://github.com/goBILDA-Official/FtcRobotController-Add-Pinpoint/">GitHub</a>.
      *
      * @author Ethan Doak - goBILDA
-     * @author Dylan B. - 18597 RoboClovers Delta
+     * @author Dylan B. - 18597 RoboClovers - Delta
      */
     @I2cDeviceType
     @DeviceProperties(
@@ -136,14 +136,18 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
                     "Odometry), optimized for Apex Pathing"
     )
     public static class Driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
-        private final PoseFactory pose = new PoseFactory(DistUnit.MM, AngleUnit.RAD);
+        final int POSITION_CORRUPT_THRESHOLD = 5000; // Millimeters (bigger than standard and CRI field)
+        final int HEADING_CORRUPT_THRESHOLD = 120; // Rad
+        final int VELOCITY_CORRUPT_THRESHOLD = 1000; // Millimeters/s (a robot can't move this fast.... right?)
+        final int HEADING_VELOCITY_CORRUPT_THRESHOLD = 15; // Rad/s
+
+        private final GeometryFactory geometryFactory = new GeometryFactory()
+                .setDistUnit(DistUnit.MM)
+                .setAngleUnit(AngleUnit.RAD);
+        private Pose pose = geometryFactory.pose();
+        private Pose velocity = geometryFactory.pose();
+
         private int loopTime = 0;
-        private float xPosition = 0;
-        private float yPosition = 0;
-        private float hOrientation = 0;
-        private float xVelocity = 0;
-        private float yVelocity = 0;
-        private float hVelocity = 0;
 
         private static final float goBILDA_SWINGARM_POD = 13.26291192f; // goBILDA Swingarm Pod TPM
         private static final float goBILDA_4_BAR_POD = 19.89436789f; // goBILDA 4 Bar Pod TPM
@@ -249,14 +253,14 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         /**
          * Confirm that the number received is a number, and does not include a change above the threshold
          *
-         * @param oldValue  the reading from the previous cycle
-         * @param newValue  the new reading
+         * @param oldValue the reading from the previous cycle
+         * @param newValue the new reading
          * @param threshold the maximum change between this reading and the previous one
          * @return newValue if the position is good, oldValue otherwise
          */
-        private Float isPositionCorrupt(float oldValue, float newValue, int threshold) {
+        private double isPositionCorrupt(double oldValue, double newValue, int threshold) {
             boolean noData = (loopTime < 1);
-            boolean isCorrupt = noData || Float.isNaN(newValue) ||
+            boolean isCorrupt = noData || Double.isNaN(newValue) ||
                     Math.abs(newValue - oldValue) > threshold;
 
             if (!isCorrupt) { return newValue; }
@@ -273,52 +277,55 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
          * @param threshold the velocity allowed to be reported
          * @return newValue if the velocity is good, oldValue otherwise
          */
-        private Float isVelocityCorrupt(float oldValue, float newValue, int threshold) {
-            boolean isCorrupt = Float.isNaN(newValue) || Math.abs(newValue) > threshold;
+        private double isVelocityCorrupt(double oldValue, double newValue, int threshold) {
+            boolean isCorrupt = Double.isNaN(newValue) || Math.abs(newValue) > threshold;
 
             if (!isCorrupt) { return newValue; }
 
             return oldValue;
         }
 
-        /**
-         * Call this once per loop to read new data from the Odometry Computer.
-         */
+        /** Call this once per loop to read new data from the Odometry Computer. */
         public void update() {
-            // Set thresholds well above any normal values to detect corruption
-            final int positionThreshold = 5000;
-            final int headingThreshold = 120;
-            final int velocityThreshold = 10000;
-            final int headingVelocityThreshold = 120;
-
-            float oldPosX = xPosition;
-            float oldPosY = yPosition;
-            float oldPosH = hOrientation;
-            float oldVelX = xVelocity;
-            float oldVelY = yVelocity;
-            float oldVelH = hVelocity;
 
             byte[] bArr = deviceClient.read(Register.BULK_READ.bVal, 40);
             loopTime = byteArrayToInt(Arrays.copyOfRange(bArr, 4, 8), ByteOrder.LITTLE_ENDIAN);
-            xPosition = byteArrayToFloat(Arrays.copyOfRange(bArr, 16, 20));
-            yPosition = byteArrayToFloat(Arrays.copyOfRange(bArr, 20, 24));
-            hOrientation = byteArrayToFloat(Arrays.copyOfRange(bArr, 24, 28)
-            );
-            xVelocity = byteArrayToFloat(Arrays.copyOfRange(bArr, 28, 32));
-            yVelocity = byteArrayToFloat(Arrays.copyOfRange(bArr, 32, 36));
-            hVelocity = byteArrayToFloat(Arrays.copyOfRange(bArr, 36, 40));
 
-            /*
-             * Check to see if any of the floats we have received from the device are NaN or are
-             * too large If they are, we return the previously read value and alert the user via
-             * the DeviceStatus Enum.
-             */
-            xPosition = isPositionCorrupt(oldPosX, xPosition, positionThreshold);
-            yPosition = isPositionCorrupt(oldPosY, yPosition, positionThreshold);
-            hOrientation = isPositionCorrupt(oldPosH, hOrientation, headingThreshold);
-            xVelocity = isVelocityCorrupt(oldVelX, xVelocity, velocityThreshold);
-            yVelocity = isVelocityCorrupt(oldVelY, yVelocity, velocityThreshold);
-            hVelocity = isVelocityCorrupt(oldVelH, hVelocity, headingVelocityThreshold);
+            pose = geometryFactory.pose(
+                    isPositionCorrupt(
+                            pose.getX().getMm(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 16, 20)),
+                            POSITION_CORRUPT_THRESHOLD
+                    ),
+                    isPositionCorrupt(
+                            pose.getY().getMm(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 20, 24)),
+                            POSITION_CORRUPT_THRESHOLD
+                    ),
+                    isPositionCorrupt(
+                            pose.getHeading().getRad(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 24, 28)),
+                            HEADING_CORRUPT_THRESHOLD
+                    )
+            );
+
+            velocity = geometryFactory.pose(
+                    isVelocityCorrupt(
+                            velocity.getX().getMm(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 28, 32)),
+                            VELOCITY_CORRUPT_THRESHOLD
+                    ),
+                    isVelocityCorrupt(
+                            velocity.getY().getMm(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 32, 36)),
+                            VELOCITY_CORRUPT_THRESHOLD
+                    ),
+                    isVelocityCorrupt(
+                            velocity.getHeading().getRad(),
+                            byteArrayToFloat(Arrays.copyOfRange(bArr, 36, 40)),
+                            HEADING_VELOCITY_CORRUPT_THRESHOLD
+                    )
+            );
         }
 
         /**
@@ -421,12 +428,12 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         /**
          * @return a Pose2D containing the estimated position of the robot
          */
-        public Pose getPosition() { return pose.of(xPosition, yPosition, hOrientation); }
+        public Pose getPosition() { return pose; }
 
         /**
          * @return a Pose2D containing the estimated velocity of the robot, velocity is unit per
          * second.
          */
-        public Pose getVelocity() { return pose.of(xVelocity, yVelocity, hVelocity); }
+        public Pose getVelocity() { return velocity; }
     }
 }

@@ -1,4 +1,4 @@
-package util;
+package geometry;
 
 /**
  * Enum to represent angle units and provide conversion methods between them.

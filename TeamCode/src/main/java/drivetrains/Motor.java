@@ -1,4 +1,4 @@
-package util;
+package drivetrains;
 
 import com.qualcomm.robotcore.hardware.DcMotor.RunMode;
 import com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior;
@@ -12,7 +12,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  * @author Dylan B. - 18597 RoboClovers - Delta
  * @author Atharv G - 13085 Bionic Dutch
  */
-public class MotorFactory {
+public class Motor {
     private final String name;
     private boolean reversed = false;
     private boolean floatMode = false;
@@ -22,18 +22,18 @@ public class MotorFactory {
      * Creates a motor constants with the given name and defaults (not reversed, brake mode, run
      * without encoder).
      */
-    public MotorFactory(String name) {this.name = name;}
+    public Motor(String name) { this.name = name; }
 
     /**
      * Creates a default motor constants ("defaultMotorName", not reversed, brake mode, run without
      * encoder).
      */
-    public MotorFactory() {this("defaultMotorName");}
+    public Motor() { this("defaultMotorName"); }
 
     /**
      * Sets the motor direction to reverse instead of teh default forward
      */
-    public MotorFactory reverse() {
+    public Motor reverse() {
         this.reversed = true;
         return this;
     }
@@ -41,7 +41,7 @@ public class MotorFactory {
     /**
      * Sets the motors zero power behavior to float instead of the default brake
      */
-    public MotorFactory floatMode() {
+    public Motor floatMode() {
         this.floatMode = true;
         return this;
     }
@@ -49,7 +49,7 @@ public class MotorFactory {
     /**
      * @param mode The {@link RunMode} of the motor. Defaults to RUN_WITHOUT_ENCODER.
      */
-    public MotorFactory runWith(RunMode mode) {
+    public Motor runWith(RunMode mode) {
         this.runMode = mode;
         return this;
     }

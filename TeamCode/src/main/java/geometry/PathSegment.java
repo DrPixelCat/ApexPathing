@@ -304,10 +304,10 @@ public class PathSegment {
         Vector normal;
         if (cross < 0) {
             // Bending right: swap X and Y, negate the new Y
-            normal = Vector.of(vy, -vx, util.DistUnit.IN);
+            normal = Vector.of(vy, -vx, DistUnit.IN);
         } else {
             // Bending left: swap X and Y, negate the new X
-            normal = Vector.of(-vy, vx, util.DistUnit.IN);
+            normal = Vector.of(-vy, vx, DistUnit.IN);
         }
 
         return normal.normalize();

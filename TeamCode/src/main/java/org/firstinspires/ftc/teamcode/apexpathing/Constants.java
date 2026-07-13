@@ -5,8 +5,8 @@ import drivetrains.BaseDrivetrainConstants;
 import drivetrains.Mecanum;
 import localizers.BaseLocalizerConstants;
 import localizers.Pinpoint;
-import util.DistUnit;
-import util.MotorFactory;
+import geometry.DistUnit;
+import drivetrains.Motor;
 
 /**
  * This class extends {@link ApexConstants} and provides the specific drivetrain and localizer
@@ -19,10 +19,10 @@ public class Constants extends ApexConstants {
     @Override
     public BaseDrivetrainConstants<?> drivetrainConstants() {
         return new Mecanum.Constants()
-                .setFrontLeftMotor(new MotorFactory("frontLeftMotor"))
-                .setBackLeftMotor(new MotorFactory("backLeftMotor"))
-                .setFrontRightMotor(new MotorFactory("frontRightMotor").reverse())
-                .setBackRightMotor(new MotorFactory("backRightMotor").reverse())
+                .setFrontLeftMotor(new Motor("frontLeftMotor"))
+                .setBackLeftMotor(new Motor("backLeftMotor"))
+                .setFrontRightMotor(new Motor("frontRightMotor").reverse())
+                .setBackRightMotor(new Motor("backRightMotor").reverse())
                 .setRobotCentric(true)
                 .setMaxPower(1.0);
     }
