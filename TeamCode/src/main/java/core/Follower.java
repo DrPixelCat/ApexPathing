@@ -4,10 +4,10 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.Range;
 
-import controllers.movement.DriveController;
-import controllers.movement.DriveController.AllocatedCommand;
+import controllers.DriveController;
+import controllers.DriveController.AllocatedCommand;
+import controllers.TurnController;
 import controllers.PDSController;
-import controllers.movement.TurnController;
 import drivetrains.BaseDrivetrain;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.DualActuated;
@@ -284,7 +284,7 @@ public class Follower {
             }
 
             double headingFeedback = headingControllerEnabled
-                    ? headingController.calculateFromError(
+                    ? headingController.calculate(
                     headingTarg.getRad() - currentHeading.getRad()) : 0.0;
             double turnPow = Range.clip(headingFeedback + headingFF, -1.0, 1.0);
             double availableMotorPower = 1.0 - Math.abs(turnPow);

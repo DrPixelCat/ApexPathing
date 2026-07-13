@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import java.util.Objects;
 
-import controllers.PDSController;
 import controllers.PDSController.PDSCoefficients;
+import controllers.PDSController;
 import geometry.Angle;
 import geometry.Dist;
 
@@ -120,19 +120,19 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         }
 
         if (flError != lastFlError) {
-            flServo.setPower(flSteerController.calculateFromError(flError));
+            flServo.setPower(flSteerController.calculate(flError));
             lastFlError = flError;
         }
         if (frError != lastFrError) {
-            frServo.setPower(frSteerController.calculateFromError(frError));
+            frServo.setPower(frSteerController.calculate(frError));
             lastFrError = frError;
         }
         if (blError != lastBlError) {
-            blServo.setPower(blSteerController.calculateFromError(blError));
+            blServo.setPower(blSteerController.calculate(blError));
             lastBlError = blError;
         }
         if (brError != lastBrError) {
-            brServo.setPower(brSteerController.calculateFromError(brError));
+            brServo.setPower(brSteerController.calculate(brError));
             lastBrError = brError;
         }
 

@@ -35,9 +35,8 @@ public class TunerContext {
     }
 
     public Follower getFollower() { return follower; }
-    public Telemetry getTelemetry() { return opMode.telemetry; }
 
-    public void stopDrive() { follower.teleOpDrive(0, 0, 0); }
+    public Telemetry getTelemetry() { return opMode.telemetry; }
 
     public void saveConstants() {
         JSONObject constantsJSON = constants.toJson();

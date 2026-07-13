@@ -1,6 +1,5 @@
-package controllers.movement;
+package controllers;
 
-import controllers.PDSController;
 import geometry.Angle;
 import geometry.Dist;
 import geometry.Vector;
@@ -11,6 +10,9 @@ import geometry.Vector;
  * Field-space path corrections are converted to robot space here. Mecanum allocation additionally
  * applies the robot-relative strafe penalty and measures power using mecanum wheel demand
  * {@code |forward| + |strafe|}. Isotropic allocation is used by swerve and other holonomic drives.
+ * </p>
+ *
+ * @author DrPixelCat
  */
 public class DriveController {
     private static final double EPSILON = 1e-9;
@@ -62,16 +64,16 @@ public class DriveController {
         Vector fieldError = targetPos.minus(currentPos);
         if (fieldError.getMag().getIn() < tolerance.getIn()) return Vector.zero();
 
-        double basePower = turnPositionPds.calculateFromError(fieldError.getMag().getIn());
+        double basePower = turnPositionPds.calculate(fieldError.getMag().getIn());
         return Vector.fromPolar(Dist.fromIn(basePower), fieldError.getTheta());
     }
 
     public double calculateCrossTrack(double error) {
-        return crossTrackPds.calculateFromError(error);
+        return crossTrackPds.calculate(error);
     }
 
     public double calculateEndDistance(double error) {
-        return endDistancePds.calculateFromError(error);
+        return endDistancePds.calculate(error);
     }
 
     /** Allocates one field-centric stage using mecanum direction-dependent wheel demand. */

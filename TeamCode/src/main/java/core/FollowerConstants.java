@@ -8,8 +8,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 
-import controllers.PDSController.PDSCoefficients;
 import drivetrains.BaseDrivetrain;
+import controllers.PDSController.PDSCoefficients;
 
 /**
  * Class to hold constants for the Follower class. These constants are loaded from a JSON file

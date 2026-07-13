@@ -1,6 +1,5 @@
-package controllers.movement;
+package controllers;
 
-import controllers.PDSController;
 import feedforward.MotionParameters;
 
 /**
@@ -9,6 +8,9 @@ import feedforward.MotionParameters;
  * Quick turns and overshoot recovery use the complete heading PDS controller. Normal profiled
  * motion deliberately uses only angular feedforward, the PDS controller's tuned static term, and
  * explicit angular velocity feedback.
+ * </p>
+ *
+ * @author DrPixelCat
  */
 public class TurnController {
     private static final double EPSILON = 1e-6;
@@ -32,7 +34,7 @@ public class TurnController {
 
     /** Uses the complete heading PDS for an unprofiled turn. */
     public double calculateQuick(double headingError) {
-        return headingPds.calculateFromError(headingError);
+        return headingPds.calculate(headingError);
     }
 
     /**
@@ -47,7 +49,7 @@ public class TurnController {
         }
 
         if (overshootRecovery) {
-            return headingPds.calculateFromError(headingError);
+            return headingPds.calculate(headingError);
         }
 
         double targetVelocity = targets.getAngularVel();
@@ -66,16 +68,10 @@ public class TurnController {
         return clip(feedforward + velocityFeedback);
     }
 
-    public boolean isRecoveringFromOvershoot() {
-        return overshootRecovery;
-    }
-
     public void reset() {
         overshootRecovery = false;
         headingPds.reset();
     }
 
-    private static double clip(double power) {
-        return Math.max(-1.0, Math.min(1.0, power));
-    }
+    private static double clip(double power) { return Math.max(-1.0, Math.min(1.0, power)); }
 }

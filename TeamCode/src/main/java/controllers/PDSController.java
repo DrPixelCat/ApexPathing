@@ -1,5 +1,7 @@
 package controllers;
 
+import geometry.Angle;
+
 /**
  * A general purpose PD controller with static friction compensation specifically made for
  * controlling robot movement in a one-dimensional axis.
@@ -12,7 +14,7 @@ package controllers;
  * </ul>
  *
  * <p>
- * The controller uses a soft sign function to smooth the minimum power term, which helps prevent
+ * The controller uses a soft sign function to smooth the kS term, which helps prevent
  * overshooting and oscillation.
  * </p>
  *
@@ -23,15 +25,21 @@ package controllers;
  * @author Dylan B. - 18597 RoboClovers - Delta
  * @author DrPixelCat
  */
-public class PDSController extends Controller {
+public class PDSController {
     // TODO: I checked these on Desmos and it looks good, but they might need to be changed
     public static final double LINEAR_SMOOTHING_CONSTANT = 0.7; // In
     public static final double ANGULAR_SMOOTHING_CONSTANT = 0.07; // Rad
-
-    private PDSCoefficients coeffs;
     private double smoothingConstant = LINEAR_SMOOTHING_CONSTANT;
 
-    // region Coefficients class
+    private PDSCoefficients coeffs;
+
+    private boolean angularController = false;
+
+    protected double target = 0.0;
+    protected double lastError = 0.0;
+    protected boolean timeAnomaly = false;
+    private boolean firstRun = true;
+    private long lastTimestamp;
 
     /**
      * A simple class to hold the PDSCoefficients for the PDSController.
@@ -59,10 +67,11 @@ public class PDSController extends Controller {
         public void setkS(double kS) { this.kS = kS; }
     }
 
-    // region Constructors and getters/setters
-
     /** @param coefficients the {@link PDSCoefficients} to use for the controller */
-    public PDSController(PDSCoefficients coefficients) { this.setCoefficients(coefficients); }
+    public PDSController(PDSCoefficients coefficients) {
+        this.setCoefficients(coefficients);
+        this.lastTimestamp = System.nanoTime();
+    }
 
     /** @param PDSCoefficients the {@link PDSCoefficients} to use for the controller */
     public void setCoefficients(PDSCoefficients PDSCoefficients) { this.coeffs = PDSCoefficients; }
@@ -70,19 +79,54 @@ public class PDSController extends Controller {
     /** @return the current {@link PDSCoefficients} being used by the controller */
     public PDSCoefficients getCoefficients() { return this.coeffs; }
 
-    @Override
+    /**
+     * Sets the controller to be an angular controller. This should be called if the controller is
+     * being used to control an angular value
+     */
     public void setAngularController() {
-        super.setAngularController();
+        this.angularController = true;
         this.smoothingConstant = ANGULAR_SMOOTHING_CONSTANT;
     }
 
-    @Override
-    protected double computeOutput(double error, double lastError, double deltaTime) {
-        double proportional = this.coeffs.kP * error;
-        double derivative = this.coeffs.kD * (timeAnomalyDetected ? 0.0 :
-                (error - lastError) / deltaTime);
-        double minimum = this.coeffs.kS * (error / (Math.abs(error) + smoothingConstant));
+    /**
+     * Resets the controller state. Call this right before starting a new movement to prevent
+     * derivative kick and reset the timer.
+     */
+    public void reset() {
+        this.firstRun = true;
+        this.lastTimestamp = System.nanoTime();
+    }
 
-        return proportional + derivative + minimum;
+    /**
+     * Calculates the output directly from a pre-calculated error.
+     *
+     * @param error The calculated error (Target - Current)
+     * @return The control output
+     */
+    public synchronized double calculate(double error) {
+        long currentNano = System.nanoTime();
+
+        // Nano seconds to seconds
+        double deltaTime = (currentNano - lastTimestamp) / 1_000_000_000.0;
+
+        // Detect if loop is too fast (div by zero risk) or too slow (integral/derivative spike)
+        timeAnomaly = deltaTime < 1E-6 || deltaTime > 0.15;
+
+        double actualError = angularController ? Angle.normalize(error) : error; // 0 to 2pi
+
+        if (firstRun) {
+            lastError = actualError; // Prevents derivative kick from 0
+            timeAnomaly = true;
+            firstRun = false;
+        }
+
+        double p = this.coeffs.kP * error;
+        double d = this.coeffs.kD * (timeAnomaly ? 0.0 : (error - lastError) / deltaTime);
+        double s = this.coeffs.kS * (error / (Math.abs(error) + smoothingConstant));
+
+        lastTimestamp = currentNano;
+        lastError = actualError;
+
+        return p + d + s;
     }
 }
