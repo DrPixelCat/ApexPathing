@@ -8,7 +8,6 @@ import com.qualcomm.robotcore.hardware.configuration.annotations.DevicePropertie
 import com.qualcomm.robotcore.hardware.configuration.annotations.I2cDeviceType;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 import geometry.Pose;
 import geometry.AngleUnit;
@@ -16,7 +15,8 @@ import geometry.DistUnit;
 import geometry.GeometryFactory;
 
 /**
- * SparkFun OTOS (Optical Tracking Odometry Sensor) localizer (uses custom driver class)
+ * SparkFun OTOS (Optical Tracking Odometry Sensor) localizer with a custom driver class
+ * optimized for Apex Pathing.
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
@@ -42,20 +42,18 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
     }
 
     @Override
-    public void setPose(Pose newPose) {
-        otos.setPosition(newPose);
-    }
+    public void setPose(Pose newPose) { otos.setPosition(newPose); }
 
     /** Configuration class for the Sparkfun OTOS localizer. */
     public static class Constants extends BaseLocalizerConstants<Constants> {
-        public String name = "defaultOTOSNName";
+        public String name = null;
         public Pose offset = Pose.zero();
         public double linearScalar = 1.0;
         public double angularScalar = 1.0;
 
         @Override
         public OTOS build(HardwareMap hardwareMap) {
-            if (Objects.equals(this.name, "defaultOTOSName")) {
+            if (this.name == null) {
                 throw new IllegalArgumentException("OTOS name is not set in the localizer constants.");
             }
             return new OTOS(this, hardwareMap);
@@ -95,7 +93,8 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
          */
         public Constants setAngularScalar(double angularScalar) {
             if (angularScalar < Driver.MIN_SCALAR || angularScalar > Driver.MAX_SCALAR) {
-                throw new IllegalArgumentException("Angular scalar must be between " + Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
+                throw new IllegalArgumentException("Angular scalar must be between " +
+                        Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
             }
             this.angularScalar = angularScalar;
             return this;
@@ -118,17 +117,8 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             description = "SparkFun Qwiic Optical Tracking Odometry Sensor, optimized for Apex Pathing"
     )
     private static class Driver extends I2cDeviceSynchDevice<I2cDeviceSynch> {
-        private final GeometryFactory pose = new GeometryFactory()
-                .setDistUnit(DistUnit.M).setAngleUnit(AngleUnit.RAD);
-        private float xPosition = 0;
-        private float yPosition = 0;
-        private float hOrientation = 0;
-        private float xVelocity = 0;
-        private float yVelocity = 0;
-        private float hVelocity = 0;
-        private float xAcceleration = 0;
-        private float yAcceleration = 0;
-        private float hAcceleration = 0;
+        private final GeometryFactory factory = new GeometryFactory()
+                .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.RAD);
 
         public static final byte DEFAULT_ADDRESS = 0x17; // Default I2C addresses of the Qwiic OTOS
         public static final double MIN_SCALAR = 0.872; // Minimum scalar value for the linear and angular scalars
@@ -147,24 +137,25 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
 
         // Conversion factors
         protected static final double DEGREE_TO_RADIAN = Math.PI / 180.0;
+        protected static final double METER_TO_INCH = 1.0 / 0.0254;
 
         // Conversion factor for the linear position registers. 16-bit signed
-        // registers with a max value of 10 meters (394 inches) gives a resolution
-        // of about 0.0003 mps (0.012 ips)
-        protected static final double METER_TO_INT16 = 32768.0 / 10.0;
-        protected static final double INT16_TO_METER = 1.0 / METER_TO_INT16;
+        // registers with a max value of 10 meters (~393.7 inches) gives a resolution
+        // of about 0.012 inches
+        protected static final double INCH_TO_INT16 = 32768.0 / (10.0 * METER_TO_INCH);
+        protected static final double INT16_TO_INCH = 1.0 / INCH_TO_INT16;
 
         // Conversion factor for the linear velocity registers. 16-bit signed
-        // registers with a max value of 5 mps (197 ips) gives a resolution of about
-        // 0.00015 mps (0.006 ips)
-        protected static final double MPS_TO_INT16 = 32768.0 / 5.0;
-        protected static final double INT16_TO_MPS = 1.0 / MPS_TO_INT16;
+        // registers with a max value of 5 mps (~196.85 ips) gives a resolution of about
+        // 0.006 ips
+        protected static final double IPS_TO_INT16 = 32768.0 / (5.0 * METER_TO_INCH);
+        protected static final double INT16_TO_IPS = 1.0 / IPS_TO_INT16;
 
         // Conversion factor for the linear acceleration registers. 16-bit signed
-        // registers with a max value of 157 mps^2 (16 g) gives a resolution of
-        // about 0.0048 mps^2 (0.49 mg)
-        protected static final double MPSS_TO_INT16 = 32768.0 / (16.0 * 9.80665);
-        protected static final double INT16_TO_MPSS = 1.0 / MPSS_TO_INT16;
+        // registers with a max value of 157 mps^2 (16 g / ~6177.16 ipss) gives a
+        // resolution of about 0.19 ipss
+        protected static final double IPSS_TO_INT16 = 32768.0 / (16.0 * 9.80665 * METER_TO_INCH);
+        protected static final double INT16_TO_IPSS = 1.0 / IPSS_TO_INT16;
 
         // Conversion factor for the angular position registers. 16-bit signed
         // registers with a max value of pi radians (180 degrees) gives a resolution
@@ -184,6 +175,8 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         protected static final double RPSS_TO_INT16 = 32768.0 / (Math.PI * 1000.0);
         protected static final double INT16_TO_RPSS = 1.0 / RPSS_TO_INT16;
 
+        private Pose pose, velocity, acceleration;
+
         public Driver(I2cDeviceSynch deviceClient) {
             super(deviceClient, true);
             deviceClient.setI2cAddress(I2cAddr.create7bit(DEFAULT_ADDRESS));
@@ -192,7 +185,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         }
 
         @Override
-        protected boolean doInitialize() { return isConnected() ;}
+        protected boolean doInitialize() { return isConnected();}
 
         @Override
         public Manufacturer getManufacturer() { return Manufacturer.SparkFun; }
@@ -239,26 +232,6 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
         /** Resets the position tracker to zero. */
         public void resetTracking() { deviceClient.write(REG_POS_XL, new byte[6]); }
 
-        /** Sets the position tracker to the specified factory. */
-        public void setPosition(Pose pose) {
-            byte[] rawData = new byte[6]; // Store raw data in a temporary buffer
-
-            // Convert factory units to raw data
-            short rawX = (short) (pose.getX().getM() * METER_TO_INT16);
-            short rawY = (short) (pose.getY().getM() * METER_TO_INT16);
-            short rawH = (short) (pose.getHeading().getRad() * RAD_TO_INT16);
-
-            // Store raw data in buffer
-            rawData[0] = (byte) (rawX & 0xFF);
-            rawData[1] = (byte) ((rawX >> 8) & 0xFF);
-            rawData[2] = (byte) (rawY & 0xFF);
-            rawData[3] = (byte) ((rawY >> 8) & 0xFF);
-            rawData[4] = (byte) (rawH & 0xFF);
-            rawData[5] = (byte) ((rawH >> 8) & 0xFF);
-
-            deviceClient.write(REG_POS_XL, rawData); // Write the raw data to the device
-        }
-
         /** Calibrates the IMU and resets the tracking frame. */
         public void calibrateAndReset() {
             calibrate();
@@ -283,13 +256,12 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             deviceClient.write8(REG_SCALAR_ANGULAR, rawScalar);
         }
 
-        /** @param pose Offset of the sensor relative to the center of the robot */
-        public void setOffset(Pose pose) {
+        public void writePose(Pose pose, byte reg) {
             byte[] rawData = new byte[6]; // Store raw data in a temporary buffer
 
             // Convert factory units to raw data
-            short rawX = (short) (pose.getX().getM() * METER_TO_INT16);
-            short rawY = (short) (pose.getY().getM() * METER_TO_INT16);
+            short rawX = (short) (pose.getX().getIn() * INCH_TO_INT16);
+            short rawY = (short) (pose.getY().getIn() * INCH_TO_INT16);
             short rawH = (short) (pose.getHeading().getRad() * RAD_TO_INT16);
 
             // Store raw data in buffer
@@ -300,7 +272,17 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             rawData[4] = (byte) (rawH & 0xFF);
             rawData[5] = (byte) ((rawH >> 8) & 0xFF);
 
-            deviceClient.write(REG_OFF_XL, rawData); // Write the raw data to the device
+            deviceClient.write(reg, rawData); // Write the raw data to the device
+        }
+
+        /** @param pose The new position estimate for the robot */
+        public void setPosition(Pose pose) {
+            writePose(pose, REG_POS_XL);
+        }
+
+        /** @param pose Offset of the sensor relative to the center of the robot */
+        public void setOffset(Pose pose) {
+            writePose(pose, REG_OFF_XL);
         }
 
         /**
@@ -312,26 +294,32 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
             ByteBuffer data = ByteBuffer.wrap(rawData);
             data.order(java.nio.ByteOrder.LITTLE_ENDIAN);
 
-            xPosition = (float) (data.getShort(0) * INT16_TO_METER);
-            yPosition = (float) (data.getShort(2) * INT16_TO_METER);
-            hOrientation = (float) (data.getShort(4) * INT16_TO_RAD);
+            pose = factory.pose(
+                    data.getShort(0) * INT16_TO_INCH,
+                    data.getShort(2) * INT16_TO_INCH,
+                    data.getShort(4) * INT16_TO_RAD
+            );
 
-            xVelocity = (float) (data.getShort(6) * INT16_TO_MPS);
-            yVelocity = (float) (data.getShort(8) * INT16_TO_MPS);
-            hVelocity = (float) (data.getShort(10) * INT16_TO_RPS);
+            velocity = factory.pose(
+                    data.getShort(6) * INT16_TO_IPS,
+                    data.getShort(8) * INT16_TO_IPS,
+                    data.getShort(10) * INT16_TO_RPS
+            );
 
-            xAcceleration = (float) (data.getShort(12) * INT16_TO_MPSS);
-            yAcceleration = (float) (data.getShort(14) * INT16_TO_MPSS);
-            hAcceleration = (float) (data.getShort(16) * INT16_TO_RPSS);
+            acceleration = factory.pose(
+                    data.getShort(12) * INT16_TO_IPSS,
+                    data.getShort(14) * INT16_TO_IPSS,
+                    data.getShort(16) * INT16_TO_RPSS
+            );
         }
 
-        /** @return the current factory estimate of the robot from the OTOS */
-        public Pose getPose() { return pose.pose(xPosition, yPosition, hOrientation); }
+        /** @return the current pose estimate of the robot from the OTOS */
+        public Pose getPose() { return pose; }
 
         /** @return the current velocity estimate of the robot from the OTOS */
-        public Pose getVel() { return pose.pose(xVelocity, yVelocity, hVelocity); }
+        public Pose getVel() { return velocity; }
 
         /** @return the current acceleration estimate of the robot from the OTOS */
-        public Pose getAccel() { return pose.pose(xAcceleration, yAcceleration, hAcceleration); }
+        public Pose getAccel() { return acceleration; }
     }
 }

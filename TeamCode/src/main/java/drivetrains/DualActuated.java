@@ -5,7 +5,6 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Drivetrain class that physically actuates between holonomic and high-traction kinematics.
@@ -25,8 +24,7 @@ public class DualActuated extends BaseDrivetrain<DualActuated.Constants> {
     public DualActuated(Constants constants, HardwareMap hardwareMap) {
         super(constants, hardwareMap, DrivetrainType.DUAL_ACTUATED);
 
-        if (Objects.equals(this.constants.blMotorConfig, null) || Objects.equals(this.constants.brMotorConfig,
-                null)) {
+        if (this.constants.blMotorConfig == null || this.constants.brMotorConfig == null) {
             throw new IllegalArgumentException(
                     "Back left and right motor configurations must be provided for an Actuated " +
                             "Dual Drivetrain."

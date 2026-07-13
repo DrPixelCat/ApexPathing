@@ -2,8 +2,6 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import java.util.Objects;
-
 import geometry.Angle;
 import geometry.Vector;
 
@@ -17,8 +15,7 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
     public Mecanum(Constants constants, HardwareMap hardwareMap) {
         super(constants, hardwareMap, DrivetrainType.MECANUM);
 
-        if (Objects.equals(constants.blMotorConfig, null) ||
-                Objects.equals(constants.brMotorConfig, null)) {
+        if (constants.blMotorConfig == null || constants.brMotorConfig == null) {
             throw new IllegalArgumentException(
                     "Back left and right motor configurations must be provided for a mecanum drivetrain"
             );
@@ -36,7 +33,9 @@ public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
     /** Configuration class for Mecanum drivetrain. */
     public static class Constants extends BaseDrivetrainConstants<Constants> {
         @Override
-        public Mecanum build(HardwareMap hardwareMap) { return new Mecanum(this, hardwareMap); }
+        public Mecanum build(HardwareMap hardwareMap) {
+            return new Mecanum(this, hardwareMap);
+        }
 
         /** Sets the front left motor configuration. */
         public Constants setFrontLeftMotor(Motor Motor) {

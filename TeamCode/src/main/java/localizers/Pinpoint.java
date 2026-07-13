@@ -64,7 +64,7 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
 
     /** Configuration class for goBILDA Pinpoint localizer. */
     public static class Constants extends BaseLocalizerConstants<Constants> {
-        public String name = "defaultPinpointNName";
+        public String name = null;
         public Vector offsets = Vector.zero();
         public EncoderDirection xPodDirection = EncoderDirection.FORWARD;
         public EncoderDirection yPodDirection = EncoderDirection.FORWARD;
@@ -74,7 +74,7 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
 
         @Override
         public Pinpoint build(HardwareMap hardwareMap) {
-            if (Objects.equals(this.name, "defaultPinpointName")) {
+            if (name == null) {
                 throw new IllegalArgumentException("Pinpoint name is not set in the localizer constants.");
             }
             return new Pinpoint(this, hardwareMap);
@@ -417,12 +417,9 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
          * @param pos a Pose2D describing the robot's new position.
          */
         public void setPosition(Pose pos) {
-            writeByteArray(Register.X_POSITION, (floatToByteArray((float) pos.getX().getMm()
-            )));
-            writeByteArray(Register.Y_POSITION, (floatToByteArray((float) pos.getY().getMm()
-            )));
-            writeByteArray(Register.H_ORIENTATION,
-                    (floatToByteArray((float) pos.getHeading().getRad())));
+            writeByteArray(Register.X_POSITION, (floatToByteArray((float) pos.getX().getMm())));
+            writeByteArray(Register.Y_POSITION, (floatToByteArray((float) pos.getY().getMm())));
+            writeByteArray(Register.H_ORIENTATION, (floatToByteArray((float) pos.getHeading().getRad())));
         }
 
         /**

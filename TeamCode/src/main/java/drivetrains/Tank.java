@@ -2,7 +2,6 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-
 /**
  * Tank drivetrain controller (supports 2 and 4 motor configurations)
  *

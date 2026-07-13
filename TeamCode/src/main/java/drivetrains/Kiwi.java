@@ -2,8 +2,6 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import java.util.Objects;
-
 /**
  * Kiwi (also known as Killough or Three-Wheel Omni) drivetrain controller
  *
@@ -15,7 +13,7 @@ public class Kiwi extends BaseDrivetrain<Kiwi.Constants> {
     public Kiwi(Constants constants, HardwareMap hardwareMap) {
         super(constants, hardwareMap, DrivetrainType.KIWI);
 
-        if (Objects.equals(constants.blMotorConfig, null)) {
+        if (constants.blMotorConfig == null) {
             throw new IllegalArgumentException(
                     "Back motor configurations must be provided for a kiwi drivetrain"
             );

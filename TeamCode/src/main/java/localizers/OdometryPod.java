@@ -5,84 +5,51 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
- * This is the helper class for the two and three wheel odometry localizers
+ * Helper class for 2/3 wheel odometry and drive encoder localizers.
  *
  * @author Topher F. - 23571 alumni
+ * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class OdometryPod {
     private final String name;
 
-    /**
-     * This will be in the form ticks/inch
-     */
-    private double conversionToInches;
+    private final double ticksPerInch;
     private final DcMotorEx odometry;
 
-    /**
-     * This is used to calculate where we were last loop
-     */
-    private int tickCountLastLoop;
-
+    private int lastTicks;
     private int currentTicks;
     private double deltaTicks;
 
-    public OdometryPod(HardwareMap hardwareMap, String name) {
+    public OdometryPod(HardwareMap hardwareMap, String name, double ticksPerInch) {
         this.name = name;
         this.odometry = hardwareMap.get(DcMotorEx.class, this.name);
-        this.conversionToInches = 1.0;
-    }
-
-    public OdometryPod(HardwareMap hardwareMap, String name, double conversionToInches) {
-        this.name = name;
-        this.odometry = hardwareMap.get(DcMotorEx.class, this.name);
-        this.conversionToInches = conversionToInches;
-    }
-
-    public void setConversionToInches(double conversionToInches) {
-        this.conversionToInches = conversionToInches;
-    }
-
-    public void update() {
-        currentTicks = odometry.getCurrentPosition();
-        deltaTicks = currentTicks - tickCountLastLoop;
-        tickCountLastLoop = currentTicks;
-    }
-
-    /**
-     * @return Overall ticks travelled
-     */
-    public double getTicks() {
-        return currentTicks;
-    }
-
-    /**
-     * @return Overall inches travelled
-     */
-    public double getInches() {
-        return currentTicks / conversionToInches;
+        this.ticksPerInch = ticksPerInch;
     }
 
     public String getName() {
         return this.name;
     }
 
-    public void resetEncoder() {
-        tickCountLastLoop = 0;
+    public void update() {
+        currentTicks = odometry.getCurrentPosition();
+        deltaTicks = currentTicks - lastTicks;
+        lastTicks = currentTicks;
+    }
+
+    public void reset() {
+        lastTicks = 0;
+        currentTicks = 0;
         odometry.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
     }
 
-    /**
-     * @return Ticks this loop
-     */
-    public double getDeltaTicks() {
-        return deltaTicks;
+    /** @return the amount of inches the encoder has moved since the last reset */
+    public double getInches() {
+        return currentTicks / ticksPerInch;
     }
 
-    /**
-     * @return Ticks this loop
-     */
+    /** @return the amount of inches the encoder has moved since the last loop. */
     public double getDeltaInches() {
-        return deltaTicks / conversionToInches;
+        return deltaTicks / ticksPerInch;
     }
 }
 

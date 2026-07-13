@@ -29,8 +29,8 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
         TANK
     }
 
-    private DrivetrainType drivetrainType;
-    private boolean isHolonomic;
+    private final DrivetrainType drivetrainType;
+    private final boolean isHolonomic;
 
     // Note: front motors are guaranteed to be non-null, but rear motors may be null if not needed
     protected DcMotorEx flMotor, frMotor, blMotor, brMotor;

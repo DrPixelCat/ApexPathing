@@ -147,9 +147,8 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
     /** Configuration class for Coaxial Swerve drivetrain. */
     public static class Constants extends BaseDrivetrainConstants<Constants> {
-        public String flServoName, frServoName, blServoName, brServoName = "defaultServoName";
-        public String flEncoderName, frEncoderName, blEncoderName, brEncoderName =
-                "defaultEncoderName";
+        public String flServoName, frServoName, blServoName, brServoName = null;
+        public String flEncoderName, frEncoderName, blEncoderName, brEncoderName = null;
 
         public PDSCoefficients steeringCoefficients = new PDSCoefficients();
 
@@ -165,6 +164,25 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
             diagonalDist = wheelbase.hypot(trackWidth);
             wheelbaseRatio = wheelbase.div(diagonalDist).getIn();
             trackWidthRatio = trackWidth.div(diagonalDist).getIn();
+
+            if (flMotorConfig == null || frMotorConfig == null || blMotorConfig == null ||
+                    brMotorConfig == null) {
+                throw new IllegalArgumentException(
+                        "All 4 motor configurations must be provided for a coaxial swerve drivetrain"
+                );
+            }
+            if (flServoName == null || frServoName == null || blServoName == null ||
+                    brServoName == null) {
+                throw new IllegalArgumentException(
+                        "All 4 servo names must be provided for a coaxial swerve drivetrain"
+                );
+            }
+            if (flEncoderName == null || frEncoderName == null || blEncoderName == null ||
+                    brEncoderName == null) {
+                throw new IllegalArgumentException(
+                        "All 4 encoder names must be provided for a coaxial swerve drivetrain"
+                );
+            }
 
             return new CoaxialSwerve(this, hardwareMap);
         }
