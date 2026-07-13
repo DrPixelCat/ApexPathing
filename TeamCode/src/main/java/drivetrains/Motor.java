@@ -10,7 +10,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  * A class used to easily create and configure {@link DcMotorEx} objects.
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author Atharv G - 13085 Bionic Dutch
+ * @author Atharv G. - 13085 Bionic Dutch
  */
 public class Motor {
     private final String name;

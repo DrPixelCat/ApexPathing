@@ -1,27 +1,31 @@
-package feedforward;
+package feedforward.generators;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import core.FollowerConstants;
+import feedforward.FeedforwardLut;
+import feedforward.MotionParameters;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.constraint.AngularConstraint;
-import paths.constraint.ConstraintType;
 import paths.constraint.PathConstraint;
+import paths.constraint.PathConstraint.ConstraintType;
 import paths.constraint.TranslationalConstraint;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 
 /**
  * Shared path-parameterized profile generator.
+ *
  * <p>
  * Subclasses provide the drivetrain-specific power model through {@link #evaluatePoint}.
  * The shared algorithm does the drivetrain-independent work: sample the path, apply velocity
  * ceilings, run acceleration/deceleration sweeps, then iteratively lower any samples that still
  * exceed normalized power utilization.
+ * </p>
  *
- * @author DrPixelCat24
+ * @author DrPixelCat - 7842 alum
  */
 public abstract class BaseProfileGenerator {
     /** Normalized full power. Values above this mean the model predicts saturation. */
@@ -201,7 +205,7 @@ public abstract class BaseProfileGenerator {
         lut[0].setAngularAccel(0.0);
 
         for (int i = 1; i < points.length; i++) {
-            double ds = Math.abs(points[i].getDistanceToEnd_in() - points[i - 1].getDistanceToEnd_in());
+            double ds = Math.abs(points[i].getDistanceToEndIn() - points[i - 1].getDistanceToEndIn());
             double v = lut[i].getTangentialVel();
             double v_prev = lut[i - 1].getTangentialVel();
             // Constant-acceleration kinematics in path-distance space.
@@ -209,7 +213,7 @@ public abstract class BaseProfileGenerator {
 
             lut[i].setTangentialAccel(a_t);
 
-            double s = points[i].getDistanceToEnd_in();
+            double s = points[i].getDistanceToEndIn();
             double kappa = points[i].getSignedCurvature();
             double dKappa = points[i].getCurvatureDerivative();
 
@@ -257,7 +261,7 @@ public abstract class BaseProfileGenerator {
             lut[i] = new MotionParameters();
             lut[i].setTangentialVel(config.forwardVelLimitIn);
             lut[i].setDistAlongCurve(
-                    path.getParametricPath().getLengthIn() - points[i].getDistanceToEnd_in()
+                    path.getParametricPath().getLengthIn() - points[i].getDistanceToEndIn()
             );
         }
 
@@ -269,7 +273,7 @@ public abstract class BaseProfileGenerator {
 
         for (int i = points.length - 2; i >= 0; i--) {
             double ds =
-                    Math.abs(points[i + 1].getDistanceToEnd_in() - points[i].getDistanceToEnd_in());
+                    Math.abs(points[i + 1].getDistanceToEndIn() - points[i].getDistanceToEndIn());
             double nextVel = lut[i + 1].getTangentialVel();
             double maxReachableVel =
                     Math.sqrt((nextVel * nextVel) + (2.0 * config.forwardAccelLimitIn * ds));
@@ -285,7 +289,7 @@ public abstract class BaseProfileGenerator {
 
         for (int i = 1; i < points.length; i++) {
             double ds =
-                    Math.abs(points[i].getDistanceToEnd_in() - points[i - 1].getDistanceToEnd_in());
+                    Math.abs(points[i].getDistanceToEndIn() - points[i - 1].getDistanceToEndIn());
             double prevVel = lut[i - 1].getTangentialVel();
             double maxReachableVel =
                     Math.sqrt((prevVel * prevVel) + (2.0 * config.forwardAccelLimitIn * ds));
@@ -296,7 +300,7 @@ public abstract class BaseProfileGenerator {
             double a_t = (ds < EPSILON) ? 0.0 : ((v * v) - (prevVel * prevVel)) / (2.0 * ds);
             lut[i].setTangentialAccel(a_t);
 
-            double s = points[i].getDistanceToEnd_in();
+            double s = points[i].getDistanceToEndIn();
             double kappa = points[i].getSignedCurvature();
             double dKappa = points[i].getCurvatureDerivative();
 
@@ -327,7 +331,7 @@ public abstract class BaseProfileGenerator {
 
         for (int i = 0; i < points.length; i++) {
             // Constraints are stepwise: the latest constraint whose s has been reached is active.
-            double pctCompleted = 1.0 - (points[i].getDistanceToEnd_in() / pathLength_in);
+            double pctCompleted = 1.0 - (points[i].getDistanceToEndIn() / pathLength_in);
             double currentMaxVel = Double.MAX_VALUE;
             double currentMaxAngVel = Double.MAX_VALUE;
             double currentMaxAngAccel = Double.MAX_VALUE;
@@ -352,7 +356,7 @@ public abstract class BaseProfileGenerator {
 
             lut[i] = new MotionParameters().setTangentialVel(maxVel);
             lut[i].setDistAlongCurve(
-                    path.getParametricPath().getLengthIn() - points[i].getDistanceToEnd_in()
+                    path.getParametricPath().getLengthIn() - points[i].getDistanceToEndIn()
             );
         }
         return lut;
@@ -375,14 +379,14 @@ public abstract class BaseProfileGenerator {
 
         for (int i = points.length - 2; i >= 0; i--) {
             double ds =
-                    Math.abs(points[i + 1].getDistanceToEnd_in() - points[i].getDistanceToEnd_in());
+                    Math.abs(points[i + 1].getDistanceToEndIn() - points[i].getDistanceToEndIn());
             double nextVel = lut[i + 1].getTangentialVel();
             if (ds <= EPSILON) {
                 lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), nextVel));
                 continue;
             }
 
-            double pctCompleted = 1.0 - (points[i + 1].getDistanceToEnd_in() / pathLength_in);
+            double pctCompleted = 1.0 - (points[i + 1].getDistanceToEndIn() / pathLength_in);
             double currentMaxAccel = Double.MAX_VALUE;
             double currentMaxAngAccel = Double.MAX_VALUE;
 
@@ -435,14 +439,14 @@ public abstract class BaseProfileGenerator {
 
         for (int i = 1; i < points.length; i++) {
             double ds =
-                    Math.abs(points[i].getDistanceToEnd_in() - points[i - 1].getDistanceToEnd_in());
+                    Math.abs(points[i].getDistanceToEndIn() - points[i - 1].getDistanceToEndIn());
             double prevVel = lut[i - 1].getTangentialVel();
             if (ds <= EPSILON) {
                 lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), prevVel));
                 continue;
             }
 
-            double pctCompleted = 1.0 - (points[i].getDistanceToEnd_in() / pathLength_in);
+            double pctCompleted = 1.0 - (points[i].getDistanceToEndIn() / pathLength_in);
             double currentMaxAccel = Double.MAX_VALUE;
             double currentMaxAngAccel = Double.MAX_VALUE;
 

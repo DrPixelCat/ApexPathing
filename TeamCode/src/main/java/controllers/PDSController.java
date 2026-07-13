@@ -23,7 +23,7 @@ import geometry.Angle;
  * </p>
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  */
 public class PDSController {
     // TODO: I checked these on Desmos and it looks good, but they might need to be changed

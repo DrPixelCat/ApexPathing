@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import core.FollowerConstants;
-import feedforward.angular.TurnProfileGenerator;
+import feedforward.generators.TurnProfileGenerator;
 import geometry.Angle;
 import geometry.Pose;
-import paths.callbacks.Callback;
+import paths.Callback;
 import paths.movements.Turn;
 
 /**
@@ -116,9 +116,7 @@ public class TurnBuilder {
         return this;
     }
 
-    /**
-     * Internal method to compile the turn and execute callback bounds checks.
-     */
+    /** Internal method to compile the turn and execute callback bounds checks. */
     private Turn compileTurn() {
         if (targetHeading == null) {
             throw new IllegalStateException("Cannot build Turn: No target heading was specified! " +
@@ -140,15 +138,12 @@ public class TurnBuilder {
      *
      * @return The fully constructed {@link Turn}.
      */
-    public Turn quickBuild() {
-        return compileTurn();
-    }
+    public Turn quickBuild() { return compileTurn(); }
 
     /**
      * Compiles the turn, verifies callback bounds, and returns the executable, profiled Turn
-     * movement.
-     * RECOMMENDED: Use .quickBuild() instead for faster turns and generation time. Profiles are
-     * not needed as much for {@link Turn} movements so much as Path movements.
+     * movement. It is recommended to use .quickBuild() instead for faster turns and generation
+     * time. Profiles are not needed as much for {@link Turn} movements so much as Path movements.
      *
      * @return The fully constructed {@link Turn} with an attached feedforward profile.
      */

@@ -8,7 +8,7 @@ import geometry.ArcPose;
 import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
-import paths.callbacks.Callback;
+import paths.Callback;
 import paths.constraint.PathConstraint;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
@@ -16,7 +16,7 @@ import paths.movements.Path;
 /**
  * Provides shared functionality and structure for building paths for all drivetrain types.
  *
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public abstract class PathBuilder<T extends PathBuilder<T>> {

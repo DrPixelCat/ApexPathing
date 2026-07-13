@@ -13,7 +13,7 @@ import paths.movements.Turn;
  * {@link Vector}, {@link Dist}, and {@link Angle} objects with specified units.
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author DrPixelCat - 7842 Alum
+ * @author DrPixelCat - 7842 alum
  */
 public class GeometryFactory {
     public enum PoseMirror { NONE, X, Y }
@@ -30,13 +30,9 @@ public class GeometryFactory {
         this.isHolonomic = follower.getDrivetrain().isHolonomic();
     }
 
-    public GeometryFactory(boolean isHolonomic) {
-        this.isHolonomic = isHolonomic;
-    }
+    public GeometryFactory(boolean isHolonomic) { this.isHolonomic = isHolonomic; }
 
-    public GeometryFactory() {
-        this.isHolonomic = true;
-    }
+    public GeometryFactory() { this.isHolonomic = true; }
 
     /** Applies the configured mirroring to a {@link Pose}. */
     private Pose applyMirror(Pose pose) {
@@ -135,7 +131,7 @@ public class GeometryFactory {
     public TurnBuilder turn(Pose startPose) { return new TurnBuilder(startPose); }
 
     // endregion
-    // Vectors
+    // region Vectors
 
     /** Creates a Vector from the given (x, y) values in the configured units. */
     public Vector vector(double x, double y) { return Vector.of(x, y, distUnit); }
@@ -144,7 +140,7 @@ public class GeometryFactory {
     public Vector vector() { return vector(0, 0); }
 
     // endregion
-    // Distances and angles
+    // region Distances and angles
 
     /** Creates a Dist from the given value in the configured units. */
     public Dist dist(double value) { return Dist.of(value, distUnit); }
@@ -157,4 +153,6 @@ public class GeometryFactory {
 
     /** Creates an Angle of 0. */
     public Angle angle() { return angle(0); }
+
+    // endregion
 }

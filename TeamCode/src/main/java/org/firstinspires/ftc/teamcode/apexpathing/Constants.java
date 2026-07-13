@@ -12,8 +12,8 @@ import drivetrains.Motor;
  * This class extends {@link ApexConstants} and provides the specific drivetrain and localizer
  * configurations for your robot.
  *
- * @author Dylan B. 18597 RoboClovers - Delta
- * @author Sohum Arora 22985 Paraducks
+ * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Sohum Arora - 22985 Paraducks
  */
 public class Constants extends ApexConstants {
     @Override

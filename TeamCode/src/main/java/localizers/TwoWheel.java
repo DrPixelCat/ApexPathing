@@ -15,7 +15,7 @@ import geometry.DistUnit;
 /**
  * A localizer that uses 2 dead wheel odometry pods (1 parallel and 1 perpendicular)
  *
- * @author Topher F. - 23571 alumni
+ * @author Topher F. - 23571 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {

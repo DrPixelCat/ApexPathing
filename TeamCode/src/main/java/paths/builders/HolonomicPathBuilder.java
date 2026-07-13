@@ -7,8 +7,8 @@ import java.util.List;
 import core.FollowerConstants;
 import drivetrains.BaseDrivetrain;
 import feedforward.FeedforwardLut;
-import feedforward.holonomic.mecanum.MecanumProfileGenerator;
-import feedforward.holonomic.swerve.SwerveProfileGenerator;
+import feedforward.generators.MecanumProfileGenerator;
+import feedforward.generators.SwerveProfileGenerator;
 import geometry.Angle;
 import geometry.ArcPose;
 import geometry.BSpline;
@@ -18,7 +18,7 @@ import geometry.PathPoint;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
-import paths.callbacks.Callback;
+import paths.Callback;
 import paths.heading.HeadingNode;
 import paths.heading.InterpolationStyle;
 import paths.heading.HolonomicInterpolator;
@@ -26,10 +26,10 @@ import paths.movements.Path;
 
 /**
  * A builder class designed to construct a {@link Path} fluently for holonomic drivetrains.
- * This class captures path configurations (waypoints, interpolators, callbacks)
- * in any order and defers geometric and kinematic compilation until a build method is called.
+ * This class captures path configurations (waypoints, interpolators, callbacks) in any order and
+ * defers geometric and kinematic compilation until a build method is called.
  *
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
@@ -185,7 +185,7 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
         Angle offset = angleOffset != null ? angleOffset : Angle.zero();
 
         for (PathPoint sample : samples) {
-            double pct = 1.0 - (sample.getDistanceToEnd_in() / pathLength);
+            double pct = 1.0 - (sample.getDistanceToEndIn() / pathLength);
             Vector toPoint = pointToFace.minus(sample.getLocation());
             Angle heading = null;
             if (toPoint.getMag().getIn() > EPSILON) {

@@ -4,14 +4,14 @@ import java.util.ArrayList;
 
 import core.FollowerConstants;
 import feedforward.FeedforwardLut;
-import feedforward.tank.TankProfileGenerator;
+import feedforward.generators.TankProfileGenerator;
 import geometry.Angle;
 import geometry.ArcPose;
 import geometry.BSpline;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
-import paths.callbacks.Callback;
+import paths.Callback;
 import paths.heading.InterpolationStyle;
 import paths.heading.TankInterpolator;
 import paths.movements.Path;

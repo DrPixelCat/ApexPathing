@@ -10,11 +10,11 @@ import paths.ExampleAutoPath;
 
 /**
  * Test autonomous OpMode for Apex Pathing that uses the {@link ExampleAutoPath}. Make sure the
- * robot has been tuned with the {@link FollowerTuner} before running this OpMode.
- * This OpMode will first follow the test path, then follow the test turn, and finally stop.
+ * robot has been tuned with the {@link FollowerTuner} before running this OpMode. This OpMode will
+ * first follow the test path, then follow the test turn, and finally stop.
  *
- * @author Sohum Arora 22985 Paraducks
- * @author Dylan B. 18597 RoboClovers - Delta
+ * @author Sohum Arora - 22985 Paraducks
+ * @author Dylan B. - 18597 RoboClovers - Delta
  */
 @Autonomous(name = "Apex Auto Test", group = "Apex Pathing Tests")
 public class AutoTest extends LinearOpMode {

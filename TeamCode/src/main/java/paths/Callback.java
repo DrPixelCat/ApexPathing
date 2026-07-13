@@ -1,17 +1,17 @@
-package paths.callbacks;
+package paths;
 
 import com.qualcomm.robotcore.util.Range;
 
 import geometry.Angle;
 
-
 /**
  * A unified callback container capable of handling either distance-based progress triggers
  * or angular-based orientation triggers during robot movement execution.
- * * @author Sohum Arora 22985 Paraducks
+ *
+ * @author DrPixelCat - 7842 alum
+ * @author Sohum Arora - 22985 Paraducks
  */
 public class Callback {
-
     public enum CallbackType {
         DISTANCE,
         ANGLE
@@ -21,14 +21,13 @@ public class Callback {
     private final Runnable action;
     private boolean triggered = false;
 
-    // Condition parameters (mutually exclusive depending on Type)
     private final double s;
     private final Angle theta;
 
     /**
      * Constructs a physical path distance progress percentage callback.
-     * * @param s The path completion percentage [0.0, 1.0].
      *
+     * @param s The path completion percentage [0.0, 1.0].
      * @param action The code routine to execute when reached.
      */
     public Callback(double s, Runnable action) {
@@ -40,32 +39,24 @@ public class Callback {
 
     /**
      * Constructs an angular target sweep callback.
-     * * @param theta The target field/robot orientation angle.
      *
+     * @param theta The target field/robot orientation angle.
      * @param action The code routine to execute when reached.
      */
     public Callback(Angle theta, Runnable action) {
         this.type = CallbackType.ANGLE;
-        this.s = -1.0; // Clear sentinel value to avoid accidental 0.0 distance triggers
+        this.s = -1.0;
         this.theta = theta;
         this.action = action;
     }
 
-    public CallbackType getType() {
-        return type;
-    }
+    public CallbackType getType() { return type; }
 
-    public Runnable getAction() {
-        return action;
-    }
+    public Runnable getAction() { return action; }
 
-    public boolean isTriggered() {
-        return triggered;
-    }
+    public boolean isTriggered() { return triggered; }
 
-    public void setTriggered(boolean triggered) {
-        this.triggered = triggered;
-    }
+    public void setTriggered(boolean triggered) { this.triggered = triggered; }
 
     /**
      * Retrieves the target path progression factor.

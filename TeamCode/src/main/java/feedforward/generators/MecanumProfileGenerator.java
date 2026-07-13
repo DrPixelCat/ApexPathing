@@ -1,9 +1,8 @@
-package feedforward.holonomic.mecanum;
+package feedforward.generators;
 
 import core.FollowerConstants;
 import drivetrains.Mecanum;
 import drivetrains.Mecanum.DirectionalLut.DirectionalKinematics;
-import feedforward.BaseProfileGenerator;
 import geometry.Angle;
 import geometry.PathPoint;
 import geometry.Vector;
@@ -12,10 +11,14 @@ import geometry.DistUnit;
 
 /**
  * Generates holonomic profiles for mecanum drives, including direction-specific limits.
+ *
  * <p>
  * Unlike ideal swerve, mecanum does not have equal authority in every robot-relative direction.
  * The directional LUT scales velocity and acceleration costs so a diagonal/strafe-heavy segment
  * gets a lower limit than an efficient forward segment.
+ * </p>
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class MecanumProfileGenerator extends BaseProfileGenerator {
     /** Avoids divide-by-zero and unstable comparisons near flat derivatives. */
@@ -46,7 +49,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
     protected double calculateMaxTangentialVelocity(PathPoint point,
                                                     Path path, double maxAngVel,
                                                     double maxAngAccel) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         Vector tangent = point.getFirstDerivative();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
@@ -131,7 +134,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
     @Override
     protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double v_prev,
                                  double v, double a_t, EvaluationResult outResult) {
-        double s = current.getDistanceToEnd_in();
+        double s = current.getDistanceToEndIn();
         double kappa = current.getSignedCurvature();
         double dKappa = current.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
@@ -197,7 +200,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
     private double calculateAngularLimitedTangentialAccel(double currentVel, PathPoint point,
                                                           Path path, double maxAngAccel,
                                                           boolean positiveAccel) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         Vector tangent = point.getFirstDerivative();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();

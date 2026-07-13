@@ -2,15 +2,16 @@ package geometry;
 
 /**
  * Represents a Uniform Cubic B-Spline.
+ *
  * <p>
  * B-Splines guarantee C2 continuity (smooth position, velocity, and acceleration)
  * across the entire path. Because they are evaluated using a sliding 4-point window,
  * calculating a point on the curve runs in O(1) constant time, regardless of how
  * many control points are in the path.
- * TODO: Maybe add heading component to each control point
- * Author: DrPixelCat
+ * </p>
  *
- * @author Sohum Arora
+ * @author DrPixelCat - 7842 alum
+ * @author Sohum Arora - 22895 Paraducks
  */
 public class BSpline implements ParametricSegment {
     private final int numSegments;

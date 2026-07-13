@@ -15,7 +15,8 @@ import java.util.Objects;
  * translated into motor powers.
  * </p>
  *
- * @param <T> the type of drivetrain configuration this drivetrain uses, which must extend {@link BaseDrivetrainConstants}
+ * @param <T> the type of drivetrain configuration this drivetrain uses, which must extend
+ *        {@link BaseDrivetrainConstants}
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {

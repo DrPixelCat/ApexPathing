@@ -15,9 +15,9 @@ import controllers.PDSController.PDSCoefficients;
  * Class to hold constants for the Follower class. These constants are loaded from a JSON file
  * created by the tuners. If the file does not exist or cannot be read, default values will be used.
  *
- * @author Sohum Arora 22985 Paraducks
- * @author Dylan B. 18597 RoboClovers - Delta
- * @author DrPixelCat
+ * @author Sohum Arora - 22985 Paraducks
+ * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
     private static FollowerConstants instance;

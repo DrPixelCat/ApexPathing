@@ -1,7 +1,6 @@
-package feedforward.holonomic.swerve;
+package feedforward.generators;
 
 import core.FollowerConstants;
-import feedforward.BaseProfileGenerator;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
@@ -9,10 +8,14 @@ import paths.movements.Path;
 /**
  * Generates time-optimal motion profiles for Swerve drivetrains by evaluating
  * continuous voltage saturation constraints algebraically.
+ *
  * <p>
  * Swerve can point its traction vector, so translational tangent and normal power combine like a
  * vector. Heading power is still added because steering the robot body consumes the same normalized
  * power budget.
+ * </p>
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class SwerveProfileGenerator extends BaseProfileGenerator {
     /** Avoids divide-by-zero and unstable comparisons near flat derivatives. */
@@ -36,7 +39,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
     @Override
     protected double calculateMaxTangentialVelocity(PathPoint point, Path path,
                                                     double maxAngVel, double maxAngAccel) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
@@ -124,7 +127,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
      */
     private void evaluateState(Path path, PathPoint point, double vel, double accel,
                                EvaluationResult outResult) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
@@ -172,7 +175,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
             return 0.0;
         }
 
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);

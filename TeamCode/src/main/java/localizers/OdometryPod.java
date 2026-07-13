@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 /**
  * Helper class for 2/3 wheel odometry and drive encoder localizers.
  *
- * @author Topher F. - 23571 alumni
+ * @author Topher F. - 23571 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class OdometryPod {
@@ -26,9 +26,7 @@ public class OdometryPod {
         this.ticksPerInch = ticksPerInch;
     }
 
-    public String getName() {
-        return this.name;
-    }
+    public String getName() { return this.name; }
 
     public void update() {
         currentTicks = odometry.getCurrentPosition();
@@ -43,13 +41,9 @@ public class OdometryPod {
     }
 
     /** @return the amount of inches the encoder has moved since the last reset */
-    public double getInches() {
-        return currentTicks / ticksPerInch;
-    }
+    public double getInches() { return currentTicks / ticksPerInch; }
 
     /** @return the amount of inches the encoder has moved since the last loop. */
-    public double getDeltaInches() {
-        return deltaTicks / ticksPerInch;
-    }
+    public double getDeltaInches() { return deltaTicks / ticksPerInch; }
 }
 

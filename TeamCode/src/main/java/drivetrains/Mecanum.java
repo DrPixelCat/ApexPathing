@@ -9,7 +9,7 @@ import geometry.Vector;
  * Mecanum drivetrain controller
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  */
 public class Mecanum extends BaseDrivetrain<Mecanum.Constants> {
     public Mecanum(Constants constants, HardwareMap hardwareMap) {

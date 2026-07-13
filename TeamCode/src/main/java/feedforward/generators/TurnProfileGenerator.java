@@ -1,4 +1,4 @@
-package feedforward.angular;
+package feedforward.generators;
 
 import core.FollowerConstants;
 import feedforward.FeedforwardLut;
@@ -7,10 +7,14 @@ import paths.movements.Turn;
 
 /**
  * Generates a one-dimensional angular profile for point turns.
+ *
  * <p>
  * A turn does not move along a path, so the profile only fills {@code omega} and
  * {@code alpha}-related limits. The same LUT type is used so the follower can query turns and
  * paths through the same feedforward interface.
+ * </p>
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class TurnProfileGenerator {
     private static final double EPSILON = 1e-9;

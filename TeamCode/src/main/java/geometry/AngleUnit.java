@@ -6,28 +6,19 @@ package geometry;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public enum AngleUnit {
-    /**
-     * Radian
-     **/
+    /** Radian */
     RAD(1.0),
-    /**
-     * Degree
-     **/
+
+    /** Degree */
     DEG(Math.PI / 180.0);
 
     private final double radiansPerUnit;
 
-    AngleUnit(double radiansPerUnit) {
-        this.radiansPerUnit = radiansPerUnit;
-    }
+    AngleUnit(double radiansPerUnit) { this.radiansPerUnit = radiansPerUnit; }
 
-    /**
-     * Converts a value in this unit to radians.
-     */
-    public double toRadians(double value) {return value * radiansPerUnit;}
+    /** Converts a value in this unit to radians. */
+    public double toRadians(double value) { return value * radiansPerUnit; }
 
-    /**
-     * Converts a value in radians to this unit.
-     */
-    public double fromRadians(double radians) {return radians / radiansPerUnit;}
+    /** Converts a value in radians to this unit. */
+    public double fromRadians(double radians) { return radians / radiansPerUnit; }
 }

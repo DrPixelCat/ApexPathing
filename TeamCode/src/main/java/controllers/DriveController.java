@@ -6,13 +6,14 @@ import geometry.Vector;
 
 /**
  * Shared translational controller and holonomic power allocator.
+ *
  * <p>
  * Field-space path corrections are converted to robot space here. Mecanum allocation additionally
  * applies the robot-relative strafe penalty and measures power using mecanum wheel demand
  * {@code |forward| + |strafe|}. Isotropic allocation is used by swerve and other holonomic drives.
  * </p>
  *
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  */
 public class DriveController {
     private static final double EPSILON = 1e-9;

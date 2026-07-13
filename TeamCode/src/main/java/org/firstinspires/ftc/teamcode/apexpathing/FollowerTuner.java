@@ -17,8 +17,8 @@ import geometry.Pose;
 /**
  * Unified follower tuning class for Apex Pathing
  *
- * @author Sohum Arora 22985 Paraducks
- * @author Dylan B. 18597 RoboClovers - Delta
+ * @author Sohum Arora - 22985 Paraducks
+ * @author Dylan B. - 18597 RoboClovers - Delta
  */
 @Configurable
 @TeleOp(name = "Follower Tuner", group = "Apex Pathing Tuning")

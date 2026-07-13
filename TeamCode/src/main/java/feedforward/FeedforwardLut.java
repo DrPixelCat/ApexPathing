@@ -2,13 +2,16 @@ package feedforward;
 
 import androidx.annotation.NonNull;
 
-
 /**
  * Linear lookup table for generated feedforward states.
+ *
  * <p>
  * The generator samples a path into rows of {@link MotionParameters}. The follower later asks
  * for the row at its current path progression; this class linearly interpolates between the two
  * neighboring samples so the target does not jump from row to row.
+ * </p>
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class FeedforwardLut {
     /** Ordered samples of the path-relative state [v, a, omega, alpha]. */

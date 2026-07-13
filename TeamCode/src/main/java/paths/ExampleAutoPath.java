@@ -26,13 +26,9 @@ public class ExampleAutoPath {
         build();
     }
 
-    public void exampleDistanceCallback() {
-        callbackMessage = "Distance callback triggered!";
-    }
+    public void exampleDistanceCallback() { callbackMessage = "Distance callback triggered!"; }
 
-    public void exampleAngularCallback() {
-        callbackMessage = "Angular callback triggered!";
-    }
+    public void exampleAngularCallback() { callbackMessage = "Angular callback triggered!"; }
 
     private void build() {
         testPath = factory.path(startPose, // Forward and left curve

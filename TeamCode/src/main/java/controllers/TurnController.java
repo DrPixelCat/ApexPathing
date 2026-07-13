@@ -4,13 +4,14 @@ import feedforward.MotionParameters;
 
 /**
  * Executes quick and displacement-profiled point turns.
+ *
  * <p>
  * Quick turns and overshoot recovery use the complete heading PDS controller. Normal profiled
  * motion deliberately uses only angular feedforward, the PDS controller's tuned static term, and
  * explicit angular velocity feedback.
  * </p>
  *
- * @author DrPixelCat
+ * @author DrPixelCat - 7842 alum
  */
 public class TurnController {
     private static final double EPSILON = 1e-6;

@@ -1,17 +1,20 @@
-package feedforward.tank;
+package feedforward.generators;
 
 import core.FollowerConstants;
-import feedforward.BaseProfileGenerator;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
 /**
  * Generates path profiles for differential/tank drives.
+ *
  * <p>
  * Tank drives spend the same left/right wheel voltage budget on forward motion and heading
  * motion. This generator therefore treats forward and angular power as additive normalized
  * utilization.
+ * </p>
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class TankProfileGenerator extends BaseProfileGenerator {
     /** Avoids division by zero when heading derivatives are nearly flat. */
@@ -41,7 +44,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
     protected double calculateMaxTangentialVelocity(PathPoint point,
                                                     Path path, double maxAngVel,
                                                     double maxAngAccel) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
@@ -115,7 +118,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
     @Override
     protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double v_prev,
                                  double v, double a_t, EvaluationResult outResult) {
-        double s = current.getDistanceToEnd_in();
+        double s = current.getDistanceToEndIn();
         double kappa = current.getSignedCurvature();
         double dKappa = current.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
@@ -172,7 +175,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
     private double calculateAngularLimitedTangentialAccel(double currentVel, PathPoint point,
                                                           Path path, double maxAngAccel,
                                                           boolean positiveAccel) {
-        double s = point.getDistanceToEnd_in();
+        double s = point.getDistanceToEndIn();
         double kappa = point.getSignedCurvature();
         double dKappa = point.getCurvatureDerivative();
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);

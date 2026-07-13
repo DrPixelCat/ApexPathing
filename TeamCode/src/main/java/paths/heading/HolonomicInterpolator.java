@@ -6,6 +6,8 @@ import geometry.Vector;
 
 /**
  * Calculates heading profiles allowing independent rotational control.
+ *
+ * @author DrPixelCat - 7842 alum
  */
 public class HolonomicInterpolator implements HeadingInterpolator {
     private final InterpolationStyle style;
@@ -28,17 +30,13 @@ public class HolonomicInterpolator implements HeadingInterpolator {
     }
 
     @Override
-    public void setPathLength(double length) {
-        this.pathLength = Math.max(length, 1e-6);
-    }
+    public void setPathLength(double length) { this.pathLength = Math.max(length, 1e-6); }
 
-    public void setBlendWindow(double windowLengthInches) {
-        this.blendWindow = windowLengthInches;
-    }
+    public void setBlendWindow(double windowLengthInches) { this.blendWindow = windowLengthInches; }
 
     /**
-     * Calculates the blend parameter u (0.0 to 1.0) at the END of the path.
-     * s is distance remaining. When s > blendWindow, u = 0. When s = 0, u = 1.
+     * Calculates the blend parameter u (0.0 to 1.0) at the END of the path. s is distance
+     * remaining. When s > blendWindow, u = 0. When s = 0, u = 1.
      */
     private double getBlendU(double s) {
         if (blendWindow <= 1e-6 || s > blendWindow) return 0.0;

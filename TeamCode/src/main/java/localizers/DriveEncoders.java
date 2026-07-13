@@ -5,8 +5,6 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
-import java.util.Objects;
-
 import geometry.Angle;
 import geometry.DistUnit;
 import geometry.GeometryFactory;
@@ -15,7 +13,7 @@ import geometry.Pose;
 /**
  * A localizer that uses 4 drive encoders and an IMU
  *
- * @author Topher F. - 23571 alumni
+ * @author Topher F. - 23571 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants> {

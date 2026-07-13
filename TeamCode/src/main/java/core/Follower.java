@@ -19,19 +19,19 @@ import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
 import localizers.BaseLocalizer;
-import paths.callbacks.Callback;
+import paths.Callback;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 import paths.movements.Turn;
 
 /**
- * Apex Pathing main Follower class. Handles the execution of generated paths and turns using
+ * Apex Pathing's main Follower class. Handles the execution of generated paths and turns using
  * kinematic feedforward and feedback controllers.
  *
- * @author Sohum Arora 22985 Paraducks
- * @author DrPixelCat
- * @author Dylan B. 18597 RoboClovers - Delta
- * @author Xander Haemel 31616 404 Not Found
+ * @author Sohum Arora - 22985 Paraducks
+ * @author DrPixelCat - 7842 alum
+ * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Xander Haemel - 31616 404 Not Found
  */
 public class Follower {
     private final FollowerConstants constants;

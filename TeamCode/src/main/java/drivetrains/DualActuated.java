@@ -10,7 +10,7 @@ import java.util.List;
  * Drivetrain class that physically actuates between holonomic and high-traction kinematics.
  * Supports Butterfly, locking mecanum, and similar drivetrains.
  *
- * @author DrPixelCat - 7842 Alum
+ * @author DrPixelCat - 7842 alum
  */
 public class DualActuated extends BaseDrivetrain<DualActuated.Constants> {
     public enum DriveState {
