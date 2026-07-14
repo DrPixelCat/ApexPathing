@@ -70,8 +70,6 @@ public class FollowerTuner extends LinearOpMode {
 
         while (opModeIsActive() && selectedPhaseIndex < phases.length) {
             currentPhase = phases[selectedPhaseIndex];
-            context.getFollower().setPose(Pose.zero());
-
             currentPhase.run(this);
 
             if (TuningPhase.complete) {
