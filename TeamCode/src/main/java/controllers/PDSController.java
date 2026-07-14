@@ -103,7 +103,7 @@ public class PDSController {
      * @param error The calculated error (Target - Current)
      * @return The control output
      */
-    public synchronized double calculate(double error) {
+    public double calculate(double error) {
         long currentNano = System.nanoTime();
 
         // Nano seconds to seconds
@@ -112,7 +112,7 @@ public class PDSController {
         // Detect if loop is too fast (div by zero risk) or too slow (integral/derivative spike)
         timeAnomaly = deltaTime < 1E-6 || deltaTime > 0.15;
 
-        double actualError = angularController ? Angle.normalize(error) : error; // 0 to 2pi
+        double actualError = angularController ? Angle.wrap(error) : error; // -pi to pi for angular
 
         if (firstRun) {
             lastError = actualError; // Prevents derivative kick from 0
@@ -120,9 +120,9 @@ public class PDSController {
             firstRun = false;
         }
 
-        double p = this.coeffs.kP * error;
-        double d = this.coeffs.kD * (timeAnomaly ? 0.0 : (error - lastError) / deltaTime);
-        double s = this.coeffs.kS * (error / (Math.abs(error) + smoothingConstant));
+        double p = this.coeffs.kP * actualError;
+        double d = this.coeffs.kD * (timeAnomaly ? 0.0 : (actualError - lastError) / deltaTime);
+        double s = this.coeffs.kS * (actualError / (Math.abs(actualError) + smoothingConstant));
 
         lastTimestamp = currentNano;
         lastError = actualError;

@@ -37,12 +37,10 @@ public class DriveController {
     private final PDSController crossTrackPds;
     private final PDSController endDistancePds;
     private final PDSController turnPositionPds;
-    private final Dist tolerance;
 
     public DriveController(Dist maxForwardVelocity, Dist maxStrafeVelocity,
-                           PDSController.PDSCoefficients coefficients, Dist tolerance,
+                           PDSController.PDSCoefficients coefficients,
                            boolean requireMecanumLimits) {
-        this.tolerance = tolerance;
 
         double forwardVelocity = maxForwardVelocity.getIn();
         double strafeVelocity = maxStrafeVelocity.getIn();
@@ -63,19 +61,14 @@ public class DriveController {
     /** Returns an unallocated field-centric correction toward a fixed position. */
     public Vector calculatePointToPoint(Vector targetPos, Vector currentPos) {
         Vector fieldError = targetPos.minus(currentPos);
-        if (fieldError.getMag().getIn() < tolerance.getIn()) return Vector.zero();
 
         double basePower = turnPositionPds.calculate(fieldError.getMag().getIn());
         return Vector.fromPolar(Dist.fromIn(basePower), fieldError.getTheta());
     }
 
-    public double calculateCrossTrack(double error) {
-        return crossTrackPds.calculate(error);
-    }
+    public double calculateCrossTrack(double error) { return crossTrackPds.calculate(error); }
 
-    public double calculateEndDistance(double error) {
-        return endDistancePds.calculate(error);
-    }
+    public double calculateEndDistance(double error) { return endDistancePds.calculate(error); }
 
     /** Allocates one field-centric stage using mecanum direction-dependent wheel demand. */
     public AllocatedCommand allocateMecanum(Vector fieldCommand, Angle currentHeading,

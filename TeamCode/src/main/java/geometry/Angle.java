@@ -77,6 +77,18 @@ public final class Angle {
     /** @return a new Angle that is normalized to [0, 2π] radians */
     public Angle normalized() { return new Angle(normalize(this.radians)); }
 
+    /** @return the given angle wrapped in radians to the range [-PI, PI]. */
+    public static double wrap(double radians) {
+        double wrapped = (radians + Math.PI) % (2 * Math.PI) - Math.PI;
+        if (wrapped < -Math.PI) {
+            wrapped += 2 * Math.PI;
+        }
+        return wrapped;
+    }
+
+    /** @return a new Angle that is wrapped to [-π, π) radians */
+    public Angle wrapped() { return new Angle(wrap(this.radians)); }
+
     /** @return a copy of this Angle */
     public Angle copy() { return new Angle(this.radians); }
 
@@ -86,13 +98,7 @@ public final class Angle {
      */
     public Angle getShortestAngleTo(Angle to) {
         double diff = to.getRad() - this.getRad();
-
-        // Wrap the difference into the [-PI, PI] range
-        diff = (diff + Math.PI) % (2 * Math.PI) - Math.PI;
-        if (diff < -Math.PI) {
-            diff += 2 * Math.PI;
-        }
-        return Angle.fromRad(diff);
+        return Angle.fromRad(wrap(diff));
     }
 
     @SuppressLint("DefaultLocale")

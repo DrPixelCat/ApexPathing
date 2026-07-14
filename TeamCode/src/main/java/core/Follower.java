@@ -14,6 +14,7 @@ import drivetrains.DualActuated;
 import drivetrains.Mecanum;
 import feedforward.MotionParameters;
 import geometry.Angle;
+import geometry.AngleUnit;
 import geometry.Dist;
 import geometry.PathSegment;
 import geometry.Pose;
@@ -95,13 +96,13 @@ public class Follower {
         velocityFeedbackGain = this.constants.velocityFeedbackGain;
     }
 
-    // region Callbacks
+    // region Private methods
 
     /**
      * Evaluates all callbacks attached to the current movement and executes them if their
      * conditions are met.
-     * * @param t The current geometric progression percentage [0.0, 1.0]. Pass -1.0 for turns.
      *
+     * @param s The current geometric progression percentage [0.0, 1.0]. Pass -1.0 for turns.
      * @param currentHeading The robot's current field orientation.
      */
     private void processCallbacks(double s, Angle currentHeading) {
@@ -153,7 +154,37 @@ public class Follower {
         lastHeading = currentHeading;
     }
 
-    // region General methods
+    private HolonomicDriveModel getActiveHolonomicDriveModel() {
+        if (drivetrain instanceof Mecanum) return HolonomicDriveModel.ANISOTROPIC;
+        if (drivetrain instanceof DualActuated) {
+            if (!drivetrain.isHolonomic()) {
+                throw new IllegalStateException(
+                        "Dual-actuated drivetrain is not in its holonomic state."
+                );
+            }
+            return HolonomicDriveModel.ANISOTROPIC;
+        }
+        if (!drivetrain.isHolonomic()) {
+            throw new IllegalStateException(
+                    "A holonomic allocation was requested while the drivetrain was non-holonomic."
+            );
+        }
+        return HolonomicDriveModel.ISOTROPIC;
+    }
+
+    private AllocatedCommand allocateHolonomicStage(Vector fieldCommand, Angle currentHeading,
+                                                    double availablePower,
+                                                    HolonomicDriveModel driveModel) {
+        if (driveModel == HolonomicDriveModel.ANISOTROPIC) {
+            return driveController.allocateMecanum(
+                    fieldCommand, currentHeading, availablePower);
+        }
+        return driveController.allocateIsotropic(fieldCommand, currentHeading, availablePower);
+    }
+
+    // endregion
+    // Public methods
+
     /**
      * The main execution loop of the follower.
      * Must be called continuously during the active OpMode loop to drive the robot along the path.
@@ -179,9 +210,9 @@ public class Follower {
         // region Turn Execution
         if (currentMovement instanceof Turn) {
             Turn turn = (Turn) currentMovement;
-            double headingError = targetHeading.getRad() - currentHeading.getRad();
+            double headingError = currentHeading.getShortestAngleTo(targetHeading).getRad();
 
-            // Process angular callbacks
+            // Process angular callbacks (-1 s value is used to indicate a turn)
             processCallbacks(-1.0, currentHeading);
 
             // Require both positional accuracy and low angular velocity to prevent momentum
@@ -366,8 +397,7 @@ public class Follower {
             Vector finalDriveOutput = lateralCommand.getRobotCommand()
                     .plus(tangentCommand.getRobotCommand());
 
-            // Check stop condition and drive hardware
-            // TODO: Maybe don't hardcode this 25
+            // Must be moving slower than 5 in/s and be within distance tolerance to stop
             if (distanceRemaining < distanceTol && robotVel.getMagSq().getIn() < 25) {
                 stop();
                 return;
@@ -380,12 +410,12 @@ public class Follower {
         } else {
             // Process tank driving via Ramsete controller
             double t = segment.getBestT(currentPos);
-
-            // Process scheduled distance and angular callbacks
-            processCallbacks(t, currentHeading);
-
             Vector targetPoseVec = segment.getPosition(t);
             double s = segment.getDistanceToEndIn(targetPoseVec, t);
+
+            // Process scheduled distance and angular callbacks
+            processCallbacks(s / segment.getLengthIn(), currentHeading);
+
             Vector velVec = segment.getFirstDerivative(t);
             Vector robotVel = localizer.getVel().getVec();
 
@@ -440,36 +470,6 @@ public class Follower {
         }
     }
 
-    private HolonomicDriveModel getActiveHolonomicDriveModel() {
-        if (drivetrain instanceof Mecanum) return HolonomicDriveModel.ANISOTROPIC;
-        if (drivetrain instanceof DualActuated) {
-            if (!drivetrain.isHolonomic()) {
-                throw new IllegalStateException(
-                        "Dual-actuated drivetrain is not in its holonomic state."
-                );
-            }
-            return HolonomicDriveModel.ANISOTROPIC;
-        }
-        if (!drivetrain.isHolonomic()) {
-            throw new IllegalStateException(
-                    "A holonomic allocation was requested while the drivetrain was non-holonomic."
-            );
-        }
-        return HolonomicDriveModel.ISOTROPIC;
-    }
-
-    private AllocatedCommand allocateHolonomicStage(Vector fieldCommand, Angle currentHeading,
-                                                     double availablePower,
-                                                     HolonomicDriveModel driveModel) {
-        if (driveModel == HolonomicDriveModel.ANISOTROPIC) {
-            return driveController.allocateMecanum(
-                    fieldCommand, currentHeading, availablePower);
-        }
-        return driveController.allocateIsotropic(fieldCommand, currentHeading, availablePower);
-    }
-
-    //region Initialize Sequence
-
     /**
      * Starts following the given movement.
      *
@@ -479,8 +479,8 @@ public class Follower {
     public void follow(FollowerMovement movement) {
         if (isBusy()) {
             throw new IllegalStateException(
-                    "Cannot execute a new movement while another movement is still in progress " +
-                            "Tip use follower.isBusy() to check if the follower is currently " +
+                    "Cannot execute a new movement while another movement is still in progress. " +
+                            "Tip: use follower.isBusy() to check if the follower is currently " +
                             "executing a movement before starting a new one."
             );
         }
@@ -493,8 +493,9 @@ public class Follower {
         if (movement instanceof Turn) {
             Turn turn = (Turn) currentMovement;
             this.targetTurnPoseVec = turn.getStartPose().getVec();
-            double signedTurn = turn.getStartPose().getHeading()
-                    .getShortestAngleTo(turn.getEndPose().getHeading()).getRad();
+            double signedTurn = turn.getStartPose().getHeading().getShortestAngleTo(
+                    turn.getEndPose().getHeading()
+            ).getRad();
             this.turnDirection = Math.signum(signedTurn);
             this.turnTotalDisplacement = Math.abs(signedTurn);
         } else if (movement instanceof Path) {
@@ -516,12 +517,9 @@ public class Follower {
         lastNano = -1;
         paused = false;
 
-        // Reset sweeping tracker for angular callbacks so it doesn't instantly trigger on path
-        // start
+        // Reset tracker for angular callbacks so it doesn't instantly trigger on path start
         lastHeading = null;
     }
-
-    // region Public Methods
 
     /** Instantly stops the drivetrain and ends any ongoing movement. */
     public void stop() {
@@ -554,40 +552,37 @@ public class Follower {
     }
 
     /**
-     * Drives the robot using joystick inputs adjusted for field centric control.
-     * Stops any active autonomous movement.
-     * Drives the robot using the provided  inputs. The joystick inputs are adjusted for
-     * field-centric or robot-centric control based on the constants. This method  will stop the
-     * current movement if one is in progress, as manual control takes priority over following a path.
+     * Drives the robot using the provided inputs. The joystick inputs are adjusted for
+     * field-centric or robot-centric control based on the constants. Any active follower movement
+     * will be stopped as manual control takes priority over following a path. If you want to use
+     * a standard control scheme, you can pass your gamepad to the other teleOpDrive method.
      *
-     * @param x left/right joystick input (positive for right, negative for left)
-     * @param y forward/backward joystick input (positive for forward, negative for backward)
-     * @param turn rotation joystick input (positive for clockwise, negative for counterclockwise)
+     * @param x forward/backward input where positive is forward
+     * @param y left/right input where positive is left
+     * @param turn rotation input where positive is counter-clockwise
      */
     public void teleOpDrive(double x, double y, double turn) {
         if (isBusy()) { stop(); }
-        drivetrain.drive(x, y, turn, this.getPose().getHeading().getRad());
+        drivetrain.drive(x, y, turn, this.getPose().getHeading(AngleUnit.RAD));
     }
 
     /**
-     * Drives the robot using standard gamepad inputs. The left stick controls translation (x and y),
-     * and the right stick controls rotation (turn). The joystick inputs are adjusted for
-     * field-centric or robot-centric control based on the constants. This method will stop the
-     * current movement if one is in progress, as manual control takes priority over following a path.
+     * Drives the robot using standard gamepad inputs. The left stick controls forward/backward and
+     * left/right movement, while the right stick controls rotation. Any active follower movement
+     * will be stopped as manual control takes priority over following a path. If you want to
+     * use a different control scheme, use the other teleOpDrive method with custom inputs.
      *
      * @param gamepad the gamepad to read inputs from
      */
     public void teleOpDrive(Gamepad gamepad) {
-        teleOpDrive(-gamepad.left_stick_x, -gamepad.left_stick_y, -gamepad.right_stick_x);
+        // Left stick Y is negated because forward is negative on the gamepad
+        // Left stick X is negated because left is positive in the coordinate system
+        // Right stick X is negated because CC is positive in in the coordinate system.
+        teleOpDrive(-gamepad.left_stick_y, -gamepad.left_stick_x, -gamepad.right_stick_x);
     }
-    // endregion
 
-    public void disableHeadingController() {
-        this.headingControllerEnabled = false;
-    }
-    public void disableDriveController() {
-        this.driveControllerEnabled = false;
-    }
+    public void disableHeadingController() { this.headingControllerEnabled = false; }
+    public void disableDriveController() { this.driveControllerEnabled = false; }
     public void disableControllers() {
         disableHeadingController();
         disableDriveController();
@@ -641,5 +636,6 @@ public class Follower {
     public BaseDrivetrain<?> getDrivetrain() { return drivetrain; }
 
     public FollowerConstants getConstants() { return constants; }
+
     // endregion
 }

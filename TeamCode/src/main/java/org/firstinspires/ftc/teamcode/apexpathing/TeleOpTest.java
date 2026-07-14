@@ -32,11 +32,7 @@ public class TeleOpTest extends LinearOpMode {
                 follower.stop();
                 telemetry.addLine("Follower stopped");
             } else {
-                follower.teleOpDrive(
-                        -gamepad1.left_stick_y,
-                        -gamepad1.left_stick_x,
-                        -gamepad1.right_stick_x
-                );
+                follower.teleOpDrive(gamepad1);
             }
 
             telemetry.addData("X", currentPose.getX());
