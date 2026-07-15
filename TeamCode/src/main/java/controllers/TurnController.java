@@ -17,9 +17,9 @@ public class TurnController {
     private static final double EPSILON = 1e-6;
 
     private final PDSController headingPds;
-    private final double angularKV;
-    private final double angularKA;
-    private final double angularVelocityFeedbackGain;
+    private double angularKV;
+    private double angularKA;
+    private double angularVelocityFeedbackGain;
 
     private boolean overshootRecovery;
 
@@ -31,6 +31,20 @@ public class TurnController {
         this.angularKV = angularKV;
         this.angularKA = angularKA;
         this.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
+    }
+
+    public void setHeadingCoefficients(PDSController.PDSCoefficients coefficients) {
+        headingPds.setCoefficients(coefficients);
+        headingPds.setAngularController();
+        reset();
+    }
+
+    public void setMotionGains(double angularKV, double angularKA,
+                               double angularVelocityFeedbackGain) {
+        this.angularKV = angularKV;
+        this.angularKA = angularKA;
+        this.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
+        reset();
     }
 
     /** Uses the complete heading PDS for an unprofiled turn. */

@@ -19,7 +19,6 @@ public abstract class TuningPhase {
     protected final TunerContext context;
     public boolean manualMode;
     LinearOpMode opMode;
-    public static boolean complete = false;
     public enum subPhase {
         PRE_TUNE_PHASE,
         TUNING_PHASE,
@@ -29,7 +28,6 @@ public abstract class TuningPhase {
     public void run(LinearOpMode opMode) {
         this.opMode = opMode;
         currentSubPhase = subPhase.PRE_TUNE_PHASE;
-        complete = false;
         manualMode = false;
 
         while (opMode.opModeIsActive()) {
@@ -53,9 +51,13 @@ public abstract class TuningPhase {
 
                 case TUNING_PHASE:
                     context.getFollower().update();
-                    complete = manualMode ? manualTune() : autoTune();
+                    if (manualMode) {
+                        manualTune();
+                    } else {
+                        autoTune();
+                    }
 
-                    if (complete) {
+                    if (isComplete()) {
                         context.getFollower().stop();
                         currentSubPhase = subPhase.POST_TUNE_PHASE;
                     }
@@ -91,14 +93,13 @@ public abstract class TuningPhase {
                 }
                 break;
             case RUNNING:
-                boolean complete;
                 if (manualMode) {
-                    complete = manualTune();
+                    manualTune();
                 } else {
-                    complete = autoTune();
+                    autoTune();
                 }
 
-                if (complete) {
+                if (isComplete()) {
                     state = State.COMPLETE;
                     context.getFollower().stop();
                 }
@@ -162,23 +163,14 @@ public abstract class TuningPhase {
      */
     protected abstract boolean autoTuneIsPossible();
 
+    public abstract boolean isComplete();
+
     /** Initializes the tuning phase (for automatic or manual) */
     protected abstract void init();
 
-    /**
-     * This method should perform manual tuning updates. It will be called repeatedly until it
-     * returns true.
-     * @return true if the manual tuning is complete, false otherwise
-     */
-    protected abstract boolean manualTune();
+    protected abstract void manualTune();
 
-    /**
-     * This method should perform automatic tuning updates. It will be called repeatedly until it
-     * returns true.
-     *
-     * @return true if the automatic tuning is complete, false otherwise
-     */
-    protected abstract boolean autoTune();
+    protected abstract void autoTune();
 
     /**
      * This method should use the telemetry (context.getTelemetry()) to report the results of
