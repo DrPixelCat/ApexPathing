@@ -33,7 +33,7 @@ public class DriveController {
         public double getPowerDemand() { return powerDemand; }
     }
 
-    private final double strafePenaltyRatio;
+    private double strafePenaltyRatio;
     private final PDSController crossTrackPds;
     private final PDSController endDistancePds;
     private final PDSController turnPositionPds;
@@ -41,11 +41,19 @@ public class DriveController {
     public DriveController(Dist maxForwardVelocity, Dist maxStrafeVelocity,
                            PDSController.PDSCoefficients coefficients,
                            boolean requireMecanumLimits) {
+        crossTrackPds = new PDSController(coefficients);
+        endDistancePds = new PDSController(coefficients);
+        turnPositionPds = new PDSController(coefficients);
+        setVelocityLimits(maxForwardVelocity, maxStrafeVelocity, requireMecanumLimits);
+    }
 
+    public void setVelocityLimits(Dist maxForwardVelocity, Dist maxStrafeVelocity,
+                                  boolean requireMecanumLimits) {
         double forwardVelocity = maxForwardVelocity.getIn();
         double strafeVelocity = maxStrafeVelocity.getIn();
         boolean invalidLimits = !Double.isFinite(forwardVelocity) || forwardVelocity <= 0.0 ||
                 !Double.isFinite(strafeVelocity) || strafeVelocity <= 0.0;
+
         if (requireMecanumLimits && invalidLimits) {
             throw new IllegalArgumentException(
                     "Mecanum forward and strafe velocity limits must both be positive."
@@ -53,9 +61,13 @@ public class DriveController {
         }
 
         strafePenaltyRatio = invalidLimits ? 1.0 : forwardVelocity / strafeVelocity;
-        crossTrackPds = new PDSController(coefficients);
-        endDistancePds = new PDSController(coefficients);
-        turnPositionPds = new PDSController(coefficients);
+    }
+
+    public void setCoefficients(PDSController.PDSCoefficients coefficients) {
+        crossTrackPds.setCoefficients(coefficients);
+        endDistancePds.setCoefficients(coefficients);
+        turnPositionPds.setCoefficients(coefficients);
+        reset();
     }
 
     /** Returns an unallocated field-centric correction toward a fixed position. */

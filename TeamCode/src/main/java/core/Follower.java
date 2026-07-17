@@ -51,7 +51,13 @@ public class Follower {
     private final PDSController headingController;
     private final TurnController turnController;
     private final DriveController driveController;
-    private final double velocityFeedbackGain;
+    private double translationalKV;
+    private double translationalKA;
+    private double angularKV;
+    private double angularKA;
+    private double centripetalGain;
+    private double velocityFeedbackGain;
+    private double angularVelocityFeedbackGain;
 
     private FollowerMovement currentMovement = null;
     private boolean paused = false;
@@ -67,6 +73,10 @@ public class Follower {
 
     /** Constructs the drivetrain, localizer, and follower from the given {@link ApexConstants}. */
     public Follower(ApexConstants constants, HardwareMap hardwareMap) {
+        this(constants, hardwareMap, false);
+    }
+
+    public Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode) {
         BaseDrivetrainConstants<?> drivetrainConstants = constants.drivetrainConstants();
 
         this.drivetrain = drivetrainConstants.build(hardwareMap);
@@ -76,24 +86,32 @@ public class Follower {
         this.headingTol = drivetrainConstants.headingTolerance.getRad();
         this.distanceTol = drivetrainConstants.distanceTolerance.getIn();
 
+        this.translationalKV = this.constants.translationalKV;
+        this.translationalKA = this.constants.translationalKA;
+        this.angularKV = this.constants.angularKV;
+        this.angularKA = this.constants.angularKA;
+        this.centripetalGain = this.constants.Kcentripetal;
+        this.velocityFeedbackGain = this.constants.velocityFeedbackGain;
+        this.angularVelocityFeedbackGain = this.constants.angularVelocityFeedbackGain;
+
         this.headingController = new PDSController(this.constants.headingCoeffs);
         this.headingController.setAngularController();
 
         this.turnController = new TurnController(
                 this.constants.headingCoeffs,
-                this.constants.angularKV,
-                this.constants.angularKA,
-                this.constants.angularVelocityFeedbackGain
+                angularKV,
+                angularKA,
+                angularVelocityFeedbackGain
         );
 
+        boolean requireMecanumLimits = !tuningMode &&
+                (drivetrain instanceof Mecanum || drivetrain instanceof DualActuated);
         this.driveController = new DriveController(
                 Dist.fromIn(this.constants.forwardVelLimitIn),
                 Dist.fromIn(this.constants.strafeVelLimitIn),
                 this.constants.translationalCoeffs,
-                Dist.fromIn(0.25),
-                drivetrain instanceof Mecanum || drivetrain instanceof DualActuated
+                requireMecanumLimits
         );
-        velocityFeedbackGain = this.constants.velocityFeedbackGain;
     }
 
     // region Private methods
@@ -308,7 +326,7 @@ public class Follower {
                 double alphaTarget = (fDoublePrime * (robotTangentialVel * robotTangentialVel)) +
                         (fPrime * targets.getTangentialAccel());
 
-                headingFF = (omegaTarget * constants.angularKV) + (alphaTarget * constants.angularKA);
+                headingFF = (omegaTarget * angularKV) + (alphaTarget * angularKA);
                 if (Math.abs(omegaTarget) > 1e-6) {
                     headingFF += Math.signum(omegaTarget) * constants.headingCoeffs.kS;
                 }
@@ -327,7 +345,7 @@ public class Follower {
                     ? driveController.calculateCrossTrack(crossTrackError) : 0.0;
 
             double requiredLateralAccel = (robotTangentialVel * robotTangentialVel) * kappa;
-            double centripetalMag = requiredLateralAccel * constants.Kcentripetal;
+            double centripetalMag = requiredLateralAccel * centripetalGain;
 
             Vector requestedLateralField = normal.times(
                     centripetalMag + lateralFeedbackMag
@@ -354,8 +372,8 @@ public class Follower {
             double totalTangentPower;
             if (t < 1.0) {
                 if (isProfiled) {
-                    double feedforward = (constants.translationalKV * targets.getTangentialVel()) +
-                            (constants.translationalKA * targets.getTangentialAccel()) +
+                    double feedforward = (translationalKV * targets.getTangentialVel()) +
+                            (translationalKA * targets.getTangentialAccel()) +
                             (Math.signum(targets.getTangentialVel()) * constants.translationalCoeffs.kS);
 
                     // TODO: Verify p only feedback performance, compare to SquID
@@ -375,7 +393,7 @@ public class Follower {
                     double maxVel = path.getQuickVelocityLimit(percentageClipped,
                             constants.forwardVelLimitIn);
                     double velError = maxVel - robotTangentialVel;
-                    double accelPower = (maxVel * constants.translationalKV)
+                    double accelPower = (maxVel * translationalKV)
                             + (Math.signum(maxVel) * constants.translationalCoeffs.kS)
                             + (velError * velocityFeedbackGain);
                     totalTangentPower = Math.min(accelPower, decelPower);
@@ -449,10 +467,10 @@ public class Follower {
             double w_cmd = omega_d + k * e_theta + b * v_d * sinc * e_y;
 
             // Convert velocity commands to motor power using feedforward constants
-            double totalTangentPower = (v_cmd * constants.translationalKV) +
-                    (a_d * constants.translationalKA) + (Math.signum(v_cmd) *
+            double totalTangentPower = (v_cmd * translationalKV) +
+                    (a_d * translationalKA) + (Math.signum(v_cmd) *
                     constants.translationalCoeffs.kS);
-            double turnPow = (w_cmd * constants.angularKV) + (alpha_d * constants.angularKA);
+            double turnPow = (w_cmd * angularKV) + (alpha_d * angularKA);
             turnPow += Math.signum(turnPow) * constants.headingCoeffs.kS;
 
             double availableMotorPower = 1.0;
@@ -586,6 +604,49 @@ public class Follower {
     public void disableControllers() {
         disableHeadingController();
         disableDriveController();
+    }
+
+    public void setHeadingTuning(PDSController.PDSCoefficients coefficients) {
+        headingController.setCoefficients(coefficients);
+        headingController.setAngularController();
+        turnController.setHeadingCoefficients(coefficients);
+    }
+
+    public void setMovementTuning(PDSController.PDSCoefficients coefficients,
+                                  double translationalKV, double translationalKA,
+                                  double angularKV, double angularKA,
+                                  double forwardVelocity, double strafeVelocity) {
+        this.translationalKV = translationalKV;
+        this.translationalKA = translationalKA;
+        this.angularKV = angularKV;
+        this.angularKA = angularKA;
+        driveController.setCoefficients(coefficients);
+        driveController.setVelocityLimits(
+                Dist.fromIn(forwardVelocity),
+                Dist.fromIn(strafeVelocity),
+                drivetrain instanceof Mecanum || drivetrain instanceof DualActuated
+        );
+        turnController.setMotionGains(angularKV, angularKA, angularVelocityFeedbackGain);
+    }
+
+    public void setCentripetalTuning(double centripetalGain) {
+        this.centripetalGain = centripetalGain;
+    }
+
+    public void setVelocityFeedbackTuning(double velocityFeedbackGain,
+                                          double angularVelocityFeedbackGain) {
+        this.velocityFeedbackGain = velocityFeedbackGain;
+        this.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
+        turnController.setMotionGains(angularKV, angularKA, angularVelocityFeedbackGain);
+    }
+
+    public void setDriveControllerEnabled(boolean enabled) {
+        driveControllerEnabled = enabled;
+    }
+
+    public void enableControllers() {
+        headingControllerEnabled = true;
+        driveControllerEnabled = true;
     }
 
     /**
