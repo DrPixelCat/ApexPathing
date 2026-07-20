@@ -16,6 +16,7 @@ import feedforward.MotionParameters;
 import geometry.Angle;
 import geometry.AngleUnit;
 import geometry.Dist;
+import geometry.DistUnit;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
@@ -47,6 +48,7 @@ public class Follower {
     private double lastS = -1.0;
     private long lastNano = -1;
     private Angle lastHeading = null; // Tracks heading between ticks for angular callback sweeps
+    private Pose lastPose = null;
 
     private final PDSController headingController;
     private final TurnController turnController;
@@ -200,18 +202,43 @@ public class Follower {
         return driveController.allocateIsotropic(fieldCommand, currentHeading, availablePower);
     }
 
-    // endregion
-    // Public methods
+    // region ========Update=========
 
     /**
      * The main execution loop of the follower.
      * Must be called continuously during the active OpMode loop to drive the robot along the path.
+     *
+     * @param holdPose Determines whether the robot should hold its pose or not after each movement.
+     *                 This can be toggled at any time.
      */
-    public void update() {
+    public void update(boolean holdPose) {
         localizer.update();
 
-        // Exit early if nothing is running
+        // Exit early if nothing is running or if paused
         if (currentMovement == null || paused) {
+            if (holdPose && lastPose != null) {
+                double angularResponse = headingController.calculate(
+                        lastPose.getHeading(AngleUnit.RAD) - getPose().getHeading(AngleUnit.RAD)
+                );
+                Vector transResponse;
+                if (drivetrain.isHolonomic()) {
+                    transResponse = driveController.calculatePointToPoint(
+                            lastPose.getVec(), getPose().getVec()
+                    );
+                } else {
+                    Vector globalError = lastPose.getVec().minus(getPose().getVec());
+                    Vector localError = globalError.rotate(lastPose.getHeading().times(-1.0));
+                    double forwardErr = localError.getX(DistUnit.IN);
+                    transResponse = new Vector(
+                            Dist.fromIn(driveController.calculateEndDistance(forwardErr)),
+                            Dist.zero()
+                    );
+                }
+                drivetrain.drive(
+                        transResponse.getX().getIn(), transResponse.getY().getIn(), angularResponse);
+            } else {
+                this.stop();
+            }
             return;
         }
 
@@ -280,7 +307,13 @@ public class Follower {
             }
 
         } else if (segment == null) {
-            this.stop();
+            if (holdPose) {
+                if (drivetrain.isHolonomic()) {
+
+                }
+            } else {
+                this.stop();
+            }
             // region Holonomic Following
         } else if (drivetrain.isHolonomic()) {
             // Retrieve path geometry at closest point
@@ -488,6 +521,8 @@ public class Follower {
         }
     }
 
+    //region Public Methods
+
     /**
      * Starts following the given movement.
      *
@@ -507,6 +542,7 @@ public class Follower {
         this.currentMovement.setStarted(true);
         this.currentMovement.setEnded(false);
         this.targetHeading = movement.getEndPose().getHeading();
+        this.lastPose = movement.getEndPose();
 
         if (movement instanceof Turn) {
             Turn turn = (Turn) currentMovement;
@@ -606,6 +642,8 @@ public class Follower {
         disableDriveController();
     }
 
+    // region Getters/Setters
+
     public void setHeadingTuning(PDSController.PDSCoefficients coefficients) {
         headingController.setCoefficients(coefficients);
         headingController.setAngularController();
@@ -683,6 +721,8 @@ public class Follower {
      * @return The current acceleration expressed in robot local frame.
      */
     public Pose getAcceleration() { return localizer.getAccel(); }
+
+    //region Internal Methods
 
     /**
      * DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
