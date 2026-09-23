@@ -5,7 +5,7 @@ import feedforward.MotionParameters;
 /**
  * Executes quick and displacement-profiled point turns.
  *
- * <p>Quick turns use the complete heading PDS controller. Profiled turns track a time-indexed
+ * <p>Quick turns use complete heading feedback. Profiled turns track a time-indexed
  * heading, angular velocity, and angular acceleration reference.
  *
  * @author DrPixelCat - 7842 alum
@@ -16,33 +16,25 @@ public class TurnController {
     // until nearly zero lets static friction stop the robot for a loop before recovery restarts it.
     private static final double LOW_SPEED_ANGULAR_VELOCITY = 0.25;
     private static final double BREAKAWAY_RESERVE = 0.02;
-    // Velocity feedback is a correction, not the primary command. Bounding its contribution keeps
-    // an over-tuned/stale gain from turning profile tracking into full-power bang-bang control.
-    private static final double MAX_ACCELERATING_FEEDBACK_POWER = 0.50;
-    private static final double MAX_BRAKING_FEEDBACK_POWER = 0.25;
-
-    private final PDSController headingPds;
-    private double angularKV;
-    private double angularKA;
+    private final FeedbackController headingController;
+    private final FeedbackController motionController;
     private double angularFeedforwardKS;
-    private double angularVelocityFeedbackGain;
 
     private boolean quickEndpointCapture;
 
-    public TurnController(PDSController.PDSCoefficients headingCoefficients,
+    public TurnController(FeedbackController.Coefficients headingCoefficients,
                           double angularKV, double angularKA, double angularFeedforwardKS,
-                          double angularVelocityFeedbackGain) {
-        headingPds = new PDSController(headingCoefficients);
-        headingPds.setAngularController();
+                          double ignoredAngularVelocityFeedbackGain) {
+        headingController = new FeedbackController(headingCoefficients);
+        headingController.setAngularController();
+        motionController = new FeedbackController(new FeedbackController.Coefficients()
+                .vel(angularKV).accel(angularKA));
 
-        this.angularKV = angularKV;
-        this.angularKA = angularKA;
         this.angularFeedforwardKS = angularFeedforwardKS;
-        this.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
     }
 
-    public void setCoefficients(PDSController.PDSCoefficients coefficients) {
-        headingPds.setCoefficients(coefficients);
+    public void setCoefficients(FeedbackController.Coefficients coefficients) {
+        headingController.setCoefficients(coefficients);
         reset();
     }
 
@@ -55,16 +47,16 @@ public class TurnController {
     /** Updates dynamic and moving-friction feedforward gains. */
     public void setMotionGains(double angularKV, double angularKA,
                                double angularFeedforwardKS,
-                               double angularVelocityFeedbackGain) {
-        this.angularKV = angularKV;
-        this.angularKA = angularKA;
+                               double ignoredAngularVelocityFeedbackGain) {
         this.angularFeedforwardKS = angularFeedforwardKS;
-        this.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
+        motionController.getCoefficients().vel(angularKV).accel(angularKA);
         reset();
     }
 
-    /** Uses the complete heading PDS for an unprofiled turn. */
-    public double calculateQuick(double headingError) { return headingPds.calculate(headingError); }
+    /** Uses complete heading feedback for an unprofiled turn. */
+    public double calculateQuick(double headingError) {
+        return headingController.p().d().s().calculate(headingError).get();
+    }
 
     /** Latches out static compensation after a quick turn reaches its endpoint band. */
     public double calculateQuick(double headingError, double measuredAngularVelocity,
@@ -72,8 +64,9 @@ public class TurnController {
         if (Math.abs(headingError) <= endpointCaptureHeading) {
             quickEndpointCapture = true;
         }
-        return headingPds.calculate(
-                headingError, -measuredAngularVelocity, !quickEndpointCapture);
+        return headingController.p().d(-measuredAngularVelocity)
+                .s(quickEndpointCapture ? 0.0 : Math.signum(headingError))
+                .calculate(headingError).get();
     }
 
     /**
@@ -91,24 +84,20 @@ public class TurnController {
             motionSign = Math.signum(targetAcceleration);
         }
 
-        double feedforward = angularKV * targetVelocity + angularKA * targetAcceleration
-                + angularFeedforwardKS * motionSign;
-        double velocityFeedback = Math.abs(targetVelocity) > EPSILON
-                ? clipVelocityFeedback(angularVelocityFeedbackGain
-                * (targetVelocity - measuredAngularVelocity), intendedDirection)
-                : 0.0;
-
+        double feedforward = motionController.vel(targetVelocity).accel(targetAcceleration)
+                .f(angularFeedforwardKS * motionSign).calculate(headingError).get();
         double errorRate = targetVelocity - measuredAngularVelocity;
         boolean stoppedReference = Math.abs(targetVelocity) <= EPSILON &&
                 Math.abs(measuredAngularVelocity) < LOW_SPEED_ANGULAR_VELOCITY;
-        double positionPower = headingPds.calculate(
-                headingError, errorRate, stoppedReference);
-        double requestedPower = feedforward + velocityFeedback + positionPower;
+        double positionPower = headingController.p().d(errorRate)
+                .s(stoppedReference ? Math.signum(headingError) : 0.0)
+                .calculate(headingError).get();
+        double requestedPower = feedforward + positionPower;
         return clip(ensureProfiledMotionBreakaway(
                 requestedPower,
                 targetVelocity,
                 measuredAngularVelocity,
-                headingPds.getCoefficients().kS
+                headingController.getCoefficients().kS
         ));
     }
 
@@ -133,19 +122,9 @@ public class TurnController {
 
     public void reset() {
         quickEndpointCapture = false;
-        headingPds.reset();
+        headingController.reset();
+        motionController.reset();
     }
 
     private static double clip(double power) { return Math.max(-1.0, Math.min(1.0, power)); }
-
-    private static double clipVelocityFeedback(double feedback, double intendedDirection) {
-        if (Math.abs(intendedDirection) <= EPSILON) {
-            return Math.max(-MAX_BRAKING_FEEDBACK_POWER,
-                    Math.min(MAX_BRAKING_FEEDBACK_POWER, feedback));
-        }
-        double alongDirection = feedback * Math.signum(intendedDirection);
-        double bounded = Math.max(-MAX_BRAKING_FEEDBACK_POWER,
-                Math.min(MAX_ACCELERATING_FEEDBACK_POWER, alongDirection));
-        return bounded * Math.signum(intendedDirection);
-    }
 }

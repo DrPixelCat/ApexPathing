@@ -7,8 +7,9 @@ import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedDrivetrain;
 import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedMecanum;
 import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedTank;
 import org.codeblooded.ftcodesim.input.DefaultKeybinds;
-import org.codeblooded.ftcodesim.physics.MotionVector;
-import org.codeblooded.ftcodesim.physics.RobotGeometry;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.RobotGeometry;
+import org.codeblooded.ftcodesim.ascope.SourceType;
 import org.codeblooded.ftcodesim.simulator.FTCodeSim;
 import org.codeblooded.ftcodesim.simulator.FTCodeSimTelemetryInstaller;
 import org.codeblooded.ftcodesim.ascope.ApexAdvantageScopeLayout;
@@ -62,7 +63,7 @@ public final class ApexSimulation {
 
     public static FTCodeSim createSimulator() throws IOException {
         FTCodeSim simulator = new FTCodeSim(createConfig());
-        ApexAdvantageScopeLayout.install();
+        ApexAdvantageScopeLayout.install(isTankSimulation());
         installTelemetryAdapter(simulator);
         return simulator;
     }
@@ -70,7 +71,7 @@ public final class ApexSimulation {
     /** Creates Code Sim with the tank hardware used by the tank-only test OpModes. */
     public static FTCodeSim createTankSimulator() throws IOException {
         FTCodeSim simulator = new FTCodeSim(createTankConfig());
-        ApexAdvantageScopeLayout.install();
+        ApexAdvantageScopeLayout.install(isTankSimulation());
         installTelemetryAdapter(simulator);
         return simulator;
     }
@@ -79,27 +80,34 @@ public final class ApexSimulation {
         configureDesktopStorage();
 
         SimMecanumConfig config = new SimMecanumConfig();
-        // The FTC SDK applies the configured right-side motor reversals before physical wheel
-        // motion. FTCodeSim's SimMotor ignores setDirection(), and its mecanum model consumes the
-        // four logical powers directly with the opposite lateral/turn convention. Mirroring the
-        // model's wheel slots preserves the production motor mix while making +Y and +heading
-        // agree with Apex in the simulator.
-        config.frontLeftMotorName = FRONT_RIGHT_MOTOR;
-        config.frontRightMotorName = FRONT_LEFT_MOTOR;
-        config.backLeftMotorName = BACK_RIGHT_MOTOR;
-        config.backRightMotorName = BACK_LEFT_MOTOR;
+        // The alpha release consumes logical powers with Apex's forward/left/CCW convention.
+        // SimMotor ignores SDK direction; the old snapshot's mirrored slot workaround is wrong here.
+        config.frontLeftMotorName = FRONT_LEFT_MOTOR;
+        config.frontRightMotorName = FRONT_RIGHT_MOTOR;
+        config.backLeftMotorName = BACK_LEFT_MOTOR;
+        config.backRightMotorName = BACK_RIGHT_MOTOR;
 
-        // These are the measured Code Blooded drivetrain values from FTCodeSim's DECODE example.
+        // Geometry/speed parameters from the DECODE example.
         config.wheelbase = 14;
         config.trackWidth = 14;
         config.wheelRadius = 1.889765;
-        config.staticVelocityRegion = 2;
-        config.staticFriction = 45;
         config.maxAcceleration = 150;
         config.maxVelocity = 75;
-        config.naturalDeceleration = 40;
-        config.strafeEfficiency = 0.80;
+        // Preserve the configured natural-deceleration input. In alpha.1 it contributes
+        // to the motor scale and regenerative-braking fit, not a 6% Coulomb friction term.
+        // The release motor has duty-dependent drag and no static breakaway gate.
+        config.naturalDeceleration = config.maxAcceleration * 0.06 / (1.0 - 0.06);
+        // alpha.1 moved directional friction to the chassis. Zero translation radii
+        // make its directional interpolation divide by zero (even during a pure turn).
+        config.forwardNaturalDeceleration = config.naturalDeceleration;
+        config.strafeNaturalDeceleration = config.naturalDeceleration;
+        config.turnNaturalDeceleration = config.naturalDeceleration
+                / ((config.wheelbase + config.trackWidth) / 2.0);
+        config.staticVelocityRegion = 0.05;
+        config.staticFriction = (config.maxAcceleration + config.naturalDeceleration) * 0.08;
+        // v0.1.0-alpha.1 removed strafeEfficiency; use the release's mecanum kinematics.
         config.robotGeometry = new RobotGeometry(12, 18, 2, 0);
+        config.robotModel = SourceType.ROBOT_CODE_BLOODED_DECODE;
 
         SimulatedDrivetrain drivetrain = new SimulatedMecanum(config);
         SimHardwareMap hardwareMap = new StableSimHardwareMap();
@@ -134,6 +142,7 @@ public final class ApexSimulation {
         config.maxVelocity = 75;
         config.naturalDeceleration = 40;
         config.robotGeometry = new RobotGeometry(12, 18, 2, 0);
+        config.robotModel = SourceType.ROBOT_TANK;
 
         SimulatedDrivetrain drivetrain = new SimulatedTank(config);
         SimHardwareMap hardwareMap = new StableSimHardwareMap();
@@ -178,6 +187,31 @@ public final class ApexSimulation {
         Hardware(SimHardwareMap hardwareMap, SimulatedDrivetrain drivetrain) {
             this.hardwareMap = hardwareMap;
             this.drivetrain = drivetrain;
+        }
+    }
+
+    /** Advance the same complete drivetrain mechanism used by the desktop simulator. */
+    static void stepPhysics(Hardware hardware, double seconds) {
+        for (String name : hardware.drivetrain.motorNames) {
+            ((org.codeblooded.ftcodesim.hardware.devices.SimMotor) hardware.hardwareMap.get(
+                    com.qualcomm.robotcore.hardware.DcMotorEx.class, name)).update(seconds);
+        }
+        try {
+            hardware.drivetrain.update(seconds);
+        } catch (NullPointerException missingViewer) {
+            // The alpha release registers a visualization source after completing physics.
+            // Headless tests have no viewer. Suppress only that specific post-physics error.
+            StackTraceElement[] trace = missingViewer.getStackTrace();
+            if (trace.length == 0) throw missingViewer;
+            StackTraceElement top = trace[0];
+            if (org.codeblooded.ftcodesim.ascope.AdvantageScopeRunner.INSTANCE != null
+                    || !top.getClassName().equals("org.codeblooded.ftcodesim.ascope.boundaries.MotionVector")
+                    || !top.getMethodName().equals("log")) throw missingViewer;
+        }
+        if (!Double.isFinite(hardware.drivetrain.position.x)
+                || !Double.isFinite(hardware.drivetrain.position.y)
+                || !Double.isFinite(hardware.drivetrain.position.theta)) {
+            throw new IllegalStateException("Simulator produced a nonfinite drivetrain pose");
         }
     }
 }

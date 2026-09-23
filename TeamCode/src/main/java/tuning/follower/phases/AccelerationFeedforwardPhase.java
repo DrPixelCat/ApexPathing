@@ -6,26 +6,39 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import java.util.Arrays;
 import java.util.Locale;
 
+import controllers.FeedbackController;
 import core.Follower;
+import feedforward.DynamicMotionProfile;
+import geometry.Angle;
 import geometry.AngleUnit;
+import geometry.DistUnit;
 import geometry.Pose;
+import geometry.Vector;
 import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
-/** Tunes translational and angular kA with paired, fixed-profile velocity tracking trials. */
+/**
+ * Legacy fixed-profile kA diagnostics.
+ * @deprecated FollowerTuner now identifies kA in each axis's SysId phase.
+ */
+@Deprecated
 public final class AccelerationFeedforwardPhase extends TuningPhase {
     private static final int SEARCH_ROUNDS = 7;
     private static final double COMMAND_LIMIT = .85;
     private static final double CRUISE_SECONDS = .25;
-    private static final double TRANSLATION_DISTANCE_IN = 60.0;
+    private static final double TRANSLATION_DISTANCE_IN = 48.0;
     private static final double TANK_ANGULAR_SWEEP_RAD = 4.5;
     private static final double HOLONOMIC_ANGULAR_SWEEP_RAD = 2.25;
     private static final double SCORE_START_FRACTION = .12;
     private static final double SCORE_END_FRACTION = .90;
+    private static final int PROFILE_SAMPLES = 121;
     private static final double SETTLE_SECONDS = .60;
     private static final double MAX_SETTLE_SECONDS = 1.50;
-    private static final int MIN_DIRECTION_SAMPLES = 20;
+    private static final int MIN_DIRECTION_SAMPLES = 10;
+    private static final int MAX_AUTOMATIC_TRIAL_RETRIES = 1;
+    private static final Pose DRIVE_START_POSE = new Pose(
+            Vector.of(-60.0, -60.0, DistUnit.IN), Angle.fromDeg(45.0));
 
     private enum Axis { TRANSLATION, ANGULAR }
     private enum State { MANUAL_IDLE, SETTLING, RUNNING, DONE, FAILED }
@@ -45,8 +58,10 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private String result = "Not run";
     private double peakVelocity;
     private double targetAcceleration;
-    private double accelerationSeconds;
     private double profileSeconds;
+    private DynamicMotionProfile motionProfile;
+    private final FeedbackController feedforwardController = new FeedbackController(
+            new FeedbackController.Coefficients().vel(0.0).accel(0.0));
     private double searchUpper;
     private double candidateKA;
     private double pendingTranslationKA;
@@ -60,6 +75,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private boolean lastSampleEligible;
     private boolean saturated;
     private int trialNumber;
+    private int automaticTrialRetries;
 
     public AccelerationFeedforwardPhase(TunerContext context) { super(context); }
 
@@ -69,7 +85,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
 
     @Override protected void showPreRunInstructions() {
         context.getTelemetry().addLine("Runs fixed forward/reverse and CCW/CW acceleration profiles.");
-        context.getTelemetry().addLine("Translation profiles travel 60 inches each way; allow braking room.");
+        context.getTelemetry().addLine("Translation profiles travel 48 inches each way; allow braking room.");
         context.getTelemetry().addLine("Angular sweeps are 50% longer; turning needs clear space.");
         context.getTelemetry().addLine("Automatic: A runs the entire search. Manual: adjust, then A runs.");
     }
@@ -85,6 +101,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         trialNumber = 0;
         openCsv();
         axis = Axis.TRANSLATION;
+        positionForAxis();
         if (!configureAxis()) {
             fail("Missing or invalid kS, kV, velocity limit, or acceleration limit.");
             return;
@@ -119,13 +136,12 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         boolean holonomic = context.getFollower().getDrivetrain().isHolonomic();
         double cap = axis == Axis.TRANSLATION ? 30.0 : holonomic ? 1.5 : 3.0;
         peakVelocity = Math.min(cap, Math.min(.50 * velocityLimit, .35 * accelerationLimit));
-        // A trapezoid travels peakVelocity * (acceleration time + cruise time).
-        // Put the extra travel into symmetric acceleration/braking ramps, with a short cruise.
         double travel = axis == Axis.TRANSLATION ? TRANSLATION_DISTANCE_IN
                 : holonomic ? HOLONOMIC_ANGULAR_SWEEP_RAD : TANK_ANGULAR_SWEEP_RAD;
-        accelerationSeconds = travel / peakVelocity - CRUISE_SECONDS;
-        targetAcceleration = peakVelocity / accelerationSeconds;
-        profileSeconds = 2 * accelerationSeconds + CRUISE_SECONDS;
+        // Use the old travel allocation only as a representative acceleration for bounding the
+        // kA search. Each actual trial gets a dynamic, power-limited profile for its candidate.
+        double representativeRampSeconds = travel / peakVelocity - CRUISE_SECONDS;
+        targetAcceleration = peakVelocity / representativeRampSeconds;
         searchUpper = initialUpperBound(kS, kV, peakVelocity, targetAcceleration,
                 accelerationLimit);
         return Double.isFinite(peakVelocity) && peakVelocity > 0.0
@@ -158,6 +174,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private void startAutomaticAxis() {
         search = new AccelerationSearch(searchUpper, SEARCH_ROUNDS);
         confirmation = false;
+        automaticTrialRetries = 0;
         scheduleTrial(search.current());
     }
 
@@ -170,6 +187,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         result = "Running fresh search";
         trialNumber = 0;
         axis = Axis.TRANSLATION;
+        positionForAxis();
         if (!configureAxis()) {
             fail("Missing or invalid kS, kV, velocity limit, or acceleration limit.");
         } else {
@@ -178,7 +196,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     }
 
     private void openCsv() {
-        csv = TuningCsvWriter.open("acceleration_feedforward",
+        csv = TuningCsvWriter.openBuffered("acceleration_feedforward",
                 "trial", "axis", "direction", "time_s", "candidate_kA",
                 "target_velocity", "target_acceleration", "filtered_velocity",
                 "raw_velocity", "command_power", "scored", "velocity_error");
@@ -187,6 +205,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
 
     private void scheduleTrial(double candidate) {
         candidateKA = Math.max(0.0, Math.min(searchUpper, candidate));
+        buildTrialProfile(candidateKA);
         direction = 0;
         saturated = false;
         Arrays.fill(squaredErrorTime, 0.0);
@@ -233,7 +252,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         double alignedRaw = directionSign() * raw;
         // Velocity belongs to this timestamp; the preceding command belongs to the
         // interval that just elapsed. Scoring against its old target rewards lag.
-        ProfilePoint currentTarget = profileAt(Math.min(elapsed, profileSeconds));
+        DynamicMotionProfile.State currentTarget = profileAt(Math.min(elapsed, profileSeconds));
         double error = currentTarget.velocity - alignedFiltered;
         boolean usableDt = dt > 0.0 && dt <= .15;
         boolean scored = lastSampleEligible && isScoringTime(elapsed) && usableDt;
@@ -257,6 +276,9 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         }
         if (elapsed >= profileSeconds) {
             context.getFollower().stop();
+            // Filesystem flushes can block long enough to invalidate profile samples. Persist the
+            // evidence only after motor output has stopped and before the settle timer starts.
+            csv.flush();
             direction++;
             if (direction < 2) {
                 state = State.SETTLING;
@@ -267,7 +289,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             return;
         }
 
-        ProfilePoint point = profileAt(elapsed);
+        DynamicMotionProfile.State point = profileAt(elapsed);
         double magnitude = feedforwardPower(point.velocity, point.acceleration, candidateKA);
         saturated |= !Double.isFinite(magnitude) || Math.abs(magnitude) > COMMAND_LIMIT;
         magnitude = Math.max(-COMMAND_LIMIT, Math.min(COMMAND_LIMIT, magnitude));
@@ -282,22 +304,34 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     }
 
     private boolean isScoringTime(double elapsed) {
-        double rampTime = elapsed < accelerationSeconds + CRUISE_SECONDS
-                ? elapsed : elapsed - accelerationSeconds - CRUISE_SECONDS;
-        return rampTime >= SCORE_START_FRACTION * accelerationSeconds
-                && rampTime <= SCORE_END_FRACTION * accelerationSeconds;
+        DynamicMotionProfile.State point = profileAt(Math.min(elapsed, profileSeconds));
+        double profilePeak = Math.max(motionProfile.getPeakVelocity(), 1e-9);
+        double velocityFraction = point.velocity / profilePeak;
+        return Math.abs(point.acceleration) > 1e-6
+                && velocityFraction >= SCORE_START_FRACTION
+                && velocityFraction <= SCORE_END_FRACTION;
     }
 
-    private ProfilePoint profileAt(double time) {
-        if (time < accelerationSeconds) {
-            return new ProfilePoint(targetAcceleration * time, targetAcceleration);
-        }
-        if (time < accelerationSeconds + CRUISE_SECONDS) {
-            return new ProfilePoint(peakVelocity, 0.0);
-        }
-        double brakingTime = time - accelerationSeconds - CRUISE_SECONDS;
-        return new ProfilePoint(Math.max(0.0, peakVelocity - targetAcceleration * brakingTime),
-                -targetAcceleration);
+    private DynamicMotionProfile.State profileAt(double time) { return motionProfile.atTime(time); }
+
+    private void buildTrialProfile(double kA) {
+        boolean holonomic = context.getFollower().getDrivetrain().isHolonomic();
+        double velocityLimit = peakVelocity;
+        double kS = axis == Axis.TRANSLATION
+                ? context.constants.translationalFeedforwardKS
+                : context.constants.angularFeedforwardKS;
+        double kV = axis == Axis.TRANSLATION
+                ? context.constants.translationalKV : context.constants.angularKV;
+        double travel = axis == Axis.TRANSLATION ? TRANSLATION_DISTANCE_IN
+                : holonomic ? HOLONOMIC_ANGULAR_SWEEP_RAD : TANK_ANGULAR_SWEEP_RAD;
+        // This is an identification experiment, so keep both ramps long enough to collect useful
+        // evidence. The power model can still lower this ceiling for candidates that would exceed
+        // the command budget.
+        DynamicMotionProfile.PowerModel model = new DynamicMotionProfile.PowerModel(
+                velocityLimit, targetAcceleration, kV, kA, kS, COMMAND_LIMIT);
+        motionProfile = DynamicMotionProfile.forPowerLimitedDistance(
+                travel, PROFILE_SAMPLES, model);
+        profileSeconds = motionProfile.getDurationSeconds();
     }
 
     private double feedforwardPower(double velocity, double acceleration, double kA) {
@@ -306,7 +340,9 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
                 : context.constants.angularFeedforwardKS;
         double kV = axis == Axis.TRANSLATION
                 ? context.constants.translationalKV : context.constants.angularKV;
-        return kS + kV * velocity + kA * acceleration;
+        feedforwardController.getCoefficients().vel(kV).accel(kA);
+        return feedforwardController.vel(velocity).accel(acceleration)
+                .f(kS).calculate(0.0).get();
     }
 
     private double measuredVelocity(boolean raw) {
@@ -335,11 +371,18 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             if (manualMode) {
                 result = "Invalid trial; press A to repeat after checking localization and space.";
                 state = State.MANUAL_IDLE;
+            } else if (!saturated
+                    && automaticTrialRetries < MAX_AUTOMATIC_TRIAL_RETRIES) {
+                automaticTrialRetries++;
+                result = "Invalid sampled run; retrying the current candidate once.";
+                scheduleTrial(candidateKA);
             } else {
                 fail("Trial lacked enough valid unsaturated acceleration and braking samples.");
             }
             return;
         }
+
+        automaticTrialRetries = 0;
 
         if (manualMode) {
             acceptManualAxis(trial);
@@ -378,6 +421,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             pendingTranslationKA = value;
             translationRms = confirmedRms;
             axis = Axis.ANGULAR;
+            positionForAxis();
             if (!configureAxis()) {
                 fail("Angular kA could not be bounded from the tuned limits and kS/kV.");
                 return;
@@ -398,6 +442,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             pendingTranslationKA = candidateKA;
             translationRms = trial.rms;
             axis = Axis.ANGULAR;
+            positionForAxis();
             if (!configureAxis()) {
                 fail("Angular kA could not be bounded from the tuned limits and kS/kV.");
                 return;
@@ -417,9 +462,19 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private void applyPendingGains() {
         context.constants.translationalKA = pendingTranslationKA;
         context.constants.angularKA = pendingAngularKA;
+        context.constants.deriveVelocityFeedbackGains();
         context.getFollower().setFeedforwardGains(
                 context.constants.translationalKV, pendingTranslationKA,
                 context.constants.angularKV, pendingAngularKA);
+        context.getFollower().setVelocityFeedback(
+                context.constants.velocityFeedbackGain,
+                context.constants.angularVelocityFeedbackGain);
+    }
+
+    /** Establishes the field origin used by each kA experiment. */
+    private void positionForAxis() {
+        context.getFollower().stop();
+        context.getFollower().setPose(axis == Axis.TRANSLATION ? DRIVE_START_POSE : Pose.zero());
     }
 
     private void fail(String message) {
@@ -520,15 +575,6 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
 
     private void closeCsv() {
         if (csv != null) { csv.close(); csv = null; }
-    }
-
-    private static final class ProfilePoint {
-        final double velocity;
-        final double acceleration;
-        ProfilePoint(double velocity, double acceleration) {
-            this.velocity = velocity;
-            this.acceleration = acceleration;
-        }
     }
 
     static final class TrialResult {

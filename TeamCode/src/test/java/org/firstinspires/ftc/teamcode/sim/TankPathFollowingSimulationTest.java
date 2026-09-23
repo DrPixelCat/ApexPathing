@@ -9,7 +9,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
 import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedTank;
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.codeblooded.ftcodesim.simulator.OpModeRegister;
 import org.codeblooded.ftcodesim.simulator.SimConfig;
 import org.json.JSONObject;

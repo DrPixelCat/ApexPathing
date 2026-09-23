@@ -4,8 +4,8 @@ import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import controllers.PDSController.PDSCoefficients;
-import controllers.PDSController;
+import controllers.FeedbackController;
+import controllers.FeedbackController.Coefficients;
 import geometry.Angle;
 import geometry.Dist;
 
@@ -21,7 +21,7 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
     private final CRServo flServo, frServo, blServo, brServo;
     private final AnalogInput flEncoder, frEncoder, blEncoder, brEncoder;
-    private final PDSController flSteerController, frSteerController, blSteerController,
+    private final FeedbackController flSteerController, frSteerController, blSteerController,
             brSteerController;
     private final double voltageToRad; // Radians = voltage * this
     private final double offsetAngleRad; // Radians added to encoder angle to get actual wheel angle
@@ -40,10 +40,10 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         blEncoder = hardwareMap.get(AnalogInput.class, constants.blEncoderName);
         brEncoder = hardwareMap.get(AnalogInput.class, constants.brEncoderName);
 
-        flSteerController = new PDSController(constants.steeringCoefficients);
-        frSteerController = new PDSController(constants.steeringCoefficients);
-        blSteerController = new PDSController(constants.steeringCoefficients);
-        brSteerController = new PDSController(constants.steeringCoefficients);
+        flSteerController = new FeedbackController(constants.steeringCoefficients);
+        frSteerController = new FeedbackController(constants.steeringCoefficients);
+        blSteerController = new FeedbackController(constants.steeringCoefficients);
+        brSteerController = new FeedbackController(constants.steeringCoefficients);
 
         voltageToRad = 2 * Math.PI / flEncoder.getMaxVoltage();
         offsetAngleRad = constants.offsetAngle.getRad();
@@ -98,19 +98,19 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         }
 
         if (flError != lastFlError) {
-            flServo.setPower(flSteerController.calculate(flError));
+            flServo.setPower(flSteerController.p().d().s().calculate(flError).get());
             lastFlError = flError;
         }
         if (frError != lastFrError) {
-            frServo.setPower(frSteerController.calculate(frError));
+            frServo.setPower(frSteerController.p().d().s().calculate(frError).get());
             lastFrError = frError;
         }
         if (blError != lastBlError) {
-            blServo.setPower(blSteerController.calculate(blError));
+            blServo.setPower(blSteerController.p().d().s().calculate(blError).get());
             lastBlError = blError;
         }
         if (brError != lastBrError) {
-            brServo.setPower(brSteerController.calculate(brError));
+            brServo.setPower(brSteerController.p().d().s().calculate(brError).get());
             lastBrError = brError;
         }
 
@@ -128,7 +128,8 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         public String flServoName, frServoName, blServoName, brServoName;
         public String flEncoderName, frEncoderName, blEncoderName, brEncoderName;
 
-        public PDSCoefficients steeringCoefficients = new PDSCoefficients();
+        public Coefficients steeringCoefficients =
+                new Coefficients().p(0.0).d(0.0).s(0.0);
 
         public Angle offsetAngle = Angle.zero(); // Encoder value facing forward position
         public Dist wheelbase = Dist.fromIn(14); // Front pod to back pod spacing
@@ -207,8 +208,8 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
             return this;
         }
 
-        /** Sets the coefficients for the steering PDS controllers. */
-        public Constants setSteeringCoefficients(PDSCoefficients coefficients) {
+        /** Sets the coefficients for the steering feedback controllers. */
+        public Constants setSteeringCoefficients(Coefficients coefficients) {
             this.steeringCoefficients = coefficients;
             return this;
         }

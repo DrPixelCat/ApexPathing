@@ -7,7 +7,7 @@ import java.io.File;
 import java.io.FileReader;
 
 import drivetrains.BaseDrivetrain;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 
 /**
  * Class to hold constants for the Follower class. These constants are loaded from a JSON file
@@ -18,6 +18,12 @@ import controllers.PDSController.PDSCoefficients;
  * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
+    /** Desired first-order velocity-error time constant used after kV/kA characterization. */
+    public static final double VELOCITY_FEEDBACK_TIME_CONSTANT_SECONDS = 0.10;
+    /** Feedback-power limits protect translation from large localization-error commands. */
+    public static final double MAX_TRANSLATION_VELOCITY_FEEDBACK_GAIN = 0.10;
+    /** Angular velocity feedback is capped more tightly to avoid noise-driven oscillation. */
+    public static final double MAX_ANGULAR_VELOCITY_FEEDBACK_GAIN = 0.25;
     /**
      * Note to developers:
      * If you want to add new constants, create the variable here and add it to the loadValues() and
@@ -27,14 +33,14 @@ public class FollowerConstants {
     private static FollowerConstants instance;
     public BaseDrivetrain.DrivetrainType drivetrainType =
             BaseDrivetrain.DrivetrainType.MECANUM;
-    public PDSCoefficients angularCoeffs = new PDSCoefficients();
-    public PDSCoefficients translationalCoeffs = new PDSCoefficients();
+    public Coefficients angularCoeffs = new Coefficients().p(0.0).d(0.0).s(0.0);
+    public Coefficients translationalCoeffs = new Coefficients().p(0.0).d(0.0).s(0.0);
 
     public double velocityFeedbackGain = 0.0;
     public double angularVelocityFeedbackGain = 0.0;
     public double translationalKV = 0.0, translationalKA = 0.0;
     public double angularKV = 0.0, angularKA = 0.0;
-    /** Moving-friction feedforward terms; PDS kS remains the larger breakaway value. */
+    /** Moving-friction feedforward terms; feedback kS remains the larger breakaway value. */
     public double translationalFeedforwardKS = 0.0, angularFeedforwardKS = 0.0;
     public double kCentripetal = 0.0;
 
@@ -212,13 +218,13 @@ public class FollowerConstants {
     }
 
     private void loadValues(JSONObject json) {
-        angularCoeffs.setkP(loadDouble(json, "headingP"));
-        angularCoeffs.setkD(loadDouble(json, "headingD"));
-        angularCoeffs.setkS(loadDouble(json, "headingS"));
+        angularCoeffs.p(loadDouble(json, "headingP"));
+        angularCoeffs.d(loadDouble(json, "headingD"));
+        angularCoeffs.s(loadDouble(json, "headingS"));
 
-        translationalCoeffs.setkP(loadDouble(json, "translationalP"));
-        translationalCoeffs.setkD(loadDouble(json, "translationalD"));
-        translationalCoeffs.setkS(loadDouble(json, "translationalS"));
+        translationalCoeffs.p(loadDouble(json, "translationalP"));
+        translationalCoeffs.d(loadDouble(json, "translationalD"));
+        translationalCoeffs.s(loadDouble(json, "translationalS"));
 
         translationalKV = loadDouble(json, "translationKV");
         translationalKA = loadDouble(json, "translationKA");
@@ -270,6 +276,32 @@ public class FollowerConstants {
             throw new IllegalStateException("Cannot save non-finite follower constants", e);
         }
         return json;
+    }
+
+    /**
+     * Derives velocity feedback from the identified first-order plant
+     * {@code power = kV * velocity + kA * acceleration}.
+     *
+     * <p>With proportional velocity feedback, the error time constant is
+     * {@code kA / (kV + gain)}. Solving for the configured response time gives
+     * {@code gain = kA / timeConstant - kV}.</p>
+     */
+    public void deriveVelocityFeedbackGains() {
+        velocityFeedbackGain = velocityFeedbackGain(
+                translationalKV, translationalKA,
+                MAX_TRANSLATION_VELOCITY_FEEDBACK_GAIN);
+        angularVelocityFeedbackGain = velocityFeedbackGain(
+                angularKV, angularKA,
+                MAX_ANGULAR_VELOCITY_FEEDBACK_GAIN);
+    }
+
+    static double velocityFeedbackGain(double kV, double kA, double maximum) {
+        if (!Double.isFinite(kV) || !Double.isFinite(kA) ||
+                kV < 0.0 || kA <= 0.0 || maximum <= 0.0) {
+            return 0.0;
+        }
+        return Math.max(0.0, Math.min(maximum,
+                kA / VELOCITY_FEEDBACK_TIME_CONSTANT_SECONDS - kV));
     }
 
     /** The inertia coefficient applies to signed acceleration, including planned braking. */

@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import org.codeblooded.ftcodesim.physics.SeasonField;
-
 /** Adds Apex's active path to FTCodeSim's dedicated AdvantageScope field tabs. */
 public final class ApexAdvantageScopeLayout {
     private static final String TWO_D_TITLE = "2D FTCodeSim";
@@ -15,18 +13,28 @@ public final class ApexAdvantageScopeLayout {
             "RealOutputs/Apex/CurrentPath";
     private static final String ROBOT_LOG_KEY =
             "RealOutputs/Drivetrain/position ftc coords (m)";
+    private static final String MECANUM_ROBOT_LOG_KEY =
+            "RealOutputs/Mecanum/position ftc coords (m)";
+    private static final String LEGACY_TANK_ROBOT_LOG_KEY =
+            "RealOutputs/Tank/position ftc coords (m)";
 
     private ApexAdvantageScopeLayout() { }
 
     /** Updates the layout created by FTCodeSim. Has no effect when AdvantageScope is unavailable. */
-    public static void install() {
-        AscopeViewEditor editor = new AscopeViewEditor(SeasonField.DECODE);
-        if (configure(editor.root, editor.mapper)) {
-            editor.save();
+    public static void install(boolean tank) {
+        AdvantageScopeRunner editor = AdvantageScopeRunner.INSTANCE;
+        if (editor == null) { return; }
+        if (configure(editor.root, editor.mapper, tank)) {
+            editor.saveConfig();
         }
     }
 
     static boolean configure(ObjectNode root, ObjectMapper mapper) {
+        return configure(root, mapper, false);
+    }
+
+    static boolean configure(ObjectNode root, ObjectMapper mapper, boolean tank) {
+        String robotKey = tank ? ROBOT_LOG_KEY : MECANUM_ROBOT_LOG_KEY;
         JsonNode tabsNode = root.path("hubs").path(0).path("state").path("tabs").path("tabs");
         if (!(tabsNode instanceof ArrayNode)) { return false; }
 
@@ -34,7 +42,8 @@ public final class ApexAdvantageScopeLayout {
         ObjectNode threeDimensionalTab = findTab(tabs, 3, THREE_D_TITLE);
         if (threeDimensionalTab == null) { return false; }
 
-        boolean changed = putPathBehindRobot(threeDimensionalTab, mapper);
+        boolean changed = repairRobotSources(threeDimensionalTab, mapper, robotKey);
+        changed |= putPathBehindRobot(threeDimensionalTab, mapper);
         String game = threeDimensionalTab.path("controller").path("game").asText(
                 "FTC:2025-2026 Field");
 
@@ -44,15 +53,23 @@ public final class ApexAdvantageScopeLayout {
             tabs.add(twoDimensionalTab);
             changed = true;
         }
-        changed |= addRobotSource(twoDimensionalTab, mapper);
+        changed |= repairRobotSources(twoDimensionalTab, mapper, robotKey);
         changed |= putPathBehindRobot(twoDimensionalTab, mapper);
 
-        // Normalize any older Apex path source and keep it ordered beneath the live robot.
+        // Match the active implementation: alpha.1 mecanum overrides logging; tank inherits it.
         for (JsonNode tab : tabs) {
             if (tab instanceof ObjectNode && (tab.path("type").asInt(-1) == 2 ||
-                    tab.path("type").asInt(-1) == 3) &&
-                    sourceIndexByLogKey(sources((ObjectNode) tab, mapper), PATH_LOG_KEY) >= 0) {
-                changed |= putPathBehindRobot((ObjectNode) tab, mapper);
+                    tab.path("type").asInt(-1) == 3)) {
+                ObjectNode fieldTab = (ObjectNode) tab;
+                ArrayNode fieldSources = sources(fieldTab, mapper);
+                if (sourceIndexByLogKey(fieldSources, ROBOT_LOG_KEY) >= 0 ||
+                        sourceIndexByLogKey(fieldSources, MECANUM_ROBOT_LOG_KEY) >= 0 ||
+                        sourceIndexByLogKey(fieldSources, LEGACY_TANK_ROBOT_LOG_KEY) >= 0) {
+                    changed |= repairRobotSources(fieldTab, mapper, robotKey);
+                }
+                if (sourceIndexByLogKey(sources(fieldTab, mapper), PATH_LOG_KEY) >= 0) {
+                    changed |= putPathBehindRobot(fieldTab, mapper);
+                }
             }
         }
         return changed;
@@ -86,16 +103,43 @@ public final class ApexAdvantageScopeLayout {
         return tab;
     }
 
-    private static boolean addRobotSource(ObjectNode tab, ObjectMapper mapper) {
+    private static boolean repairRobotSources(ObjectNode tab, ObjectMapper mapper, String robotKey) {
         ArrayNode sources = sources(tab, mapper);
-        if (containsSource(sources, "robot", ROBOT_LOG_KEY)) { return false; }
-
+        boolean changed = false;
+        boolean hasRobot = false;
+        for (int i = 0; i < sources.size(); i++) {
+            JsonNode source = sources.get(i);
+            String key = source.path("logKey").asText();
+            if (!ROBOT_LOG_KEY.equals(key) && !MECANUM_ROBOT_LOG_KEY.equals(key)
+                    && !LEGACY_TANK_ROBOT_LOG_KEY.equals(key)) { continue; }
+            ObjectNode object = (ObjectNode) source;
+            if (!robotKey.equals(key)) {
+                object.put("logKey", robotKey);
+                changed = true;
+            }
+            if ("robot".equals(source.path("type").asText())) {
+                if (hasRobot) {
+                    sources.remove(i--);
+                    changed = true;
+                    continue;
+                }
+                hasRobot = true;
+                if (!source.path("visible").asBoolean()) {
+                    object.put("visible", true);
+                    changed = true;
+                }
+            }
+        }
+        if (hasRobot) { return changed; }
         ObjectNode options = mapper.createObjectNode();
-        options.put("bumpers", "");
-        sources.add(source(mapper, "robot", ROBOT_LOG_KEY, "Pose2d", options));
+        if (tab.path("type").asInt() == 3) {
+            options.put("model", "CodeBloodedDecode");
+        } else {
+            options.put("bumpers", "");
+        }
+        sources.add(source(mapper, "robot", robotKey, "Pose2d", options));
         return true;
     }
-
     /** Earlier sources draw over later ones, so keep sampled robot boxes below the live robot. */
     private static boolean putPathBehindRobot(ObjectNode tab, ObjectMapper mapper) {
         ArrayNode sources = sources(tab, mapper);

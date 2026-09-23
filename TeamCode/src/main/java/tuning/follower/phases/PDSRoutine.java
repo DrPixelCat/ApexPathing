@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.util.Range;
 
 import controllers.PDSController;
 import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import geometry.Angle;
 
 /** Non-blocking coordinate-descent tuner shared by linear and angular PDS controllers. */
@@ -66,13 +67,19 @@ public final class PDSRoutine {
     private enum Evaluation { BASELINE, PLUS, MINUS }
 
     private static final double COMMAND_LIMIT = 0.85;
-    private static final double TRIAL_TIMEOUT = 4.0;
-    private static final double SETTLED_TIME = 0.25;
-    private static final double BETWEEN_TRIALS = 0.25;
+    /** Model seeds target 1.0-1.25 s settling; 2.5 s is ample evidence of a poor candidate. */
+    private static final double TRIAL_TIMEOUT = 2.5;
+    /** A short consecutive window rejects target crossings without making every trial feel idle. */
+    private static final double SETTLED_TIME = 0.15;
+    private static final double BETWEEN_TRIALS = 0.15;
+    /** After this delay, tolerate low-level velocity-estimator noise while re-arming. */
+    private static final double RELAXED_REARM_TIME = 0.60;
+    private static final double RELAXED_REARM_VELOCITY_MULTIPLIER = 2.0;
     private static final double MAX_VALID_DT = 0.08;
     private static final int TRIALS_PER_CANDIDATE = 2;
-    private static final int MAX_COORDINATE_STEPS = 8;
-
+    private static final int MAX_COORDINATE_STEPS = 12;
+    private static final double MINIMUM_RELATIVE_IMPROVEMENT = 0.02;
+    private static final double MINIMUM_ABSOLUTE_IMPROVEMENT = 0.05;
     private final Config config;
     private final PDSController controller;
     private final ElapsedTime clock = new ElapsedTime();
@@ -105,6 +112,50 @@ public final class PDSRoutine {
         deltas[1] = Math.max(gains[1] * 0.35, (config.maxD - config.minD) * 0.025);
     }
 
+    /**
+     * Creates a tuner whose initial gains come from the characterized first-order plant.
+     *
+     * <p>For {@code command = kV * velocity + kA * acceleration}, PD position feedback gives
+     * {@code kA * error'' + (kV + kD) * error' + kP * error = 0}. Matching that equation to a
+     * second-order response yields a model-based seed. The seed is deliberately only a starting
+     * point: the measured Twiddle trials still select the saved gains.</p>
+     */
+    public PDSRoutine(Config config, double kV, double kA, double settlingTime,
+                      double dampingRatio, double staticPower) {
+        this(config, modelBasedSeed(config, kV, kA, settlingTime, dampingRatio), staticPower);
+    }
+
+    private PDSRoutine(Config config, double[] seed, double staticPower) {
+        this(config, seed[0], seed[1], staticPower);
+    }
+
+    /** Returns a bounded PD seed using the conventional two-percent settling-time model. */
+    static double[] modelBasedSeed(Config config, double kV, double kA,
+                                   double settlingTime, double dampingRatio) {
+        if (config == null || !Double.isFinite(kV) || kV <= 0.0 ||
+                !Double.isFinite(kA) || kA < 0.0 ||
+                !positive(settlingTime) || !positive(dampingRatio)) {
+            throw new IllegalArgumentException("Invalid characterized plant for PDS tuning");
+        }
+        double naturalFrequency = 4.0 / (dampingRatio * settlingTime);
+        double d = 2.0 * dampingRatio * kA * naturalFrequency - kV;
+        double p;
+        if (d >= 0.0) {
+            p = kA * naturalFrequency * naturalFrequency;
+        } else {
+            // The plant's own velocity term already provides more damping than requested, and a
+            // negative derivative gain would be destabilizing. With D=0, place the dominant real
+            // pole at the requested settling rate instead.
+            double poleRate = 4.0 / settlingTime;
+            p = poleRate * (kV - kA * poleRate);
+            d = 0.0;
+        }
+        return new double[] {
+                Range.clip(Math.max(0.0, p), config.minP, config.maxP),
+                Range.clip(d, config.minD, config.maxD)
+        };
+    }
+
     /** Starts with a paired baseline response. */
     public void start() {
         applyGains();
@@ -114,6 +165,7 @@ public final class PDSRoutine {
         candidateTrials = coordinateSteps = totalTrials = coordinate = 0;
         candidateCost = 0.0;
         bestCost = Double.POSITIVE_INFINITY;
+        System.arraycopy(gains, 0, bestGains, 0, gains.length);
         nextDirection = 1.0;
         state = PDSState.SETTLING;
         status = "Measuring baseline";
@@ -126,10 +178,10 @@ public final class PDSRoutine {
     /** Returns the current state. */
     public PDSState getState() { return state; }
 
-    /** Returns a copy of the active coefficients. */
-    public PDSCoefficients getCoefficients() {
+    /** Returns active PD/static gains in the follower's current coefficient format. */
+    public Coefficients getCoefficients() {
         PDSCoefficients c = controller.getCoefficients();
-        return new PDSCoefficients(c.kP, c.kD, c.kS);
+        return new Coefficients().p(c.kP).d(c.kD).s(c.kS);
     }
 
     /** Returns whether manual verification is available. */
@@ -176,7 +228,13 @@ public final class PDSRoutine {
 
     /** Waits for rest without blocking. */
     private double settle(double velocity) {
-        if (clock.seconds() < BETWEEN_TRIALS || Math.abs(velocity) > config.velocityTolerance) {
+        double waitingTime = clock.seconds();
+        boolean normalRest = Math.abs(velocity) <= config.velocityTolerance;
+        boolean relaxedRest = waitingTime >= RELAXED_REARM_TIME &&
+                Math.abs(velocity) <= config.velocityTolerance *
+                        RELAXED_REARM_VELOCITY_MULTIPLIER;
+        if (waitingTime < BETWEEN_TRIALS || (!normalRest && !relaxedRest)) {
+            status = "Waiting for robot to stop";
             return 0.0;
         }
         direction = nextDirection;
@@ -248,13 +306,15 @@ public final class PDSRoutine {
             status = "Test complete; X repeats, A accepts";
             return;
         }
-        candidateCost += cost;
+        // Each candidate is tested once in each direction. Selecting on the worse response avoids
+        // hiding drivetrain asymmetry in an average while remaining deterministic and inexpensive.
+        candidateCost = Math.max(candidateCost, cost);
         if (++candidateTrials < TRIALS_PER_CANDIDATE) {
             state = PDSState.SETTLING;
             clock.reset();
             return;
         }
-        evaluate(candidateCost / TRIALS_PER_CANDIDATE);
+        evaluate(candidateCost);
     }
 
     // endregion
@@ -266,16 +326,17 @@ public final class PDSRoutine {
             bestCost = cost;
             System.arraycopy(gains, 0, bestGains, 0, gains.length);
             evaluation = Evaluation.PLUS;
-            gains[coordinate] = clip(coordinate, gains[coordinate] + deltas[coordinate]);
-        } else if (evaluation == Evaluation.PLUS && cost < bestCost) {
+            propose(1.0);
+        } else if (evaluation == Evaluation.PLUS && meaningfulImprovement(cost)) {
             bestCost = cost;
             System.arraycopy(gains, 0, bestGains, 0, gains.length);
             deltas[coordinate] *= 1.15;
             nextCoordinate();
         } else if (evaluation == Evaluation.PLUS) {
-            gains[coordinate] = clip(coordinate, bestGains[coordinate] - deltas[coordinate]);
+            System.arraycopy(bestGains, 0, gains, 0, gains.length);
+            propose(-1.0);
             evaluation = Evaluation.MINUS;
-        } else if (cost < bestCost) {
+        } else if (meaningfulImprovement(cost)) {
             bestCost = cost;
             System.arraycopy(gains, 0, bestGains, 0, gains.length);
             deltas[coordinate] *= 1.15;
@@ -289,6 +350,8 @@ public final class PDSRoutine {
         candidateCost = 0.0;
         candidateTrials = 0;
         if (coordinateSteps >= MAX_COORDINATE_STEPS || normalizedDelta() < 0.025) {
+            System.arraycopy(bestGains, 0, gains, 0, gains.length);
+            applyGains();
             state = PDSState.TEST_READY;
             status = "Twiddle complete; X tests, A accepts";
         } else {
@@ -302,10 +365,22 @@ public final class PDSRoutine {
         coordinate = (coordinate + 1) % 2;
         coordinateSteps++;
         evaluation = Evaluation.PLUS;
-        // Never leave an unevaluated +delta applied when this completed coordinate ends tuning.
+        System.arraycopy(bestGains, 0, gains, 0, gains.length);
+        // Never leave an unevaluated candidate applied when this completed coordinate ends tuning.
         if (coordinateSteps < MAX_COORDINATE_STEPS && normalizedDelta() >= 0.025) {
-            gains[coordinate] = clip(coordinate, gains[coordinate] + deltas[coordinate]);
+            propose(1.0);
         }
+    }
+
+    private void propose(double direction) {
+        gains[coordinate] = clip(coordinate,
+                bestGains[coordinate] + direction * deltas[coordinate]);
+    }
+
+    private boolean meaningfulImprovement(double cost) {
+        double margin = Math.max(MINIMUM_ABSOLUTE_IMPROVEMENT,
+                MINIMUM_RELATIVE_IMPROVEMENT * bestCost);
+        return Double.isFinite(cost) && cost < bestCost - margin;
     }
 
     /** Applies the current candidate. */

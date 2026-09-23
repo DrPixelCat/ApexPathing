@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import java.nio.file.Files;
@@ -18,11 +18,11 @@ import java.util.List;
 import core.ApexStorage;
 import core.Follower;
 import core.LocalizationConstants;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import tuning.follower.phases.FeedforwardTuner;
 import tuning.follower.TunerContext;
 
-/** Exercises ramp regression and acceptance through the real tuner UI. */
+/** Exercises four-test SysId identification and acceptance through the real tuner UI. */
 public class FeedforwardPhaseSimulationTest {
     private java.lang.reflect.Field singleton;
     private Object previousConstants;
@@ -67,16 +67,25 @@ public class FeedforwardPhaseSimulationTest {
     }
 
     @Test(timeout = 150000)
-    public void automaticFeedforwardRampFitsBothAxes() throws Exception {
+    public void linearMecanumSysIdFitsBothAxes() throws Exception {
         runRamp(false);
     }
 
     @Test(timeout = 150000)
-    public void tankFeedforwardRampRecoversLowFrictionModel() throws Exception {
+    public void linearMecanumSysIdIdentifiesDifferentMovingFriction() throws Exception {
+        runRamp(false, .03);
+    }
+
+    @Test(timeout = 150000)
+    public void tankSysIdRecoversLowFrictionModel() throws Exception {
         runRamp(true);
     }
 
     private void runRamp(boolean tank) throws Exception {
+        runRamp(tank, .06);
+    }
+
+    private void runRamp(boolean tank, double expectedKS) throws Exception {
         String previousDirectory = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
         System.setProperty(ApexStorage.DIRECTORY_PROPERTY,
                 Files.createTempDirectory("apex-feedforward-phase-").toString());
@@ -84,6 +93,17 @@ public class FeedforwardPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = tank ? ApexSimulation.createTankHardware()
                     : ApexSimulation.createHardware();
+            if (!tank) {
+                // This identification fixture follows the model under test. The default mecanum
+                // simulation deliberately retains duty-dependent drag and is unchanged.
+                double kv = .94 / 75, ka = .94 / 150, radius = 1.889765;
+                for (String name : hardware.drivetrain.motorNames) {
+                    SimMotor motor = (SimMotor) hardware.hardwareMap.get(DcMotorEx.class, name);
+                    double[] coefficients = {1 / (ka * radius * 12), 0, kv / ka, expectedKS / (ka * radius)};
+                    motor.config.modelCoefficients = coefficients;
+                    motor.config.zeroPowerBrakeCoefficients = coefficients.clone();
+                }
+            }
             List<String> frames = Collections.synchronizedList(new ArrayList<>());
             ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
             telemetry.setMsTransmissionInterval(0);
@@ -104,20 +124,23 @@ public class FeedforwardPhaseSimulationTest {
                     context.constants.forwardAccelLimitIn = 148;
                     context.constants.angularVelLimitRad = 7;
                     context.constants.angularAccelLimitRad = 14.5;
-                    context.constants.translationalCoeffs = new PDSCoefficients(.20, .04, .24);
-                    context.constants.angularCoeffs = new PDSCoefficients(2.40, .45, .24);
+                    context.constants.translationalCoeffs =
+                            new Coefficients().p(.20).d(.04).s(.24);
+                    context.constants.angularCoeffs =
+                            new Coefficients().p(2.40).d(.45).s(.24);
                     context.getFollower().setDriveCoefficients(context.constants.translationalCoeffs);
                     context.getFollower().setHeadingCoefficients(context.constants.angularCoeffs);
                     if (tank) {
-                        // This phase identifies kS/kV only; provide the independently known
-                        // inertia and velocity-loop gains before testing its resulting fit.
+                        // Seed old gains to verify that SysId replaces the selected axis.
                         context.getFollower().setFeedforwardGains(0.94 / 75, 0.94 / 150,
                                 7 * 0.94 / 75, 7 * 0.94 / 150);
                         context.getFollower().setVelocityFeedback(0.02, 0.15);
                     }
                     waitForStart();
                     tunedContext.set(context);
-                    new FeedforwardTuner(context).run(this);
+                    if (new FeedforwardTuner(context, FeedforwardTuner.Axis.DRIVE).run(this)) {
+                        new FeedforwardTuner(context, FeedforwardTuner.Axis.HEADING).run(this);
+                    }
 
                 }
             };
@@ -141,7 +164,8 @@ public class FeedforwardPhaseSimulationTest {
                     remaining -= dt;
                 }
                 frame = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-                if (frame.contains("did not pass validation") || frame.contains("phase complete with results")) {
+                if (frame.contains("did not pass validation") || frame.contains("HEADING Feedforward SysId phase complete with results")
+                        || frame.contains("Fit rejected")) {
                     break;
                 }
                 if (frame.contains("Press A") && now - lastPress > 250_000_000L) {
@@ -153,6 +177,8 @@ public class FeedforwardPhaseSimulationTest {
             }
             System.out.println(frame);
             TunerContext context = tunedContext.get();
+            assertTrue("Tuner failed to converge: " + frame,
+                    frame.contains("HEADING Feedforward SysId phase complete with results"));
             if (tank) {
                 org.junit.Assert.assertEquals(0.06,
                         context.constants.translationalFeedforwardKS, 0.005);
@@ -162,9 +188,14 @@ public class FeedforwardPhaseSimulationTest {
                         context.constants.translationalKV, 0.0005);
                 org.junit.Assert.assertEquals(7 * 0.94 / 75,
                         context.constants.angularKV, 0.003);
+            } else {
+                org.junit.Assert.assertEquals("Drive moving friction", expectedKS,
+                        context.constants.translationalFeedforwardKS, 0.005);
+                org.junit.Assert.assertEquals("Turn moving friction", expectedKS,
+                        context.constants.angularFeedforwardKS, 0.005);
             }
-            assertTrue("Tuner failed to converge: " + frame,
-                    frame.contains("phase complete with results") && frame.contains("kS/kV accepted"));
+            org.junit.Assert.assertEquals("Drive inertia", .94 / 150, context.constants.translationalKA, .001);
+            org.junit.Assert.assertTrue("Heading inertia is identified", context.constants.angularKA > 0);
             if (tank) {
                 SimLinearOpModeBridge.stop(session);
                 session = null;

@@ -14,14 +14,13 @@ import geometry.Dist;
 import geometry.Pose;
 import geometry.Vector;
 import tuning.follower.phases.CentripetalPhase;
-import tuning.follower.phases.AccelerationFeedforwardPhase;
+
 import tuning.follower.phases.DrivePhase;
 import tuning.follower.phases.FeedforwardTuner;
 import tuning.follower.phases.HeadingPhase;
 import tuning.follower.phases.LimitsPhase;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
-import tuning.follower.phases.VelocityFeedbackPhase;
 
 /**
  * This OpMode is used to tune the Apex Pathing Follower. It allows the user to select a tuning
@@ -40,10 +39,10 @@ public class FollowerTuner extends LinearOpMode {
      * Tuners are ran in the order of the enum ordinals
      */
     enum Phase {
-        FEEDFORWARD(FeedforwardTuner::new, constants ->
-                constants.angularKV > 0.0 && constants.translationalKV > 0.0 &&
-                        constants.angularFeedforwardKS >= 0.0 &&
-                        constants.translationalFeedforwardKS >= 0.0),
+        DRIVE_FEEDFORWARD(context -> new FeedforwardTuner(context, FeedforwardTuner.Axis.DRIVE), constants ->
+                validFeedforward(constants.translationalFeedforwardKS, constants.translationalKV, constants.translationalKA)),
+        HEADING_FEEDFORWARD(context -> new FeedforwardTuner(context, FeedforwardTuner.Axis.HEADING), constants ->
+                validFeedforward(constants.angularFeedforwardKS, constants.angularKV, constants.angularKA)),
         HEADING(HeadingPhase::new, constants ->
                 constants.angularCoeffs.kP != 0.0),
         DRIVE(DrivePhase::new, constants ->
@@ -55,14 +54,8 @@ public class FollowerTuner extends LinearOpMode {
                         constants.strafeAccelLimitIn != 0.0)) &&
                         constants.angularVelLimitRad != 0.0 &&
                         constants.angularAccelLimitRad != 0.0),
-        ACCELERATION_FEEDFORWARD(AccelerationFeedforwardPhase::new, constants ->
-                constants.translationalKA > 0.0 && constants.angularKA > 0.0),
         CENTRIPETAL(CentripetalPhase::new, constants ->
-                constants.kCentripetal != 0.0),
-        VELOCITY_FEEDBACK(VelocityFeedbackPhase::new, constants ->
-                velocityFeedbackTuned(
-                        constants.velocityFeedbackGain,
-                        constants.angularVelocityFeedbackGain));
+                constants.kCentripetal != 0.0);
 
         final Function<TunerContext, TuningPhase> phaseFactory;
         final Predicate<FollowerConstants> isTunedPredicate;
@@ -282,13 +275,14 @@ public class FollowerTuner extends LinearOpMode {
         return nextOrdinal < phaseAmount ? phases[nextOrdinal] : null;
     }
 
-    static boolean velocityFeedbackTuned(double translationGain, double angularGain) {
-        return translationGain != 0.0 && angularGain != 0.0;
+    private static boolean validFeedforward(double ks, double kv, double ka) {
+        return Double.isFinite(ks) && Double.isFinite(kv) && Double.isFinite(ka)
+                && ks >= 0 && kv > 0 && ka >= 0;
     }
 
     private static String phaseDisplayName(Phase phase) {
-        if (phase == Phase.FEEDFORWARD) { return "FEEDFORWARD kS / kV RAMP"; }
-        if (phase == Phase.ACCELERATION_FEEDFORWARD) { return "ACCELERATION FEEDFORWARD kA"; }
+        if (phase == Phase.DRIVE_FEEDFORWARD) { return "DRIVE FEEDFORWARD SYSID"; }
+        if (phase == Phase.HEADING_FEEDFORWARD) { return "HEADING FEEDFORWARD SYSID"; }
         return phase.name().replace('_', ' ');
     }
 

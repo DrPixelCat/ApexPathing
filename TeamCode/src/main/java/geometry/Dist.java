@@ -10,17 +10,19 @@ import androidx.annotation.NonNull;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class Dist {
-    private final double inches;
+    private final Scalar inches;
 
     // region Constructors and factory methods
 
-    private Dist(double inches) { this.inches = inches; }
+    private Dist(Scalar inches) { this.inches = inches; }
 
     /** Creates a Distance from a specific unit. */
-    public static Dist of(double value, DistUnit unit) { return new Dist(unit.toInches(value)); }
+    public static Dist of(double value, DistUnit unit) {
+        return new Dist(Scalar.of(unit.toInches(value)));
+    }
 
     /** @return the distance value in the requested unit. */
-    public double get(DistUnit unit) { return unit.fromInches(this.inches); }
+    public double get(DistUnit unit) { return unit.fromInches(this.inches.get()); }
 
     /** Creates a Distance from inches. */
     public static Dist fromIn(double inches) { return of(inches, DistUnit.IN); }
@@ -38,13 +40,13 @@ public class Dist {
     public static Dist fromM(double meters) { return of(meters, DistUnit.M); }
 
     /** Creates a Distance with a value of 0 inches. */
-    public static Dist zero() { return new Dist(0); }
+    public static Dist zero() { return new Dist(Scalar.zero()); }
 
     // endregion
     // region Getters
 
     /** @return the distance in inches. */
-    public double getIn() { return this.inches; }
+    public double getIn() { return this.inches.get(); }
 
     /** @return the distance in feet. */
     public double getFt() { return get(DistUnit.FT); }
@@ -62,42 +64,48 @@ public class Dist {
     // region Arithmetic operations
 
     /** @return a new Distance that is the sum of this Distance and another one. */
-    public Dist plus(Dist other) { return of(this.inches + other.inches, DistUnit.IN); }
+    public Dist plus(Dist other) { return new Dist(this.inches.plus(other.inches)); }
 
     /** @return a new Distance that is the difference of this Distance and another one. */
-    public Dist minus(Dist other) { return of(this.inches - other.inches, DistUnit.IN); }
+    public Dist minus(Dist other) { return new Dist(this.inches.minus(other.inches)); }
 
     /** @return a new Distance that is this Distance multiplied by a scalar. */
-    public Dist times(double scalar) { return of(this.inches * scalar, DistUnit.IN); }
+    public Dist times(double scalar) { return new Dist(this.inches.times(scalar)); }
+
+    /** @return a new Distance that is this Distance multiplied by a Scalar. */
+    public Dist times(Scalar scalar) { return new Dist(this.inches.times(scalar)); }
 
     /** @return a new Distance that is this Distance multiplied by another Distance. */
-    public Dist times(Dist other) { return of(this.inches * other.inches, DistUnit.IN); }
+    public Dist times(Dist other) { return new Dist(this.inches.times(other.inches)); }
 
     /** @return a new Distance that is this Distance divided by a scalar. */
-    public Dist div(double scalar) { return of(this.inches / scalar, DistUnit.IN); }
+    public Dist div(double scalar) { return new Dist(this.inches.div(scalar)); }
+
+    /** @return a new Distance that is this Distance divided by a Scalar. */
+    public Dist div(Scalar scalar) { return new Dist(this.inches.div(scalar)); }
 
     /** @return a new Distance that is this Distance divided by another Distance. */
-    public Dist div(Dist other) { return of(this.inches / other.inches, DistUnit.IN); }
+    public Dist div(Dist other) { return new Dist(this.inches.div(other.inches)); }
 
     /** @return a new Distance that is the absolute value of this Distance. */
-    public Dist abs() { return of(Math.abs(this.inches), DistUnit.IN); }
+    public Dist abs() { return new Dist(this.inches.abs()); }
 
     /** @return a new Distance that is the hypotenuse of this Distance and another one. */
-    public Dist hypot(Dist other) { return of(Math.hypot(this.inches, other.inches), DistUnit.IN); }
+    public Dist hypot(Dist other) { return new Dist(this.inches.hypot(other.inches)); }
 
     // endregion
     // region Other operations and methods
 
     /** @return a new Distance that is the mirror of this Distance across the origin. */
-    public Dist mirror() { return new Dist(-this.inches); }
+    public Dist mirror() { return new Dist(this.inches.mirror()); }
 
     /** @return a copy of this Distance */
-    public Dist copy() { return new Dist(this.inches); }
+    public Dist copy() { return new Dist(this.inches.copy()); }
 
     @SuppressLint("DefaultLocale")
     @Override
     @NonNull
-    public String toString() { return String.format("%.3f in", this.inches); }
+    public String toString() { return String.format("%s in", this.inches); }
 
     // endregion
 }

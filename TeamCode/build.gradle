@@ -23,6 +23,12 @@ android {
         minSdk 24
     }
 
+    testOptions.unitTests.all {
+        // Headless alpha.1 physics identifies its missing-viewer exception by call site.
+        // HotSpot otherwise drops that stack trace after repeated updates.
+        jvmArgs '-XX:-OmitStackTraceInFastThrow'
+    }
+
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }
@@ -37,7 +43,5 @@ dependencies {
     testImplementation 'org.json:json:20240303'
     testImplementation 'org.knowm.xchart:xchart:4.0.2'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
-    // The README currently shows org.codeblooded.ftcodesim as the group, but the published
-    // SNAPSHOT-9cb1d09 POM uses org.codeblooded.
-    testImplementation 'org.codeblooded:Simulator:SNAPSHOT-9cb1d09'
+    testImplementation 'org.codeblooded.ftcodesim:ftcodesim:v0.1.0-alpha.1'
 }

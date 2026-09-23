@@ -34,13 +34,4 @@ final class MotionFeedforward {
                 measuredVelocity * Math.signum(targetVelocity));
         return targetAcceleration * scale * scale;
     }
-
-    static double calculate(double targetVelocity, double targetAcceleration,
-                            double kV, double kA, double kS) {
-        double motionSign = motionSign(targetVelocity, targetAcceleration);
-        if (motionSign == 0.0) {
-            return 0.0;
-        }
-        return kV * targetVelocity + kA * targetAcceleration + motionSign * kS;
-    }
 }

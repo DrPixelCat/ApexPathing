@@ -10,7 +10,9 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.IMU;
 
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
+import org.codeblooded.ftcodesim.ascope.SourceType;
+import org.codeblooded.ftcodesim.hardware.drivetrain.SimDrivetrainConfig;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
 import org.codeblooded.ftcodesim.input.Keybinds;
 import org.codeblooded.ftcodesim.input.Keys;
@@ -34,7 +36,7 @@ import core.Follower;
 import core.FollowerConstants;
 import core.FollowerDiagnostics;
 import feedforward.MotionParameters;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import drivetrains.BaseDrivetrain;
 import geometry.Pose;
 import geometry.GeometryFactory;
@@ -94,6 +96,21 @@ public class ApexSimulationTest {
 
         assertNotNull(imu);
         assertNotNull(imu.getRobotOrientationAsQuaternion());
+    }
+
+    @Test
+    public void simulatorDrivetrainsProvideAdvantageScopeRobotModels() throws Exception {
+        assertSame(SourceType.ROBOT_CODE_BLOODED_DECODE,
+                robotModel(ApexSimulation.createHardware()));
+        assertSame(SourceType.ROBOT_TANK,
+                robotModel(ApexSimulation.createTankHardware()));
+    }
+
+    private static SourceType robotModel(ApexSimulation.Hardware hardware) throws Exception {
+        java.lang.reflect.Field configField = hardware.drivetrain.getClass()
+                .getDeclaredField("config");
+        configField.setAccessible(true);
+        return ((SimDrivetrainConfig) configField.get(hardware.drivetrain)).robotModel;
     }
 
     @Test
@@ -491,8 +508,8 @@ public class ApexSimulationTest {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         configureKnownFollowerConstants();
         FollowerConstants constants = FollowerConstants.getInstance();
-        constants.angularCoeffs = new PDSCoefficients(
-                2.189285375109406, 0.2466970500838876, 0.24375);
+        constants.angularCoeffs = new Coefficients()
+                .p(2.189285375109406).d(0.2466970500838876).s(0.24375);
         constants.angularKV = 0.13651719918241684;
         constants.angularKA = 0.05331768750185841;
         constants.angularVelLimitRad = 6.958830137809905;
@@ -573,12 +590,15 @@ public class ApexSimulationTest {
 
     private static void configureKnownFollowerConstants() {
         FollowerConstants constants = FollowerConstants.getInstance();
-        constants.angularCoeffs = new PDSCoefficients(3.130238282794052, 0.44422514288504944, 0.23125);
-        constants.translationalCoeffs = new PDSCoefficients(0.11877226292167513, 0.028499409724280098, 0.23125);
+        constants.angularCoeffs = new Coefficients()
+                .p(3.130238282794052).d(0.62).s(0.23125);
+        constants.translationalCoeffs = new Coefficients()
+                .p(0.11877226292167513).d(0.028499409724280098).s(0.23125);
         constants.translationalKV = 0.0071221715453131966;
         constants.translationalKA = 0.004660337129387047;
-        constants.angularKV = 0.06566610479427347;
-        constants.angularKA = 0.04305298771810743;
+        constants.angularFeedforwardKS = 0.39601;
+        constants.angularKV = 0.08323;
+        constants.angularKA = 0.04165;
         constants.velocityFeedbackGain = 0.05926269306719753;
         constants.angularVelocityFeedbackGain = 1.664473280244918;
         constants.kCentripetal = 0.006116371767550798;

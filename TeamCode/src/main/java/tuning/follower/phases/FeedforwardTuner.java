@@ -2,265 +2,204 @@ package tuning.follower.phases;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
-
 import core.Follower;
 import geometry.AngleUnit;
 import geometry.Pose;
-import geometry.Vector;
 import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
-/** Rising/falling power ramps separate moving friction, velocity drag, and inertial power. */
+/** Independent axis characterization using quasistatic and dynamic tests in both directions. */
 public final class FeedforwardTuner extends TuningPhase {
-    // Tank fits account for inertia explicitly; holonomic drives retain the slow ramp fit.
-    private double rampRate() {
-        return .1;
-    }
-    private static final double MAX_POWER = .9;
-    private static final double MAX_DISTANCE_IN = 96;
-    private static final double MAX_TURN_RAD = 4 * Math.PI;
-    private enum Axis { DRIVE, TURN }
-    private enum Stage { READY, RAMP, REVIEW }
-
-    private Axis axis = Axis.DRIVE;
-    private Stage stage = Stage.READY;
+    public enum Axis { DRIVE, HEADING }
+    private enum Stage { READY, RUNNING, REVIEW }
+    private static final String[] RUNS = {"Quasistatic forward", "Quasistatic reverse", "Dynamic forward", "Dynamic reverse"};
+    private final Axis axis;
     private final ElapsedTime timer = new ElapsedTime();
-    private RampRegression regression;
+    private Stage stage = Stage.READY;
+    private SysIdRegression regression;
+    private SysIdRegression.Fit fit;
+    private int run;
     private Pose startPose;
-    private double lastHeading, turnTravel, previousPower;
-    private double downStarted = Double.NaN, peakPower;
-    private double sampleTime, sampleVelocity, windowStartVelocity, windowTime, velocityIntegral, powerIntegral;
-    private String result = "Not run";
-    private String csvPath = "Not started";
+    private double lastHeading, travel, previousPower, previousTime, previousVelocity;
+    private double windowTime, windowVelocity, windowPower, windowStartVelocity;
+    private String status = "Not run", csvPath = "Not started", graphPath = "Not generated";
     private TuningCsvWriter csv;
-    private RampRegression.Fit driveFit;
 
-    private boolean fitsInertia() { return !context.getFollower().getDrivetrain().isHolonomic(); }
-
-    public FeedforwardTuner(TunerContext context) { super(context); }
-    @Override protected String getPhaseName() { return "Feedforward kS / kV Ramp"; }
+    public FeedforwardTuner(TunerContext context) { this(context, Axis.DRIVE); }
+    public FeedforwardTuner(TunerContext context, Axis axis) { super(context); this.axis = axis; }
+    @Override protected String getPhaseName() { return axis + " Feedforward SysId"; }
     @Override protected boolean manualTuneIsPossible() { return false; }
     @Override protected boolean autoTuneIsPossible() { return true; }
     @Override protected boolean manualTuned() { return false; }
-    @Override protected boolean routineMotionActive() { return stage == Stage.RAMP; }
-
+    @Override protected boolean routineMotionActive() { return stage == Stage.RUNNING; }
     @Override protected void showPreRunInstructions() {
-        context.getTelemetry().addLine(fitsInertia()
-                ? "Forward power rises then falls; a separate turning ramp follows."
-                : "Slow forward ramp, then a separate counterclockwise turning ramp.");
-        context.getTelemetry().addLine("Power rises by " + rampRate()
-                + "/sec, up to 0.9. X stops a ramp for review.");
-        context.getTelemetry().addLine("Clear 96 inches ahead and room to turn. Stop early before obstacles.");
-        context.getTelemetry().addLine(fitsInertia()
-                ? "Fits kS/kV while accounting for inertia; kA is validated in the next phase."
-                : "Fits kS and kV together; kA is not tuned.");
+        context.getTelemetry().addLine("Four tests: slow ramp and power step, each forward and reverse.");
+        context.getTelemetry().addLine("Each test starts from rest with A. X aborts the current test.");
+        context.getTelemetry().addLine(axis == Axis.DRIVE
+                ? "Clear 96 inches in BOTH directions, plus braking room."
+                : "Clear room for two full turns in BOTH directions.");
+        context.getTelemetry().addLine("Fits kS, kV and kA together; saves CSV and desktop PNG results graphs.");
     }
-
     @Override protected void init() {
-        context.getFollower().stop();
-        context.getFollower().enableControllers();
-        axis = Axis.DRIVE;
-        stage = Stage.READY;
-        driveFit = null;
+        context.getFollower().stop(); context.getFollower().enableControllers();
+        regression = new SysIdRegression(); run = 0; stage = Stage.READY;
+        status = "Ready"; fit = null;
     }
-
-    /** Always close evidence and release direct motor control, including Driver Station Stop. */
     @Override public boolean run(LinearOpMode opMode) {
         try { return super.run(opMode); }
-        finally {
-            context.getFollower().stop();
-            context.getFollower().enableControllers();
-            closeCsv();
-        }
+        finally { context.getFollower().stop(); context.getFollower().enableControllers(); closeCsv(); }
     }
-
     @Override protected boolean autoTuned() {
         if (stage == Stage.READY) {
-            context.getTelemetry().addLine(axis == Axis.DRIVE
-                    ? "Next: forward power ramp. Point toward clear space."
-                    : "Next: counterclockwise power ramp. Clear space around the robot.");
-            context.getTelemetry().addLine("Press A to start from rest. Sticks reposition while idle.");
+            context.getTelemetry().addData("Next test", RUNS[run]);
+            context.getTelemetry().addLine("Reposition with sticks. Release sticks. Press A from rest.");
             if (opMode.gamepad1.aWasPressed()) {
-                Pose velocity = context.getFollower().getVelocity();
-                if (velocity.getVec().getMag().getIn() > 1
-                        || Math.abs(velocity.getHeading(AngleUnit.RAD)) > .1) {
-                    result = "Wait until the robot is stationary.";
-                } else { beginRamp(); }
+                Pose v = context.getFollower().getVelocity();
+                if (!Double.isFinite(v.getVec().getMag().getIn()) || !Double.isFinite(v.getHeading(AngleUnit.RAD))
+                        || v.getVec().getMag().getIn() > .5 || Math.abs(v.getHeading(AngleUnit.RAD)) > .05) {
+                    status = "Wait until stationary.";
+                } else { beginTest(); }
             }
-            context.getTelemetry().addData("Status", result);
-            if (axis == Axis.TURN) { context.getFollower().setPose(Pose.zero()); }
-        } else if (stage == Stage.RAMP) {
-            sampleRamp();
-        } else {
-            if (opMode.gamepad1.xWasPressed()) {
-                stage = Stage.READY;
-                result = "Reposition, then start a fresh ramp.";
-            } else {
-                if (opMode.gamepad1.yWasPressed()) { regression.excludeWorst(); }
-                if (opMode.gamepad1.bWasPressed()) { regression.restore(); }
-                RampRegression.Fit fit = regression.fit();
-                showFit(fit);
-                context.getTelemetry().addLine("Y: exclude largest residual. B: restore excluded samples.");
-                context.getTelemetry().addLine("X: discard/retry this ramp.");
-                if (fit.valid(axis == Axis.DRIVE ? 2 : .2)) {
-                    context.getTelemetry().addLine("Press A to accept this fit.");
-                    if (opMode.gamepad1.aWasPressed()) {
-                        writeReviewedSamples();
-                        if (axis == Axis.DRIVE) {
-                            driveFit = fit;
-                            axis = Axis.TURN;
-                            stage = Stage.READY;
-                            result = "Forward fit accepted. Ready for turning ramp.";
-                        } else {
-                            applyFits(driveFit, fit);
-                            result = "Forward and turning kS/kV accepted.";
-                            return true;
-                        }
-                    }
-                } else {
-                    context.getTelemetry().addLine("Fit needs 20 moving samples, a speed range, positive kV,");
-                    context.getTelemetry().addLine("nonnegative kS and R-squared >= 0.90. Retry or review outliers.");
-                    if (fitsInertia()) {
-                        context.getTelemetry().addLine("Tank fits also need both accelerating and braking samples.");
-                    }
-                }
-            }
+        } else if (stage == Stage.RUNNING) { sample(); }
+        else {
+            reportResults();
+            context.getTelemetry().addLine("X: discard all four tests and retry.");
+            if (opMode.gamepad1.xWasPressed()) { init(); }
+            else if (fit.valid) {
+                context.getTelemetry().addLine("Press A to accept this axis's kS, kV and kA.");
+                if (opMode.gamepad1.aWasPressed()) { applyFit(); return true; }
+            } else { context.getTelemetry().addLine("Fit rejected: need all four tests, speed range, nonnegative gains and R² >= 0.90."); }
         }
+        context.getTelemetry().addData("Status", status);
         context.getTelemetry().update();
         return false;
     }
-
-    private void beginRamp() {
-        Follower follower = context.getFollower();
-        follower.stop();
-        follower.disableControllers();
-        startPose = follower.getPose();
-        lastHeading = startPose.getHeading().getRad();
-        turnTravel = previousPower = 0;
-        downStarted = Double.NaN;
-        sampleTime = sampleVelocity = windowStartVelocity = windowTime = velocityIntegral = powerIntegral = 0;
-        regression = new RampRegression(axis == Axis.DRIVE ? 1 : .1);
-        closeCsv();
-        csv = TuningCsvWriter.open("feedforward_ramp_" + axis.name().toLowerCase(java.util.Locale.US),
-                "record", "axis", "time_s", "velocity", "applied_power", "included", "kS", "kV", "r_squared", "acceleration");
-        csvPath = csv.getPath();
-        timer.reset();
-        stage = Stage.RAMP;
-    }
-
-    private void sampleRamp() {
-        Follower follower = context.getFollower();
-        Pose pose = follower.getPose();
-        Pose velocity = fitsInertia() ? follower.getRawVelocity() : follower.getVelocity();
-        double measured = axis == Axis.TURN ? velocity.getHeading(AngleUnit.RAD)
-                : velocity.getVec().rotate(pose.getHeading().times(-1)).getX().getIn();
-        double time = timer.seconds();
-        // The measurement was produced by the PREVIOUS command, not the command we are about to send.
-        double dt = time - sampleTime;
-        if (!fitsInertia()) {
-            boolean included = regression.add(measured, previousPower);
-            csv.writeRow("raw", axis, time, measured, previousPower, included, "", "", "", "");
-        } else if (Double.isFinite(measured) && dt > 0 && dt <= .15) {
-            windowTime += dt;
-            velocityIntegral += .5 * (sampleVelocity + measured) * dt;
-            powerIntegral += previousPower * dt;
-            if (windowTime >= .10) {
-                // Integrate the motor equation over a window instead of differentiating
-                // individual noisy samples. The power belongs to the preceding interval.
-                double averageVelocity = velocityIntegral/windowTime;
-                double averagePower = powerIntegral/windowTime;
-                double acceleration = (measured-windowStartVelocity)/windowTime;
-                boolean included = regression.add(averageVelocity, averagePower, acceleration);
-                csv.writeRow("raw", axis, time, averageVelocity, averagePower, included,
-                        "", "", "", acceleration);
-                windowStartVelocity = measured;
-                windowTime = velocityIntegral = powerIntegral = 0;
-            }
-        } else {
-            windowStartVelocity = measured;
-            windowTime = velocityIntegral = powerIntegral = 0;
+    private void beginTest() {
+        Follower f = context.getFollower();
+        f.stop(); f.disableControllers(); startPose = f.getPose();
+        lastHeading = startPose.getHeading().getRad(); travel = previousPower = previousTime = 0;
+        previousVelocity = measuredVelocity();
+        resetWindow();
+        if (csv == null) {
+            csv = TuningCsvWriter.openBuffered("sysid_" + axis.name().toLowerCase(java.util.Locale.US),
+                    "record", "test", "time_s", "velocity", "acceleration", "applied_power", "included");
+            csvPath = csv.getPath();
         }
-        sampleTime = time;
-        sampleVelocity = measured;
-        double heading = pose.getHeading().getRad();
-        turnTravel += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
+        timer.reset(); stage = Stage.RUNNING;
+    }
+    private double measuredVelocity() {
+        Follower f = context.getFollower();
+        return axis == Axis.HEADING ? f.getVelocity().getHeading(AngleUnit.RAD)
+                : f.getVelocity().getVec().rotate(f.getPose().getHeading().times(-1)).getX().getIn();
+    }
+    private void resetWindow() {
+        windowTime = windowVelocity = windowPower = 0; windowStartVelocity = previousVelocity;
+    }
+    private void sample() {
+        Follower f = context.getFollower();
+        double time = timer.seconds(), v = measuredVelocity(), dt = time - previousTime;
+        double heading = f.getPose().getHeading().getRad();
+        travel += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
         lastHeading = heading;
-        double distance = pose.getVec().minus(startPose.getVec()).getMag().getIn();
-        boolean travelLimit = axis == Axis.DRIVE ? distance >= MAX_DISTANCE_IN : turnTravel >= MAX_TURN_RAD;
-        if (!Double.isFinite(measured) || !Double.isFinite(distance) || !Double.isFinite(turnTravel)) {
-            stopRamp("Stopped: invalid localization measurement. Check localization and retry.");
-        } else if (opMode.gamepad1.xWasPressed() || travelLimit
-                || (!fitsInertia() && time >= MAX_POWER/rampRate())
-                || (!Double.isNaN(downStarted) && time-downStarted >= peakPower/rampRate())) {
-            stopRamp(travelLimit ? "Stopped at travel limit; review collected data." : "Ramp stopped; review collected data.");
-        } else {
-            // Reserve most of the travel allowance for the falling-power half.
-            if (fitsInertia() && Double.isNaN(downStarted) && (rampRate()*time >= MAX_POWER
-                    || (axis == Axis.DRIVE ? distance >= MAX_DISTANCE_IN/3
-                            : turnTravel >= MAX_TURN_RAD/3))) {
-                downStarted = time;
-                peakPower = previousPower;
+        double distance = f.getPose().getVec().minus(startPose.getVec()).getMag().getIn();
+        if (!Double.isFinite(v) || !Double.isFinite(distance) || !Double.isFinite(travel)
+                || !Double.isFinite(previousPower)) { abort("Invalid measurement; current test discarded."); return; }
+        // Integrate the PRECEDING delivered command over its measurement interval. Windows
+        // reduce differentiation noise without mixing stationary friction into the moving model.
+        double threshold = axis == Axis.DRIVE ? .5 : .05;
+        boolean moving = Math.abs(v) >= threshold && Math.abs(previousVelocity) >= threshold
+                && Math.signum(v) == Math.signum(previousVelocity) && dt > 0 && dt <= .1;
+        csv.writeRow("raw", RUNS[run], time, v, "", previousPower, moving);
+        if (moving) {
+            windowTime += dt; windowVelocity += .5 * (v + previousVelocity) * dt;
+            windowPower += previousPower * dt;
+            if (windowTime >= .1) {
+                double meanV = windowVelocity / windowTime, a = (v - windowStartVelocity) / windowTime;
+                double p = windowPower / windowTime;
+                boolean included = regression.add(run, time, meanV, a, p);
+                csv.writeRow("window", RUNS[run], time, meanV, a, p, included);
+                previousVelocity = v; resetWindow();
             }
-            previousPower = Double.isNaN(downStarted) ? Math.min(MAX_POWER, rampRate()*time)
-                    : Math.max(0, peakPower-rampRate()*(time-downStarted));
-            follower.getDrivetrain().moveWithVectors(axis == Axis.DRIVE ? previousPower : 0,
-                    0, axis == Axis.TURN ? previousPower : 0);
-            // Fit the delivered command, including drivetrain power limits and write tolerance.
-            previousPower = Math.max(Math.abs(follower.getDrivetrain().getLastFlPower()),
-                    Math.abs(follower.getDrivetrain().getLastFrPower()));
-            context.getTelemetry().addData("Ramp", axis);
-            context.getTelemetry().addData("Power", number(previousPower));
-            context.getTelemetry().addData("Measured velocity", number(measured));
-            context.getTelemetry().addData("Moving samples", regression.samples.size());
-            context.getTelemetry().addLine("X: stop now and review. Red STOP ends the OpMode.");
+        } else { previousVelocity = v; resetWindow(); }
+        previousVelocity = v; previousTime = time;
+        if (opMode.gamepad1.xWasPressed()) { abort("Aborted; reposition and retry current test."); return; }
+        boolean limit = axis == Axis.DRIVE ? distance >= 96 : travel >= 4 * Math.PI;
+        if (limit || time >= (run < 2 ? 9 : 2)) {
+            stopMotion(); csv.flush();
+            status = limit ? "Travel limit reached." : "Test complete.";
+            if (++run == 4) {
+                closeCsv(); fit = regression.fit(axis == Axis.DRIVE ? 2 : .2);
+                writeFitCsv();
+                graphPath = renderDesktopGraphs();
+                stage = Stage.REVIEW;
+            } else { stage = Stage.READY; }
+            return;
         }
+        double command = (run % 2 == 0 ? 1 : -1) * (run < 2 ? Math.min(.9, .1 * time) : .5);
+        f.getDrivetrain().moveWithVectors(axis == Axis.DRIVE ? command : 0, 0,
+                axis == Axis.HEADING ? command : 0);
+        double delivered = Math.max(Math.max(Math.abs(f.getDrivetrain().getLastFlPower()), Math.abs(f.getDrivetrain().getLastFrPower())),
+                Math.max(Math.abs(f.getDrivetrain().getLastBlPower()), Math.abs(f.getDrivetrain().getLastBrPower())));
+        previousPower = Math.copySign(delivered, command);
+        context.getTelemetry().addData("SysId test", RUNS[run]);
+        context.getTelemetry().addData("Power / velocity", number(previousPower) + " / " + number(v));
+        context.getTelemetry().addLine("X: abort test. Red STOP: end tuning.");
     }
-
-    private void stopRamp(String message) {
-        context.getFollower().stop();
-        context.getFollower().enableControllers();
-        stage = Stage.REVIEW;
-        result = message;
-        closeCsv();
+    private void abort(String message) {
+        stopMotion();
+        regression.samples.removeIf(s -> s.run == run);
+        csv.writeRow("aborted", RUNS[run]); csv.flush(); stage = Stage.READY; status = message;
     }
-
-    private void showFit(RampRegression.Fit fit) {
-        context.getTelemetry().addData("Review", axis + " - " + result);
-        context.getTelemetry().addData("kS / kV", number(fit.kS) + " / " + number(fit.kV));
-        context.getTelemetry().addData("R-squared / included", number(fit.rSquared) + " / " + fit.count);
-        context.getTelemetry().addData("Velocity span", number(fit.span));
-        context.getTelemetry().addData("Units", axis == Axis.DRIVE ? "power, inches/sec" : "power, radians/sec");
-        context.getTelemetry().addData("CSV", csvPath);
+    private void stopMotion() { context.getFollower().stop(); context.getFollower().enableControllers(); }
+    private void closeCsv() {
+        if (csv != null) { csv.close(); if (csv.getError() != null) { status = "CSV error: " + csv.getError(); } csv = null; }
     }
-
-    private void writeReviewedSamples() {
-        TuningCsvWriter reviewed = TuningCsvWriter.open("feedforward_fit_" + axis.name().toLowerCase(java.util.Locale.US),
-                "velocity", "power", "included", "kS", "kV", "r_squared", "acceleration", "inertia_estimate");
-        RampRegression.Fit fit = regression.fit();
-        for (RampRegression.Sample s : regression.samples) {
-            reviewed.writeRow(s.velocity, s.power, !s.excluded, fit.kS, fit.kV, fit.rSquared,
-                    s.acceleration, fit.kA);
+    private void writeFitCsv() {
+        TuningCsvWriter reviewed = TuningCsvWriter.open("sysid_fit_" + axis.name().toLowerCase(java.util.Locale.US),
+                "test", "time_s", "velocity", "acceleration", "applied_power", "fitted_power", "residual", "kS", "kV", "kA", "r_squared", "valid");
+        for (SysIdRegression.Sample s : regression.samples) {
+            double predicted = fit.predict(s);
+            reviewed.writeRow(s.run, s.time, s.velocity, s.acceleration, s.power, predicted,
+                    s.power - predicted, fit.kS, fit.kV, fit.kA, fit.rSquared, fit.valid);
         }
         reviewed.close();
+        csvPath = reviewed.getError() == null ? reviewed.getPath() : "CSV error: " + reviewed.getError();
     }
-
-    private void applyFits(RampRegression.Fit drive, RampRegression.Fit turn) {
-        context.constants.translationalFeedforwardKS = drive.kS;
-        context.constants.angularFeedforwardKS = turn.kS;
-        context.getFollower().setFeedforwardGains(drive.kV, context.constants.translationalKA,
-                turn.kV, context.constants.angularKA);
+    private String renderDesktopGraphs() {
+        // XChart/AWT remain on the desktop test classpath, never in the Android APK.
+        try {
+            Class<?> renderer = Class.forName("tuning.follower.phases.SysIdGraphs");
+            return (String) renderer.getMethod("render", String.class, String.class).invoke(null, csvPath, axis.name());
+        } catch (ClassNotFoundException e) {
+            return "Run desktop SysIdGraphs on the saved fit CSV.";
+        } catch (ReflectiveOperationException e) {
+            return "Graph error: " + e.getMessage();
+        }
     }
-
-    private void closeCsv() { if (csv != null) { csv.close(); csv = null; } }
-
+    private void applyFit() {
+        if (axis == Axis.DRIVE) {
+            context.constants.translationalFeedforwardKS = fit.kS;
+            context.constants.translationalKV = fit.kV; context.constants.translationalKA = fit.kA;
+        } else {
+            context.constants.angularFeedforwardKS = fit.kS;
+            context.constants.angularKV = fit.kV; context.constants.angularKA = fit.kA;
+        }
+        context.getFollower().setFeedforwardGains(context.constants.translationalKV, context.constants.translationalKA,
+                context.constants.angularKV, context.constants.angularKA);
+        double previousDriveFeedback = context.constants.velocityFeedbackGain;
+        double previousHeadingFeedback = context.constants.angularVelocityFeedbackGain;
+        context.constants.deriveVelocityFeedbackGains();
+        if (axis == Axis.DRIVE) { context.constants.angularVelocityFeedbackGain = previousHeadingFeedback; }
+        else { context.constants.velocityFeedbackGain = previousDriveFeedback; }
+        context.getFollower().setVelocityFeedback(context.constants.velocityFeedbackGain, context.constants.angularVelocityFeedbackGain);
+    }
     @Override protected void reportResults() {
-        context.getTelemetry().addData("Drive kS / kV", number(context.constants.translationalFeedforwardKS)
-                + " / " + number(context.constants.translationalKV));
-        context.getTelemetry().addData("Turn kS / kV", number(context.constants.angularFeedforwardKS)
-                + " / " + number(context.constants.angularKV));
-        context.getTelemetry().addLine("kA and position-controller breakaway settings are unchanged.");
-        context.getTelemetry().addData("Result", result);
-        context.getTelemetry().addData("Last ramp CSV", csvPath);
+        if (fit == null) { return; }
+        context.getTelemetry().addData("kS / kV / kA", number(fit.kS) + " / " + number(fit.kV) + " / " + number(fit.kA));
+        context.getTelemetry().addData("R² / RMS power error", number(fit.rSquared) + " / " + number(fit.rms));
+        context.getTelemetry().addData("Units", axis == Axis.DRIVE ? "normalized power, inches, seconds" : "normalized power, radians, seconds");
+        context.getTelemetry().addData("CSV", csvPath);
+        context.getTelemetry().addData("Results graphs", graphPath);
     }
 }

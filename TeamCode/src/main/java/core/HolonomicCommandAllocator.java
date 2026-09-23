@@ -81,10 +81,13 @@ final class HolonomicCommandAllocator {
         double driveFeedforwardDemand = translationDemand(feedforwardRobot, anisotropic);
         double feedforwardDemand = driveFeedforwardDemand + Math.abs(headingFeedforward);
         double remaining = Math.max(0.0, 1.0 - feedbackDemand);
-        double driveFeedforwardScale = remainingScale(driveFeedforwardDemand, remaining);
-        feedforwardRobot = feedforwardRobot.times(driveFeedforwardScale);
+        // The profile plans translation and rotation together. Preserve that ratio,
+        // including angular braking, after reserving power for position correction.
+        double feedforwardScale = remainingScale(feedforwardDemand, remaining);
+        feedforwardRobot = feedforwardRobot.times(feedforwardScale);
+        headingFeedforward *= feedforwardScale;
         remaining = Math.max(0.0,
-                remaining - driveFeedforwardDemand * driveFeedforwardScale);
+                remaining - feedforwardDemand * feedforwardScale);
 
         Vector velocityFeedbackRobot = unitTangent.times(tangentVelocityFeedback)
                 .rotate(Angle.fromRad(-currentHeading.getRad()));
@@ -95,10 +98,6 @@ final class HolonomicCommandAllocator {
         velocityFeedbackRobot = velocityFeedbackRobot.times(velocityFeedbackScale);
         headingVelocityFeedback *= velocityFeedbackScale;
 
-        remaining = Math.max(0.0,
-                remaining - velocityFeedbackDemand * velocityFeedbackScale);
-        headingFeedforward *= remainingScale(Math.abs(headingFeedforward), remaining);
-
         Follower.CommandDemand commandDemand = new Follower.CommandDemand(true,
                 crossTrackCorrection.getMag().getIn(), Math.abs(tangentFeedback),
                 Math.abs(headingFeedback * feedbackScale),
@@ -106,7 +105,8 @@ final class HolonomicCommandAllocator {
                 Math.abs(tangentVelocityFeedback), rawHeadingVelocityDemand,
                 Math.abs(tangentFeedforward), rawHeadingFeedforwardDemand,
                 rawFeedbackDemand, velocityFeedbackDemand, feedforwardDemand,
-                rawFeedbackDemand + velocityFeedbackDemand + feedforwardDemand);
+                rawFeedbackDemand + velocityFeedbackDemand + feedforwardDemand,
+                1.0 / feedbackScale, feedforwardScale, velocityFeedbackScale);
 
         return new Result(
                 feedbackRobot.plus(feedforwardRobot).plus(velocityFeedbackRobot),

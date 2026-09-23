@@ -179,7 +179,7 @@ public class CentripetalPhase extends TuningPhase {
                                 " arc timed out at pose " + context.getFollower().getPose() +
                                 ", t=" + context.getFollower().getBestT() +
                                 ", velocity=" + context.getFollower().getVelocity() +
-                                ". Verify endpoint tolerances, localization, and PDS constants."
+                                ". Verify endpoint tolerances, localization, and feedback constants."
                 );
             }
             return false;

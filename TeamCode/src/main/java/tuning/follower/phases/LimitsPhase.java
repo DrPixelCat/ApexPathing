@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 
-import controllers.PDSController;
+import controllers.FeedbackController;
 import geometry.Angle;
 import geometry.DistUnit;
 import geometry.Pose;
@@ -61,7 +61,7 @@ public class LimitsPhase extends TuningPhase {
     private final ElapsedTime timer = new ElapsedTime();
     private final double[][] maxima = new double[TRIALS.length][2];
 
-    private PDSController headingHoldController;
+    private FeedbackController headingHoldController;
     private final Deque<TimedSample> velocityWindow = new ArrayDeque<>();
     private final List<Double> velocitySamples = new ArrayList<>();
     private final List<Double> accelerationSamples = new ArrayList<>();
@@ -105,10 +105,10 @@ public class LimitsPhase extends TuningPhase {
 
     @Override
     protected void init() {
-        headingHoldController = new PDSController(new PDSController.PDSCoefficients(
-                context.constants.angularCoeffs.kP,
-                context.constants.angularCoeffs.kD,
-                context.constants.angularCoeffs.kS));
+        headingHoldController = new FeedbackController(new FeedbackController.Coefficients()
+                .p(context.constants.angularCoeffs.kP)
+                .d(context.constants.angularCoeffs.kD)
+                .s(context.constants.angularCoeffs.kS));
         headingHoldController.setAngularController();
         stage = LimitStage.PROMPT;
         trial = 0;
@@ -162,7 +162,8 @@ public class LimitsPhase extends TuningPhase {
             Angle currentHeading = context.getFollower().getPose().getHeading();
             double headingError = currentHeading
                     .getShortestAngleTo(Angle.fromRad(heldHeading)).getRad();
-            turn = Math.max(-1.0, Math.min(1.0, headingHoldController.calculate(headingError)));
+            turn = Math.max(-1.0, Math.min(1.0,
+                    headingHoldController.p().d().s().calculate(headingError).get()));
         }
 
         context.getFollower().getDrivetrain().moveWithVectors(current.x, current.y, turn);

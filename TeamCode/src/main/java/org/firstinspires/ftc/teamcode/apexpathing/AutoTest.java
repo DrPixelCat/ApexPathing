@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.apexpathing;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.io.File;
@@ -518,7 +519,11 @@ public class AutoTest extends LinearOpMode {
                             "drive_feedforward_power,heading_feedforward_power,total_demand," +
                             "command_power,saturated,controller_target_in_s,controller_measured_in_s," +
                             "progress_velocity_in_s,signed_translation_ff,signed_velocity_feedback," +
-                            "left_front_command,right_front_command,endpoint_blend\n");
+                            "left_front_command,right_front_command,endpoint_blend," +
+                            "actual_omega_rad_s,correction_scale,feedforward_scale,velocity_scale," +
+                            "allocated_drive_ff_magnitude,allocated_heading_ff_magnitude," +
+                            "remaining_after_correction,remaining_after_feedforward," +
+                            "remaining_after_velocity\n");
         } catch (IOException e) {
             outboundVelocityCsv = null;
             outboundVelocityCsvPath = "Unavailable";
@@ -565,7 +570,8 @@ public class AutoTest extends LinearOpMode {
                     Locale.US,
                     "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
                             "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
-                            "%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
+                            "%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
+                            "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
                     elapsed, traveled, target.getTangentialVel(), rawVelocity,
                     kalmanVelocity, target.getTangentialAccel(), target.getAngularVel(),
                     target.getAngularAccel(), target.getMotorPower(), crossTrackError, curvature,
@@ -578,7 +584,17 @@ public class AutoTest extends LinearOpMode {
                     follower.getTrackingProgressVelocity(), follower.getTrackingFeedforward(),
                     follower.getTrackingVelocityFeedback(),
                     follower.getDrivetrain().getLastFlPower(),
-                    follower.getDrivetrain().getLastFrPower(), follower.getTrackingEndpointBlend()));
+                    follower.getDrivetrain().getLastFrPower(), follower.getTrackingEndpointBlend(),
+                    follower.getVelocity().getHeading().getRad(),
+                    demand.correctionScale, demand.feedforwardScale, demand.velocityScale,
+                    demand.driveFeedforward * demand.feedforwardScale,
+                    demand.headingFeedforward * demand.feedforwardScale,
+                    Math.max(0, 1 - demand.correctiveTotal * demand.correctionScale),
+                    Math.max(0, 1 - demand.correctiveTotal * demand.correctionScale
+                            - demand.feedforwardTotal * demand.feedforwardScale),
+                    Math.max(0, 1 - demand.correctiveTotal * demand.correctionScale
+                            - demand.feedforwardTotal * demand.feedforwardScale
+                            - demand.velocityTotal * demand.velocityScale)));
             outboundVelocityRowsSinceFlush++;
             if (outboundVelocityRowsSinceFlush >= 25) {
                 outboundVelocityCsv.flush();

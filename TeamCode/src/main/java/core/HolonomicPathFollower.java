@@ -3,7 +3,7 @@ package core;
 import com.qualcomm.robotcore.util.Range;
 
 import controllers.DriveController;
-import controllers.PDSController;
+import controllers.FeedbackController;
 import drivetrains.BaseDrivetrain;
 import feedforward.MotionParameters;
 import geometry.Angle;
@@ -19,14 +19,19 @@ final class HolonomicPathFollower {
 
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;
-    private final PDSController headingController;
+    private final FeedbackController headingController;
+    private final FeedbackController translationFeedforwardController;
+    private final FeedbackController headingFeedforwardController;
+    private final FeedbackController translationVelocityController;
+    private final FeedbackController headingVelocityController;
+    private final FeedbackController centripetalController;
     private final HolonomicCommandAllocator allocator;
     private final FollowerConstants constants;
     private final double distanceTolerance;
     private final double headingTolerance;
 
     HolonomicPathFollower(BaseDrivetrain<?> drivetrain, DriveController driveController,
-                          PDSController headingController, HolonomicCommandAllocator allocator,
+                          FeedbackController headingController, HolonomicCommandAllocator allocator,
                           FollowerConstants constants, double distanceTolerance,
                           double headingTolerance) {
         this.drivetrain = drivetrain;
@@ -36,6 +41,16 @@ final class HolonomicPathFollower {
         this.constants = constants;
         this.distanceTolerance = distanceTolerance;
         this.headingTolerance = headingTolerance;
+        translationFeedforwardController = new FeedbackController(
+                new FeedbackController.Coefficients().vel(0.0).accel(0.0));
+        headingFeedforwardController = new FeedbackController(
+                new FeedbackController.Coefficients().vel(0.0).accel(0.0));
+        translationVelocityController = new FeedbackController(
+                new FeedbackController.Coefficients().p(0.0));
+        headingVelocityController = new FeedbackController(
+                new FeedbackController.Coefficients().p(0.0));
+        centripetalController = new FeedbackController(
+                new FeedbackController.Coefficients().p(0.0));
     }
 
     boolean update(Path path, PathSegment segment, Pose current, BaseLocalizer<?> localizer,
@@ -44,6 +59,12 @@ final class HolonomicPathFollower {
                    double translationalKV, double translationalKA,
                    double angularKV, double angularKA, double centripetalGain,
                    double velocityFeedbackGain, double angularVelocityFeedbackGain) {
+        translationFeedforwardController.getCoefficients()
+                .vel(translationalKV).accel(translationalKA);
+        headingFeedforwardController.getCoefficients().vel(angularKV).accel(angularKA);
+        translationVelocityController.getCoefficients().p(velocityFeedbackGain);
+        headingVelocityController.getCoefficients().p(angularVelocityFeedbackGain);
+
         // region 1. Path Information
         // 1.1 Robot pose and path geometry
         Vector currentPosition = current.getVec();
@@ -110,12 +131,11 @@ final class HolonomicPathFollower {
             targetAngularVelocity = targets.getAngularVel() * headingTimeScale;
             double targetAngularAcceleration = targets.getAngularAccel()
                     * headingTimeScale * headingTimeScale;
-            headingFeedforward = targetAngularVelocity * angularKV
-                    + targetAngularAcceleration * angularKA;
-            if (Math.abs(targetAngularVelocity) > 1e-6) {
-                headingFeedforward += Math.signum(targetAngularVelocity)
-                        * constants.angularFeedforwardKS;
-            }
+            double movingFriction = Math.abs(targetAngularVelocity) > 1e-6
+                    ? Math.signum(targetAngularVelocity) * constants.angularFeedforwardKS : 0.0;
+            headingFeedforward = headingFeedforwardController.vel(targetAngularVelocity)
+                    .accel(targetAngularAcceleration).f(movingFriction)
+                    .calculate(0.0).get();
         }
 
         double currentAngularVelocity = localizer.getVel().getHeading().getRad();
@@ -131,8 +151,8 @@ final class HolonomicPathFollower {
                 : 0.0;
         double headingVelocityFeedback = headingControllerEnabled
                 && Math.abs(targetAngularVelocity) > 1e-6
-                ? angularVelocityFeedbackGain
-                        * (targetAngularVelocity - currentAngularVelocity) : 0.0;
+                ? headingVelocityController.p()
+                        .calculate(targetAngularVelocity - currentAngularVelocity).get() : 0.0;
         double endpointHeadingError = currentHeading
                 .getShortestAngleTo(path.getEndPose().getHeading()).getRad();
         if (distanceRemaining < Follower.PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES) {
@@ -146,19 +166,24 @@ final class HolonomicPathFollower {
         Vector positionalError = state.closestPathPoint.minus(currentPosition);
         state.crossTrackError = positionalError.dot(lateralNormal).getIn();
         state.centripetalError = positionalError.dot(principalNormal).getIn();
+        driveController.setCrossTrackStaticCompensationEnabled(applyCorrectiveStatic);
         double lateralFeedback = driveControllerEnabled
-                ? driveController.calculateCrossTrack(
-                        state.crossTrackError, applyCorrectiveStatic) : 0.0;
+                ? driveController.calculateCrossTrack(state.crossTrackError) : 0.0;
         if (driveControllerEnabled) {
             double measuredLateralVelocity = robotVelocity.dot(lateralNormal).getIn();
             lateralFeedback = Follower.ensureEndpointBreakawayPower(
                     lateralFeedback, state.crossTrackError, measuredLateralVelocity,
-                    constants.translationalCoeffs.kS, PDSController.LINEAR_STATIC_DEADBAND,
+                    constants.translationalCoeffs.kS,
+                    FeedbackController.LINEAR_STATIC_DEADBAND,
                     distanceRemaining);
         }
         state.crossTrackCorrection = lateralNormal.times(lateralFeedback);
-        state.centripetalCorrection = Follower.calculateCentripetalCorrection(
-                principalNormal, robotTangentialVelocity, curvature, centripetalGain);
+        centripetalController.getCoefficients().p(centripetalGain);
+        double centripetalResponse = centripetalController.p()
+                .calculate(robotTangentialVelocity * robotTangentialVelocity
+                        * Math.abs(curvature)).get();
+        state.centripetalCorrection = principalNormal.times(
+                Math.min(centripetalResponse, Follower.MAX_CENTRIPETAL_POWER));
 
         // 2.3 Tangential feedforward and feedback
         double tangentFeedforward;
@@ -170,11 +195,14 @@ final class HolonomicPathFollower {
                         targets.getTangentialVel(), MIN_PROFILE_VELOCITY_IN_PER_SECOND);
                 double accelerationTarget = MotionFeedforward.scaleBrakingAcceleration(
                         velocityTarget, targets.getTangentialAccel(), robotTangentialVelocity);
-                double feedforward = MotionFeedforward.calculate(
-                        velocityTarget, accelerationTarget, translationalKV, translationalKA,
-                        constants.translationalFeedforwardKS);
-                tangentVelocityFeedback =
-                        (velocityTarget - robotTangentialVelocity) * velocityFeedbackGain;
+                double motionSign = MotionFeedforward.motionSign(
+                        velocityTarget, accelerationTarget);
+                double feedforward = translationFeedforwardController.vel(velocityTarget)
+                        .accel(accelerationTarget)
+                        .f(motionSign * constants.translationalFeedforwardKS)
+                        .calculate(0.0).get();
+                tangentVelocityFeedback = translationVelocityController.p()
+                        .calculate(velocityTarget - robotTangentialVelocity).get();
                 state.trackingVelocityTarget = velocityTarget;
                 state.trackingFeedforward = feedforward;
                 state.trackingVelocityFeedback = tangentVelocityFeedback;
@@ -198,14 +226,17 @@ final class HolonomicPathFollower {
                 double decelPower = driveController.calculateEndDistance(
                         endDistanceError, -measuredTangentialVelocity);
                 double velocityError = commandedForwardVelocity - robotTangentialVelocity;
-                tangentVelocityFeedback = velocityError * velocityFeedbackGain;
+                tangentVelocityFeedback = translationVelocityController.p()
+                        .calculate(velocityError).get();
                 double propulsionStatic = Math.abs(robotTangentialVelocity)
                         < Follower.ENDPOINT_STALLED_VELOCITY_IN_PER_SECOND
                         ? Math.max(constants.translationalFeedforwardKS,
                                 constants.translationalCoeffs.kS)
                         : constants.translationalFeedforwardKS;
-                double feedforwardPower = commandedForwardVelocity * translationalKV
-                        + Math.signum(commandedForwardVelocity) * propulsionStatic;
+                double feedforwardPower = translationFeedforwardController
+                        .vel(commandedForwardVelocity)
+                        .f(Math.signum(commandedForwardVelocity) * propulsionStatic)
+                        .calculate(0.0).get();
                 double accelerationPower = feedforwardPower + tangentVelocityFeedback;
                 if (decelPower <= accelerationPower) {
                     tangentFeedback = decelPower;

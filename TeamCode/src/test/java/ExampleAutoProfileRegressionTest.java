@@ -4,7 +4,7 @@ import org.junit.Test;
 
 import java.io.File;
 
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import core.FollowerConstants;
 import core.ApexStorage;
 import feedforward.MotionParameters;
@@ -54,8 +54,8 @@ public class ExampleAutoProfileRegressionTest {
         System.setProperty(ApexStorage.DIRECTORY_PROPERTY,
                 new File("build/profile-tests").getAbsolutePath());
         FollowerConstants constants = FollowerConstants.getInstance();
-        constants.angularCoeffs = new PDSCoefficients(0.80, 0.10, 0.23);
-        constants.translationalCoeffs = new PDSCoefficients(0.12, 0.03, 0.23);
+        constants.angularCoeffs = new Coefficients().p(0.80).d(0.10).s(0.23);
+        constants.translationalCoeffs = new Coefficients().p(0.12).d(0.03).s(0.23);
         constants.angularKV = 0.066;
         constants.angularKA = 0.043;
         constants.translationalKV = 0.0071;

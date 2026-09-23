@@ -22,8 +22,8 @@ public class HeadingPhase extends TuningPhase {
     private static final double HEADING_KP_MAX = 32.0;
     private static final double HEADING_KD_MIN = 0.0;
     private static final double HEADING_KD_MAX = 2.0;
-    private static final double HEADING_INITIAL_KP = 0.80;
-    private static final double HEADING_INITIAL_KD = 0.10;
+    private static final double DESIRED_SETTLING_TIME = 1.0;
+    private static final double DESIRED_DAMPING_RATIO = 1.0;
     private static final double AUTOMATIC_TEST_ANGLE = Math.toRadians(60.0);
     private static final double POSITION_TOLERANCE = Math.toRadians(0.75);
     private static final double SETTLING_ANGULAR_VELOCITY = 0.10;
@@ -56,7 +56,7 @@ public class HeadingPhase extends TuningPhase {
         context.getTelemetry().addLine(
                 "Place the robot where it can rotate safely through a 60 degree out-and-back test.");
         context.getTelemetry().addLine(
-                "Automatic tuning starts from generic gains, then " +
+                "Automatic tuning starts from the measured feedforward model, then " +
                         "checks settling, overshoot, error, and consistency in both directions.");
     }
 
@@ -85,8 +85,10 @@ public class HeadingPhase extends TuningPhase {
         );
         routine = new PDSRoutine(
                 config,
-                HEADING_INITIAL_KP,
-                HEADING_INITIAL_KD,
+                context.constants.angularKV,
+                context.constants.angularKA,
+                DESIRED_SETTLING_TIME,
+                DESIRED_DAMPING_RATIO,
                 context.constants.angularCoeffs.kS);
         routine.start();
         context.getFollower().disableControllers();

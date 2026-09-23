@@ -13,6 +13,26 @@ import org.junit.Test;
 
 public class ApexAdvantageScopeLayoutTest {
     @Test
+    public void repairsWrongKeyAndHiddenRobotAndSupportsSwitchingToTank() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode root = layoutWithThreeDimensionalTab(mapper);
+        JsonNode tab = root.path("hubs").path(0).path("state").path("tabs").path("tabs").path(0);
+        ObjectNode robot = source(mapper, "robot",
+                "RealOutputs/Drivetrain/position ftc coords (m)", "Pose2d");
+        robot.put("visible", false);
+        robot.with("options").put("model", "CodeBloodedDecode");
+        ((ArrayNode) tab.path("controller").path("sources")).add(robot);
+
+        assertTrue(ApexAdvantageScopeLayout.configure(root, mapper, false));
+        assertSource(tab, "robot", "Pose2d", "RealOutputs/Mecanum/position ftc coords (m)");
+        assertFalse(ApexAdvantageScopeLayout.configure(root, mapper, false));
+        assertTrue(ApexAdvantageScopeLayout.configure(root, mapper, true));
+        assertSource(tab, "robot", "Pose2d", "RealOutputs/Drivetrain/position ftc coords (m)");
+        assertFalse(ApexAdvantageScopeLayout.configure(root, mapper, true));
+        assertEquals("CodeBloodedDecode", robot.path("options").path("model").asText());
+    }
+
+    @Test
     public void addsCurrentPathToDedicatedTwoAndThreeDimensionalTabsOnce() {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode root = layoutWithThreeDimensionalTab(mapper);
@@ -26,7 +46,7 @@ public class ApexAdvantageScopeLayoutTest {
         assertSource(tabs.get(0), "ghost", "Pose2d[]",
                 "RealOutputs/Apex/CurrentPath");
         assertSource(tabs.get(1), "robot", "Pose2d",
-                "RealOutputs/Drivetrain/position ftc coords (m)");
+                "RealOutputs/Mecanum/position ftc coords (m)");
         assertSource(tabs.get(1), "ghost", "Pose2d[]",
                 "RealOutputs/Apex/CurrentPath");
         assertEquals("robot", tabs.get(1).path("controller").path("sources")
@@ -49,8 +69,9 @@ public class ApexAdvantageScopeLayoutTest {
 
         assertTrue(ApexAdvantageScopeLayout.configure(root, mapper));
         assertEquals("robot", sources.path(0).path("type").asText());
-        assertEquals("ghost", sources.path(1).path("type").asText());
-        assertEquals("#00ff00", sources.path(1).path("options").path("color").asText());
+        JsonNode path = sources.path(sources.size() - 1);
+        assertEquals("ghost", path.path("type").asText());
+        assertEquals("#00ff00", path.path("options").path("color").asText());
     }
 
     @Test
@@ -73,6 +94,46 @@ public class ApexAdvantageScopeLayoutTest {
         assertTrue(ApexAdvantageScopeLayout.configure(root, mapper));
         assertEquals("ghost", sources.path(1).path("type").asText());
         assertEquals("CodeBloodedDecode", sources.path(1).path("options").path("model").asText());
+    }
+
+    @Test
+    public void repairsStaleRobotSourcesInExistingFieldTabs() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode root = layoutWithThreeDimensionalTab(mapper);
+        ArrayNode tabs = (ArrayNode) root.path("hubs").path(0).path("state")
+                .path("tabs").path("tabs");
+        ObjectNode field = mapper.createObjectNode();
+        field.put("type", 2);
+        field.put("title", "2D Field");
+        ObjectNode controller = mapper.createObjectNode();
+        ArrayNode sources = mapper.createArrayNode();
+        ObjectNode robot = source(mapper, "robot",
+                "RealOutputs/Mecanum/position ftc coords (m)", "Pose2d");
+        robot.with("options").put("bumpers", "");
+        sources.add(robot);
+        controller.set("sources", sources);
+        field.set("controller", controller);
+        tabs.add(field);
+        ObjectNode threeDimensionalField = mapper.createObjectNode();
+        threeDimensionalField.put("type", 3);
+        threeDimensionalField.put("title", "3D Field");
+        ObjectNode threeDimensionalController = mapper.createObjectNode();
+        ArrayNode threeDimensionalSources = mapper.createArrayNode();
+        threeDimensionalSources.add(source(mapper, "robot",
+                "RealOutputs/Mecanum/position ftc coords (m)", "Pose2d"));
+        threeDimensionalController.set("sources", threeDimensionalSources);
+        threeDimensionalField.set("controller", threeDimensionalController);
+        tabs.add(threeDimensionalField);
+
+        assertTrue(ApexAdvantageScopeLayout.configure(root, mapper));
+        assertFalse(ApexAdvantageScopeLayout.configure(root, mapper));
+        assertEquals(1, sources.size());
+        assertEquals("RealOutputs/Mecanum/position ftc coords (m)",
+                sources.path(0).path("logKey").asText());
+        assertEquals("", sources.path(0).path("options").path("bumpers").asText());
+        assertEquals(1, threeDimensionalSources.size());
+        assertEquals("RealOutputs/Mecanum/position ftc coords (m)",
+                threeDimensionalSources.path(0).path("logKey").asText());
     }
 
     private static ObjectNode layoutWithThreeDimensionalTab(ObjectMapper mapper) {

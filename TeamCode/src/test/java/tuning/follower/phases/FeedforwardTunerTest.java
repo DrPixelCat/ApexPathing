@@ -4,6 +4,36 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class FeedforwardTunerTest {
+    @Test public void dutyDependentDragDoesNotBecomeStaticFriction() {
+        for (double ks : new double[] {.03, .06, .09, .21}) {
+            for (double drag : new double[] {0, .009}) {
+                RampRegression regression = new RampRegression(1);
+                for (double acceleration : new double[] {-3, 3, -6, 6}) {
+                    for (int i=0; i<40; i++) {
+                        double velocity = 2+i*.6;
+                        double power = (ks+.004*velocity+.004*acceleration)/(1-drag*velocity);
+                        regression.add(velocity, power, acceleration, power*velocity);
+                    }
+                }
+                RampRegression.Fit fit = regression.fit();
+                assertTrue(fit.valid(2));
+                assertEquals(ks, fit.kS, 1e-9);
+                assertEquals(.004, fit.kA, 1e-9);
+                assertEquals(.004, fit.linearKV, 1e-9);
+                assertEquals(drag, fit.kPowerVelocity, 1e-9);
+            }
+        }
+    }
+
+    @Test public void interactionFitRejectsAnUnidentifiableSingleRamp() {
+        RampRegression regression = new RampRegression(1);
+        for (int i=0; i<40; i++) {
+            double v = 2+i*.5, p = (.06+.006*5)/(1-.012*v);
+            regression.add(v, p, 5, p*v);
+        }
+        assertFalse(regression.fit().valid(2));
+    }
+
     @Test public void risingAndFallingRampsSeparateInertiaFromStaticFriction() {
         RampRegression regression = new RampRegression(1);
         for (double acceleration : new double[] {10, -10}) {

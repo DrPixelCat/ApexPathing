@@ -9,7 +9,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.AutoTest;
 import org.junit.Test;
 import org.knowm.xchart.BitmapEncoder;
@@ -27,7 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import core.FollowerConstants;
 import core.ApexStorage;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import paths.movements.Path;
 
 public class AutoTestSimulationTest {
@@ -121,22 +121,7 @@ public class AutoTestSimulationTest {
     }
 
     private static void stepPhysics(ApexSimulation.Hardware hardware, double dt) throws Exception {
-        double[] wheelVelocities = new double[hardware.drivetrain.motorNames.length];
-        for (int i = 0; i < hardware.drivetrain.motorNames.length; i++) {
-            SimMotor motor = (SimMotor) hardware.hardwareMap.get(
-                    DcMotorEx.class, hardware.drivetrain.motorNames[i]);
-            motor.update(dt);
-            wheelVelocities[i] = motor.getVelocity();
-        }
-        Method kinematics = hardware.drivetrain.getClass()
-                .getDeclaredMethod("forwardKinematics", double[].class);
-        kinematics.setAccessible(true);
-        MotionVector robotVelocity = (MotionVector) kinematics.invoke(
-                hardware.drivetrain, (Object) wheelVelocities);
-        hardware.drivetrain.velocity = robotVelocity.toFieldFrame(
-                hardware.drivetrain.position.theta);
-        hardware.drivetrain.position = hardware.drivetrain.position.step(
-                hardware.drivetrain.velocity, dt);
+        ApexSimulation.stepPhysics(hardware, dt);
     }
 
     private static String latest(List<String> frames) {
@@ -234,22 +219,6 @@ public class AutoTestSimulationTest {
             if (gain != null) { constants.velocityFeedbackGain = Double.parseDouble(gain); }
             return;
         }
-        constants.angularCoeffs = new PDSCoefficients(2.40, 0.45, 0.236);
-        constants.translationalCoeffs = new PDSCoefficients(0.20, 0.04, 0.235);
-        constants.angularKV = 0.03729620016302293;
-        constants.angularKA = 0.05762017415132837;
-        constants.angularFeedforwardKS = 0.2571326953727573;
-        constants.translationalKV = 0.007985735155227602;
-        constants.translationalKA = 0.006869366751688844;
-        constants.translationalFeedforwardKS = 0.10800918318444208;
-        constants.kCentripetal = 0.002846477691686655;
-        constants.velocityFeedbackGain = 0.08273740189064561;
-        constants.angularVelocityFeedbackGain = 0.25;
-        constants.forwardVelLimitIn = 64.82715934849021;
-        constants.forwardAccelLimitIn = 138.67321291770276;
-        constants.strafeVelLimitIn = 53.709295445494945;
-        constants.strafeAccelLimitIn = 107.71546803022714;
-        constants.angularVelLimitRad = 6.980307090964637;
-        constants.angularAccelLimitRad = 14.46018035928052;
+        SimulatorTuning.apply(constants);
     }
 }

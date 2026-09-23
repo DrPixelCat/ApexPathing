@@ -18,7 +18,7 @@ public class TankTuningWorkflowSimulationTest {
         runWorkflow(false);
     }
 
-    @Test(timeout = 180000) public void retunedFeedbackTracksConsistentProfile() throws Exception {
+    @Test(timeout = 180000) public void derivedFeedbackTracksConsistentProfile() throws Exception {
         runWorkflow(true);
     }
 
@@ -46,12 +46,15 @@ public class TankTuningWorkflowSimulationTest {
                     context.setFollower(new Follower(new TankSimulationConstants(), hardwareMap, true));
                     waitForStart();
                     if (!feedbackOnly) {
-                        if (!new FeedforwardTuner(context).run(this)) { return; }
-                        System.out.println("AFTER RAMP " + context.constants.toJson());
-                        if (!new AccelerationFeedforwardPhase(context).run(this)) { return; }
-                        System.out.println("AFTER KA " + context.constants.toJson());
+                        if (!new FeedforwardTuner(context, FeedforwardTuner.Axis.DRIVE).run(this)) { return; }
+                        System.out.println("AFTER DRIVE SYSID " + context.constants.toJson());
+                        if (!new FeedforwardTuner(context, FeedforwardTuner.Axis.HEADING).run(this)) { return; }
+                        System.out.println("AFTER HEADING SYSID " + context.constants.toJson());
                     }
-                    if (!new VelocityFeedbackPhase(context).run(this)) { return; }
+                    context.constants.deriveVelocityFeedbackGains();
+                    context.getFollower().setVelocityFeedback(
+                            context.constants.velocityFeedbackGain,
+                            context.constants.angularVelocityFeedbackGain);
                     output.set(context.constants.toJson().toString());
                     context.getFollower().stop();
                 }
@@ -72,7 +75,7 @@ public class TankTuningWorkflowSimulationTest {
                     TankAutoAccuracySimulationTest.stepPhysics(hardware, dt); remaining -= dt;
                 }
                 frame = frames.isEmpty() ? "" : frames.get(frames.size()-1);
-                if (frame.contains("Automatic kA tuning stopped.")) { break; }
+                if (frame.contains("Fit rejected")) { break; }
                 if (frame.contains("Press A") && now-lastPress > 300_000_000L) { lastPress = now; }
                 op.gamepad1.a = now-lastPress < 60_000_000L;
                 SimLinearOpModeBridge.eventLoopIteration(session, op.gamepad1, op.gamepad2);

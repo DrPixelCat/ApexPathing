@@ -5,8 +5,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.Range;
 
 import controllers.DriveController;
-import controllers.PDSController;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController;
+import controllers.FeedbackController.Coefficients;
 import controllers.TurnController;
 import drivetrains.BaseDrivetrain;
 import drivetrains.BaseDrivetrainConstants;
@@ -43,7 +43,7 @@ public class Follower {
     static final double PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES = 8.0;
     static final double ENDPOINT_STALLED_VELOCITY_IN_PER_SECOND = 0.25;
     private static final double PROFILED_HEADING_CAPTURE_RADIANS = Math.toRadians(10.0);
-    private static final double MAX_CENTRIPETAL_POWER = 0.65;
+    static final double MAX_CENTRIPETAL_POWER = 0.65;
     private static final double SLOWED_VELOCITY_DELTA_IN_PER_SECOND = 6.0;
     private static final double STUCK_LINEAR_VELOCITY_IN_PER_SECOND = 0.5;
 
@@ -54,7 +54,7 @@ public class Follower {
     private final double headingTolerance;
     private final double distanceTolerance;
 
-    private final PDSController headingController;
+    private final FeedbackController headingController;
     private final TurnController turnController;
     private final DriveController driveController;
     private final MovementCallbackRunner callbackRunner = new MovementCallbackRunner();
@@ -88,6 +88,10 @@ public class Follower {
         public final double velocityTotal;
         public final double feedforwardTotal;
         public final double total;
+        /** Applied fractions of the requested stages; feedforward uses one coupled scale. */
+        public final double correctionScale;
+        public final double feedforwardScale;
+        public final double velocityScale;
 
         CommandDemand(boolean available, double crossTrack, double tangentCorrection,
                       double headingCorrection, double centripetal,
@@ -95,6 +99,21 @@ public class Follower {
                       double driveFeedforward, double headingFeedforward,
                       double correctiveTotal, double velocityTotal,
                       double feedforwardTotal, double total) {
+            this(available, crossTrack, tangentCorrection, headingCorrection, centripetal,
+                    forwardVelocity, headingVelocity, driveFeedforward, headingFeedforward,
+                    correctiveTotal, velocityTotal, feedforwardTotal, total, 1.0, 1.0, 1.0);
+        }
+
+        CommandDemand(boolean available, double crossTrack, double tangentCorrection,
+                      double headingCorrection, double centripetal,
+                      double forwardVelocity, double headingVelocity,
+                      double driveFeedforward, double headingFeedforward,
+                      double correctiveTotal, double velocityTotal,
+                      double feedforwardTotal, double total, double correctionScale,
+                      double feedforwardScale, double velocityScale) {
+            this.correctionScale = correctionScale;
+            this.feedforwardScale = feedforwardScale;
+            this.velocityScale = velocityScale;
             this.available = available;
             this.crossTrack = crossTrack;
             this.tangentCorrection = tangentCorrection;
@@ -138,7 +157,7 @@ public class Follower {
         distanceTolerance = drivetrainConstants.distanceTolerance.getIn();
 
 
-        headingController = new PDSController(this.constants.angularCoeffs);
+        headingController = new FeedbackController(this.constants.angularCoeffs);
         headingController.setAngularController();
         turnController = new TurnController(this.constants.angularCoeffs, this.constants.angularKV, this.constants.angularKA,
                 this.constants.angularFeedforwardKS, this.constants.angularVelocityFeedbackGain);
@@ -209,8 +228,8 @@ public class Follower {
     }
 
     private void holdPose(Pose target) {
-        double angularResponse = headingControllerEnabled ? headingController.calculate(
-                target.getHeading(AngleUnit.RAD) - getPose().getHeading(AngleUnit.RAD)) : 0.0;
+        double angularResponse = headingControllerEnabled ? headingController.p().d().s().calculate(
+                target.getHeading(AngleUnit.RAD) - getPose().getHeading(AngleUnit.RAD)).get() : 0.0;
         Vector translationalResponse;
         if (!driveControllerEnabled) {
             translationalResponse = Vector.zero();
@@ -409,12 +428,12 @@ public class Follower {
         localizer = localizerSet.getLocalizer();
     }
 
-    public void setHeadingCoefficients(PDSCoefficients coefficients) {
+    public void setHeadingCoefficients(Coefficients coefficients) {
         headingController.setCoefficients(coefficients);
         turnController.setCoefficients(coefficients);
     }
 
-    public void setDriveCoefficients(PDSCoefficients coefficients) {
+    public void setDriveCoefficients(Coefficients coefficients) {
         driveController.setCoefficients(coefficients);
     }
 
@@ -531,15 +550,18 @@ public class Follower {
     static Vector calculateCentripetalCorrection(Vector principalNormal,
                                                  double tangentialVelocity,
                                                  double signedCurvature, double gain) {
-        double magnitude = tangentialVelocity * tangentialVelocity
-                * Math.abs(signedCurvature) * gain;
+        FeedbackController controller = new FeedbackController(new Coefficients().p(gain));
+        double magnitude = controller.p().calculate(tangentialVelocity * tangentialVelocity
+                * Math.abs(signedCurvature)).get();
         return principalNormal.times(Math.min(magnitude, MAX_CENTRIPETAL_POWER));
     }
 
-    static double calculatePathHeadingFeedback(PDSController controller, double headingError,
+    static double calculatePathHeadingFeedback(FeedbackController controller, double headingError,
                                                double targetRate, double measuredRate,
                                                boolean applyStatic) {
-        return controller.calculate(headingError, targetRate - measuredRate, applyStatic);
+        return controller.p().d(targetRate - measuredRate)
+                .s(applyStatic ? Math.signum(headingError) : 0.0)
+                .calculate(headingError).get();
     }
 
     static double feedforwardMotionSign(double targetVelocity, double targetAcceleration) {
@@ -560,6 +582,10 @@ public class Follower {
     static double calculateTranslationFeedforward(double targetVelocity,
                                                   double targetAcceleration,
                                                   double kV, double kA, double kS) {
-        return MotionFeedforward.calculate(targetVelocity, targetAcceleration, kV, kA, kS);
+        double motionSign = MotionFeedforward.motionSign(targetVelocity, targetAcceleration);
+        FeedbackController controller = new FeedbackController(
+                new Coefficients().vel(kV).accel(kA));
+        return controller.vel(targetVelocity).accel(targetAcceleration)
+                .f(motionSign * kS).calculate(0.0).get();
     }
 }

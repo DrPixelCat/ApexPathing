@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import core.ApexStorage;
 import core.FollowerConstants;
 import core.Follower;
@@ -51,7 +51,7 @@ public class FollowerTunerTelemetryTest {
 
             tuner.gamepad1.left_stick_y = 0.0f;
             pump(session, tuner, telemetry, hardware, 30);
-            // Select heading explicitly; the first phase is now the feedforward ramp.
+            // Select heading SysId to exercise its idle and active motor ownership.
             tuner.gamepad1.dpad_down = true;
             pump(session, tuner, telemetry, hardware, 30);
             tuner.gamepad1.dpad_down = false;
@@ -74,6 +74,7 @@ public class FollowerTunerTelemetryTest {
 
             tuner.gamepad1.left_stick_y = 0.0f;
             pump(session, tuner, telemetry, hardware, 30);
+            pump(session, tuner, telemetry, hardware, 1000);
             pressA(session, tuner, telemetry, hardware);
             tuner.gamepad1.left_stick_y = -1.0f;
             pump(session, tuner, telemetry, hardware, 80);
@@ -87,7 +88,7 @@ public class FollowerTunerTelemetryTest {
     }
 
     @Test(timeout = 420_000L)
-    public void automaticWorkflowCompletesFromStaticFrictionThroughFeedback() throws Exception {
+    public void automaticWorkflowCompletesWithoutVelocityFeedbackTuner() throws Exception {
         resetFollowerConstants();
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         seedAcceptedLocalization(hardware);
@@ -114,7 +115,7 @@ public class FollowerTunerTelemetryTest {
                     System.nanoTime() < deadline) {
                 String frame = latestFrame(frames);
                 assertTrue("Automatic feedforward validation failed:\n" + frame,
-                        !frame.contains("did not pass validation"));
+                        !frame.contains("did not pass validation") && !frame.contains("Fit rejected"));
                 if (frame.contains("Press A")) {
                     tuner.gamepad1.a = true;
                     pump(session, tuner, telemetry, hardware, 30);
@@ -176,22 +177,7 @@ public class FollowerTunerTelemetryTest {
 
     private static void stepPhysics(ApexSimulation.Hardware hardware, double seconds)
             throws Exception {
-        double[] wheelVelocities = new double[hardware.drivetrain.motorNames.length];
-        for (int i = 0; i < hardware.drivetrain.motorNames.length; i++) {
-            SimMotor motor = (SimMotor) hardware.hardwareMap.get(
-                    DcMotorEx.class, hardware.drivetrain.motorNames[i]);
-            motor.update(seconds);
-            wheelVelocities[i] = motor.getVelocity();
-        }
-        java.lang.reflect.Method kinematics = hardware.drivetrain.getClass()
-                .getDeclaredMethod("forwardKinematics", double[].class);
-        kinematics.setAccessible(true);
-        MotionVector robotVelocity = (MotionVector) kinematics.invoke(
-                hardware.drivetrain, (Object) wheelVelocities);
-        hardware.drivetrain.velocity = robotVelocity.toFieldFrame(
-                hardware.drivetrain.position.theta);
-        hardware.drivetrain.position = hardware.drivetrain.position.step(
-                hardware.drivetrain.velocity, seconds);
+        ApexSimulation.stepPhysics(hardware, seconds);
     }
 
     private static String latestFrame(List<String> frames) {
@@ -204,8 +190,8 @@ public class FollowerTunerTelemetryTest {
             System.setProperty(ApexStorage.DIRECTORY_PROPERTY, directory.getAbsolutePath());
         }
         FollowerConstants constants = FollowerConstants.getInstance();
-        constants.angularCoeffs = new PDSCoefficients();
-        constants.translationalCoeffs = new PDSCoefficients();
+        constants.angularCoeffs = new Coefficients().p(0.0).d(0.0).s(0.0);
+        constants.translationalCoeffs = new Coefficients().p(0.0).d(0.0).s(0.0);
         constants.angularKV = 0.0;
         constants.angularKA = 0.0;
         constants.angularFeedforwardKS = 0.0;

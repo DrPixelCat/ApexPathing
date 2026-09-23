@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "profiles": {
+    "DEFAULT": {
+      "velocityFeedbackGain": 0.06652120505574205,
+      "translationalD": 0.02024725491002294,
+      "translationKV": 0.006241447491199932,
+      "headingP": 1.4856040860569153,
+      "headingD": 0.6462600581362252,
+      "maxCentripetalAccelIn": 0,
+      "angularFeedforwardS": 0.002890627190233272,
+      "forwardAccelLimitIn": 130.96290779332884,
+      "angularKA": 0.0928502553785572,
+      "kCentripetal": 0.004848838022952525,
+      "strafeVelLimitIn": 64.89296810271468,
+      "angularAccelLimitRad": 9.209873757764186,
+      "strafeAccelLimitIn": 133.16656938084773,
+      "angularVelLimitRad": 4.865468109458274,
+      "translationalFeedforwardS": 0.004891713679570547,
+      "headingS": 0.08,
+      "angularKV": 0.09654198489223237,
+      "angularVelocityFeedbackGain": 0.25,
+      "translationalS": 0.08,
+      "forwardVelLimitIn": 64.78564909014041,
+      "translationalP": 0.09608861264983048,
+      "translationKA": 0.007276265254694199
+    }
+  },
+  "drivetrainType": "MECANUM"
+}

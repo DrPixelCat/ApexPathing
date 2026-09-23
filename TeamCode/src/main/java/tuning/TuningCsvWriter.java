@@ -13,10 +13,21 @@ import core.ApexStorage;
 public final class TuningCsvWriter {
     private final File file;
     private final FileWriter writer;
+    private final int autoFlushRows;
+    private final StringBuilder pending;
     private String error;
     private int rowsSinceFlush;
 
     public static TuningCsvWriter open(String prefix, String... header) {
+        return open(prefix, 25, header);
+    }
+
+    /** Opens a writer whose caller will flush at safe points outside time-critical motion. */
+    public static TuningCsvWriter openBuffered(String prefix, String... header) {
+        return open(prefix, 0, header);
+    }
+
+    private static TuningCsvWriter open(String prefix, int autoFlushRows, String... header) {
         try {
             File directory = ApexStorage.getDirectory();
             if (!directory.exists() && !directory.mkdirs()) {
@@ -25,7 +36,8 @@ public final class TuningCsvWriter {
             String timestamp = new SimpleDateFormat(
                     "yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
             File file = new File(directory, prefix + "_" + timestamp + ".csv");
-            TuningCsvWriter result = new TuningCsvWriter(file, new FileWriter(file));
+            TuningCsvWriter result = new TuningCsvWriter(
+                    file, new FileWriter(file), autoFlushRows);
             result.writeRow((Object[]) header);
             return result;
         } catch (IOException e) {
@@ -33,32 +45,53 @@ public final class TuningCsvWriter {
         }
     }
 
-    private TuningCsvWriter(File file, FileWriter writer) {
+    private TuningCsvWriter(File file, FileWriter writer, int autoFlushRows) {
         this.file = file;
         this.writer = writer;
+        this.autoFlushRows = autoFlushRows;
+        this.pending = autoFlushRows == 0 ? new StringBuilder() : null;
     }
 
     private TuningCsvWriter(String error) {
         this.file = null;
         this.writer = null;
+        this.autoFlushRows = 0;
+        this.pending = null;
         this.error = error;
     }
 
     public void writeRow(Object... values) {
         if (writer == null) { return; }
         try {
+            StringBuilder row = new StringBuilder();
             for (int i = 0; i < values.length; i++) {
-                if (i > 0) { writer.write(','); }
-                writer.write(escape(values[i]));
+                if (i > 0) { row.append(','); }
+                row.append(escape(values[i]));
             }
-            writer.write('\n');
+            row.append('\n');
+            if (pending != null) {
+                pending.append(row);
+            } else {
+                writer.write(row.toString());
+            }
             // Periodic flushing bounds data loss if Stop is pressed without adding filesystem
             // latency to every 50 Hz controller iteration.
             rowsSinceFlush++;
-            if (rowsSinceFlush >= 25) {
-                writer.flush();
-                rowsSinceFlush = 0;
+            if (autoFlushRows > 0 && rowsSinceFlush >= autoFlushRows) { flush(); }
+        } catch (IOException e) {
+            error = e.getMessage();
+        }
+    }
+
+    public void flush() {
+        if (writer == null) { return; }
+        try {
+            if (pending != null && pending.length() > 0) {
+                writer.write(pending.toString());
+                pending.setLength(0);
             }
+            writer.flush();
+            rowsSinceFlush = 0;
         } catch (IOException e) {
             error = e.getMessage();
         }
@@ -67,6 +100,7 @@ public final class TuningCsvWriter {
     public void close() {
         if (writer == null) { return; }
         try {
+            flush();
             writer.close();
         } catch (IOException e) {
             error = e.getMessage();

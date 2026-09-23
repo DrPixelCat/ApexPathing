@@ -8,6 +8,7 @@ import java.util.Locale;
 
 import core.FollowerConstants;
 import feedforward.FFLut;
+import feedforward.DynamicMotionProfile;
 import feedforward.MotionParameters;
 import geometry.PathPoint;
 import geometry.Vector;
@@ -109,8 +110,7 @@ public abstract class BaseProfileGenerator {
 
         // Start with each point's local velocity ceiling, then enforce reachability both ways.
         MotionParameters[] outputParams = generateBasePass(points, path);
-        runBackwardPass(outputParams, points, path);
-        runForwardPass(outputParams, points, path);
+        runReachabilityPasses(outputParams, points, path);
 
         // Fill acceleration, omega, alpha, and power after the sweeps settle.
         ProfileEvaluation profileEval = populateKinematicsAndPower(outputParams, points, path);
@@ -148,8 +148,7 @@ public abstract class BaseProfileGenerator {
             log.pHeading = profileEval.pHeading;
             lastReport.logs.add(log);
 
-            runBackwardPass(outputParams, points, path);
-            runForwardPass(outputParams, points, path);
+            runReachabilityPasses(outputParams, points, path);
             profileEval = populateKinematicsAndPower(outputParams, points, path);
             iterations++;
         }
@@ -244,53 +243,33 @@ public abstract class BaseProfileGenerator {
         Path path = (Path) this.path;
         PathPoint[] points = path.getGeneratedPoints();
         MotionParameters[] lut = new MotionParameters[points.length];
-
-        // Base pass: Max velocity everywhere
+        double[] positions = new double[points.length];
+        double[] velocityLimits = new double[points.length];
+        DynamicMotionProfile.PowerModel powerModel = new DynamicMotionProfile.PowerModel(
+                config.forwardVelLimitIn, config.forwardAccelLimitIn,
+                config.translationalKV, config.translationalKA,
+                config.translationalFeedforwardKS);
         for (int i = 0; i < points.length; i++) {
-            lut[i] = new MotionParameters();
-            lut[i].setTangentialVel(config.forwardVelLimitIn);
-            lut[i].setDistAlongCurve(
-                    path.getParametricPath().getLengthIn() - points[i].getDistanceToEndIn()
-            );
+            positions[i] = path.getParametricPath().getLengthIn()
+                    - points[i].getDistanceToEndIn();
+            velocityLimits[i] = powerModel.getVelocityLimit();
         }
-
-        // Backward pass: Naive deceleration
-        // If boosted, relax the boundary condition so the path ends at cruising speed
-        if (!path.isAccelBoosted()) { lut[points.length - 1].setTangentialVel(0.0); }
-
-        for (int i = points.length - 2; i >= 0; i--) {
-            double ds =
-                    Math.abs(points[i + 1].getDistanceToEndIn() - points[i].getDistanceToEndIn());
-            double nextVel = lut[i + 1].getTangentialVel();
-            double maxReachableVel =
-                    Math.sqrt(nextVel * nextVel + 2.0 * config.forwardAccelLimitIn * ds);
-            lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), maxReachableVel));
-        }
-
-        // Forward pass: Naive acceleration and populate angular targets
-        // If boosted, relax the boundary condition so the path begins at cruising speed
-        if (!path.isAccelBoosted()) { lut[0].setTangentialVel(0.0); }
-
-        for (int i = 1; i < points.length; i++) {
-            double ds =
-                    Math.abs(points[i].getDistanceToEndIn() - points[i - 1].getDistanceToEndIn());
-            double prevVel = lut[i - 1].getTangentialVel();
-            double maxReachableVel =
-                    Math.sqrt(prevVel * prevVel + 2.0 * config.forwardAccelLimitIn * ds);
-
-            double v = Math.min(lut[i].getTangentialVel(), maxReachableVel);
-            lut[i].setTangentialVel(v);
+        double boundaryVelocity = path.isAccelBoosted() ? powerModel.getVelocityLimit() : 0.0;
+        DynamicMotionProfile profile = DynamicMotionProfile.fromVelocityEnvelope(
+                positions, velocityLimits, boundaryVelocity, boundaryVelocity,
+                powerModel.forwardReachability(), powerModel.backwardReachability());
+        DynamicMotionProfile.State[] scalarStates = profile.getStates();
+        for (int i = 0; i < points.length; i++) {
+            lut[i] = new MotionParameters()
+                    .setTangentialVel(scalarStates[i].velocity)
+                    .setTangentialAccel(scalarStates[i].acceleration);
+            lut[i].setDistAlongCurve(positions[i]);
         }
 
         Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
         for (int i = 0; i < points.length - 1; i++) {
-            double ds = Math.abs(points[i + 1].getDistanceToEndIn()
-                    - points[i].getDistanceToEndIn());
             double v = lut[i].getTangentialVel();
-            double nextVelocity = lut[i + 1].getTangentialVel();
-            double a_t = (ds < EPSILON) ? 0.0
-                    : (nextVelocity * nextVelocity - v * v) / (2.0 * ds);
-            lut[i].setTangentialAccel(a_t);
+            double a_t = lut[i].getTangentialAccel();
 
             double s = points[i].getDistanceToEndIn();
             double kappa = points[i].getSignedCurvature();
@@ -369,121 +348,86 @@ public abstract class BaseProfileGenerator {
         return lut;
     }
 
-    /**
-     * Sweeps from end to start so every point can decelerate into the next point.
-     *
-     * <p>The reachability equation is {@code v0 = sqrt(v1^2 + 2 * a * ds)}. After that normal
-     * kinematic cap, the code optionally binary-searches the previous velocity against the full
-     * power model because braking plus turning can still saturate.
-     */
-    private void runBackwardPass(MotionParameters[] lut, PathPoint[] points, Path path) {
-        if (!path.isAccelBoosted()) { lut[points.length - 1].setTangentialVel(0.0); }
+    /** Applies the common dynamic envelope with drivetrain-specific reachability rules. */
+    private void runReachabilityPasses(final MotionParameters[] lut, final PathPoint[] points,
+                                       final Path path) {
+        final double pathLength = Math.max(path.getParametricPath().getLengthIn(), EPSILON);
+        final PathConstraint[] constraints = path.getConstraints();
+        final double[] positions = new double[lut.length];
+        final double[] velocityLimits = new double[lut.length];
+        for (int i = 0; i < lut.length; i++) {
+            positions[i] = lut[i].getDistAlongCurve();
+            velocityLimits[i] = lut[i].getTangentialVel();
+        }
+        double startVelocity = path.isAccelBoosted() ? velocityLimits[0] : 0.0;
+        double endVelocity = path.isAccelBoosted() ? velocityLimits[lut.length - 1] : 0.0;
 
-        double pathLength_in = Math.max(path.getParametricPath().getLengthIn(), EPSILON);
-        PathConstraint[] constraints = path.getConstraints();
-
-        for (int i = points.length - 2; i >= 0; i--) {
-            double ds =
-                    Math.abs(points[i + 1].getDistanceToEndIn() - points[i].getDistanceToEndIn());
-            double nextVel = lut[i + 1].getTangentialVel();
-            if (ds <= EPSILON) {
-                lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), nextVel));
-                continue;
-            }
-
-            double pctCompleted = path.constraintProgress(
-                    1.0 - points[i + 1].getDistanceToEndIn() / pathLength_in);
-            double currentMaxAccel = Double.MAX_VALUE;
-            double currentMaxAngAccel = Double.MAX_VALUE;
-
-            for (PathConstraint constraint : constraints) {
-                if (constraint.getS() <= pctCompleted) {
-                    if (constraint instanceof TranslationalConstraint &&
-                            constraint.getType() == Type.ACCELERATION) {
-                        currentMaxAccel = ((TranslationalConstraint) constraint).getValueIn();
-                    } else if (constraint instanceof AngularConstraint &&
-                            constraint.getType() == Type.ACCELERATION) {
-                        currentMaxAngAccel = ((AngularConstraint) constraint).getValueRad();
+        DynamicMotionProfile profile = DynamicMotionProfile.fromVelocityEnvelope(
+                positions, velocityLimits, startVelocity, endVelocity,
+                new DynamicMotionProfile.Reachability() {
+                    @Override public double maxReachableVelocity(
+                            double previousVelocity, double velocityCeiling, double ds,
+                            double boundaryPosition, int intervalIndex) {
+                        int pointIndex = intervalIndex + 1;
+                        double[] activeLimits = activeAccelerationLimits(
+                                path, constraints, points[pointIndex], pathLength);
+                        double maxAccel = calculateDynamicMaxAccel(previousVelocity,
+                                points[pointIndex], path, activeLimits[1]);
+                        if (activeLimits[0] != Double.MAX_VALUE && activeLimits[0] > 0.0) {
+                            maxAccel = Math.min(maxAccel, activeLimits[0]);
+                        }
+                        maxAccel = sanitizeNonNegative(maxAccel);
+                        double reachable = safeReachableVelocity(previousVelocity, maxAccel, ds);
+                        double capped = Math.min(velocityCeiling, reachable);
+                        return capped > previousVelocity + EPSILON
+                                ? findMaxNextVelocity(path, points[intervalIndex], points[pointIndex],
+                                previousVelocity, capped, maxAccel, ds) : capped;
                     }
-                }
-            }
+                },
+                new DynamicMotionProfile.Reachability() {
+                    @Override public double maxReachableVelocity(
+                            double nextVelocity, double velocityCeiling, double ds,
+                            double boundaryPosition, int intervalIndex) {
+                        int pointIndex = intervalIndex + 1;
+                        double[] activeLimits = activeAccelerationLimits(
+                                path, constraints, points[pointIndex], pathLength);
+                        double maxAccel = getMaxTangentialAccel(nextVelocity,
+                                points[pointIndex], path, activeLimits[1]);
+                        if (activeLimits[0] != Double.MAX_VALUE && activeLimits[0] > 0.0) {
+                            maxAccel = Math.min(maxAccel, activeLimits[0]);
+                        }
+                        maxAccel = sanitizeNonNegative(maxAccel);
+                        double reachable = safeReachableVelocity(nextVelocity, maxAccel, ds);
+                        double capped = Math.min(velocityCeiling, reachable);
+                        return capped > nextVelocity + EPSILON
+                                ? findMaxPreviousVelocity(path, points[intervalIndex],
+                                points[pointIndex], nextVelocity, capped, maxAccel, ds) : capped;
+                    }
+                });
 
-            double maxAccel = getMaxTangentialAccel(nextVel, points[i + 1], path,
-                    currentMaxAngAccel);
-            if (currentMaxAccel != Double.MAX_VALUE && currentMaxAccel > 0.0) {
-                maxAccel = Math.min(maxAccel, currentMaxAccel);
-            }
-            maxAccel = sanitizeNonNegative(maxAccel);
-
-            double maxReachableVel = safeReachableVelocity(nextVel, maxAccel, ds);
-            double cappedVel = Math.min(lut[i].getTangentialVel(), maxReachableVel);
-            if (ds > EPSILON && cappedVel > nextVel + EPSILON) {
-                // The kinematic cap can still overuse power once rotation/lateral load is included.
-                cappedVel = findMaxPreviousVelocity(
-                        path, points[i], points[i + 1], nextVel, cappedVel, maxAccel, ds
-                );
-            }
-            lut[i].setTangentialVel(cappedVel);
+        DynamicMotionProfile.State[] states = profile.getStates();
+        for (int i = 0; i < lut.length; i++) {
+            lut[i].setTangentialVel(states[i].velocity);
         }
     }
 
-    /**
-     * Sweeps from start to end so every point can accelerate from the previous point.
-     *
-     * <p>This is the forward companion to {@link #runBackwardPass}. Together the two passes create
-     * a profile that respects both start/end boundary conditions and local acceleration limits.
-     */
-    private void runForwardPass(MotionParameters[] lut, PathPoint[] points, Path path) {
-        /* If boosted, relax the boundary condition so the path begins at cruising speed so the
-        feedback controller can provide maximum +/- power */
-        if (!path.isAccelBoosted()) { lut[0].setTangentialVel(0.0); }
-
-        double pathLength_in = Math.max(path.getParametricPath().getLengthIn(), EPSILON);
-        PathConstraint[] constraints = path.getConstraints();
-
-        for (int i = 1; i < points.length; i++) {
-            double ds =
-                    Math.abs(points[i].getDistanceToEndIn() - points[i - 1].getDistanceToEndIn());
-            double prevVel = lut[i - 1].getTangentialVel();
-            if (ds <= EPSILON) {
-                lut[i].setTangentialVel(Math.min(lut[i].getTangentialVel(), prevVel));
-                continue;
-            }
-
-            double pctCompleted = path.constraintProgress(
-                    1.0 - points[i].getDistanceToEndIn() / pathLength_in);
-            double currentMaxAccel = Double.MAX_VALUE;
-            double currentMaxAngAccel = Double.MAX_VALUE;
-
-            for (PathConstraint constraint : constraints) {
-                if (constraint.getS() <= pctCompleted) {
-                    if (constraint instanceof TranslationalConstraint &&
-                            constraint.getType() == Type.ACCELERATION) {
-                        currentMaxAccel = ((TranslationalConstraint) constraint).getValueIn();
-                    } else if (constraint instanceof AngularConstraint &&
-                            constraint.getType() == Type.ACCELERATION) {
-                        currentMaxAngAccel = ((AngularConstraint) constraint).getValueRad();
-                    }
+    /** Returns the active translational and angular acceleration limits at a path point. */
+    private static double[] activeAccelerationLimits(Path path, PathConstraint[] constraints,
+                                                     PathPoint point, double pathLength) {
+        double progress = path.constraintProgress(
+                1.0 - point.getDistanceToEndIn() / pathLength);
+        double translational = Double.MAX_VALUE;
+        double angular = Double.MAX_VALUE;
+        for (PathConstraint constraint : constraints) {
+            if (constraint.getS() <= progress && constraint.getType() == Type.ACCELERATION) {
+                if (constraint instanceof TranslationalConstraint) {
+                    translational = ((TranslationalConstraint) constraint).getValueIn();
+                } else if (constraint instanceof AngularConstraint) {
+                    angular = ((AngularConstraint) constraint).getValueRad();
                 }
             }
-
-            double dynamicAccel = calculateDynamicMaxAccel(prevVel, points[i], path,
-                    currentMaxAngAccel);
-            if (currentMaxAccel != Double.MAX_VALUE && currentMaxAccel > 0.0) {
-                dynamicAccel = Math.min(dynamicAccel, currentMaxAccel);
-            }
-            dynamicAccel = sanitizeNonNegative(dynamicAccel);
-
-            double maxReachableVel = safeReachableVelocity(prevVel, dynamicAccel, ds);
-            double cappedVel = Math.min(lut[i].getTangentialVel(), maxReachableVel);
-            if (ds > EPSILON && cappedVel > prevVel + EPSILON) {
-                // Re-check the candidate segment against the full drivetrain power equation.
-                cappedVel = findMaxNextVelocity(
-                        path, points[i - 1], points[i], prevVel, cappedVel, dynamicAccel, ds
-                );
-            }
-            lut[i].setTangentialVel(cappedVel);
         }
+        return new double[]{translational, angular};
     }
 
     /**
@@ -537,8 +481,7 @@ public abstract class BaseProfileGenerator {
             trialProfile[pinIndex].setTangentialVel(candidate);
 
             // Test the candidate in-context; a local velocity is only valid after both sweeps settle.
-            runBackwardPass(trialProfile, points, path);
-            runForwardPass(trialProfile, points, path);
+            runReachabilityPasses(trialProfile, points, path);
             populateKinematicsAndPower(trialProfile, points, path);
 
             if (trialProfile[boundedCheckIndex].getMotorPower() <=

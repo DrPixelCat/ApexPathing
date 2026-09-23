@@ -12,7 +12,7 @@ import org.knowm.xchart.XYChartBuilder;
 import org.knowm.xchart.XYSeries;
 import org.knowm.xchart.style.Styler;
 
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController.Coefficients;
 import core.ApexStorage;
 import core.FollowerConstants;
 import drivetrains.BaseDrivetrain.DrivetrainType;
@@ -51,8 +51,8 @@ public class PathProfileConvergenceTest {
                 new File("build/profile-tests").getAbsolutePath());
         constants = FollowerConstants.getInstance();
         constants.drivetrainType = DrivetrainType.MECANUM;
-        constants.angularCoeffs = new PDSCoefficients(0.8, 0.04, 0.0);
-        constants.translationalCoeffs = new PDSCoefficients(1.3, 0.04, 0.0);
+        constants.angularCoeffs = new Coefficients().p(0.8).d(0.04).s(0.0);
+        constants.translationalCoeffs = new Coefficients().p(1.3).d(0.04).s(0.0);
         constants.velocityFeedbackGain = 2.5;
         constants.translationalKV = 0.0135;
         constants.translationalKA = 0.0026;

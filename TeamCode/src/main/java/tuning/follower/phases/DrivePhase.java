@@ -25,8 +25,8 @@ public class DrivePhase extends TuningPhase {
     private static final double TRANSLATIONAL_KP_MAX = 0.75;
     private static final double TRANSLATIONAL_KD_MIN = 0.0;
     private static final double TRANSLATIONAL_KD_MAX = 0.30;
-    private static final double TRANSLATIONAL_INITIAL_KP = 0.08;
-    private static final double TRANSLATIONAL_INITIAL_KD = 0.02;
+    private static final double DESIRED_SETTLING_TIME = 1.25;
+    private static final double DESIRED_DAMPING_RATIO = 1.0;
     private static final double AUTOMATIC_TEST_DISTANCE = 24.0;
     private static final double POSITION_TOLERANCE = 0.75;
     private static final double SETTLING_VELOCITY = 1.0;
@@ -73,7 +73,7 @@ public class DrivePhase extends TuningPhase {
         context.getTelemetry().addLine(
                 "Place the robot with at least 36 inches clear in front and behind it.");
         context.getTelemetry().addLine(
-                "Automatic tuning starts from generic gains, then " +
+                "Automatic tuning starts from the measured feedforward model, then " +
                         "checks settling, overshoot, error, and consistency in both directions.");
     }
 
@@ -98,8 +98,10 @@ public class DrivePhase extends TuningPhase {
         );
         routine = new PDSRoutine(
                 config,
-                TRANSLATIONAL_INITIAL_KP,
-                TRANSLATIONAL_INITIAL_KD,
+                context.constants.translationalKV,
+                context.constants.translationalKA,
+                DESIRED_SETTLING_TIME,
+                DESIRED_DAMPING_RATIO,
                 context.constants.translationalCoeffs.kS);
         routine.start();
         trialHeading = context.getFollower().getPose().getHeading().getRad();

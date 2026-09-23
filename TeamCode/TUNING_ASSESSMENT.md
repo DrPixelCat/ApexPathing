@@ -1,5 +1,18 @@
 # AutoTest tuning assessment — 2026-09-08
 
+## Development-branch policy
+
+The instrumentation and acceptance checks discussed here belong to the testing branch primarily
+to diagnose repeatability. CSV capture, explicit review screens, early-stop paths, and detailed
+failure telemetry should make a bad or inconsistent fit explainable; they must not turn an
+inconsistent algorithm into an apparently successful one through retries or operator selection.
+
+For main-line evaluation, repeatability is the criterion: given valid hardware, localization, and
+test space, the tuner either produces usable coefficients consistently or it does not work. Debug
+guardrails are not required in the final implementation merely because they are useful during
+development. Retain only checks needed to prevent injury or hardware damage, or checks that reject
+invalid input deterministically rather than masking tuner behavior.
+
 AutoTest.java was executed through AutoTestSimulationTest using the saved simulator
 constants (`APEX_USE_SAVED_TUNER_CONSTANTS=true`), without the bench-feedforward
 override. Existing workspace changes were retained. These are simulator results,

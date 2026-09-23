@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.physics.MotionVector;
+import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 
@@ -68,8 +68,9 @@ public class AccelerationFeedforwardPhaseSimulationTest {
                             : new Constants(), hardwareMap, true));
                     context.constants.translationalFeedforwardKS = .15;
                     context.constants.translationalKV = .01;
-                    context.constants.angularFeedforwardKS = .15;
-                    context.constants.angularKV = .08;
+                    // Representative result of the preceding angular kS/kV ramp.
+                    context.constants.angularFeedforwardKS = .39601;
+                    context.constants.angularKV = .08323;
                     context.constants.forwardVelLimitIn = 65;
                     context.constants.forwardAccelLimitIn = 148;
                     context.constants.angularVelLimitRad = 7;

@@ -96,6 +96,7 @@ public final class FTCodeSimLinearOpModeRunner {
         gamepad2.fromByteArray(lifecycle.latestGamepad2Data);
 
         lifecycle.wrap(() -> {
+            lifecycle.simHardwareMap.update();
             SimLinearOpModeBridge.eventLoopIteration(session, gamepad1, gamepad2);
             apexLogger.flush();
         });

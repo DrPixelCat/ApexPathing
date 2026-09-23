@@ -19,7 +19,7 @@ public class TunedAutoTestSimulationTest {
         File directory = new File("build/tuner-e2e-data");
         System.setProperty(ApexStorage.DIRECTORY_PROPERTY, directory.getAbsolutePath());
         try {
-            new FollowerTunerTelemetryTest().automaticWorkflowCompletesFromStaticFrictionThroughFeedback();
+            new FollowerTunerTelemetryTest().automaticWorkflowCompletesWithoutVelocityFeedbackTuner();
             new AutoTestSimulationTest().runAutoTest(true);
             assertVelocityTracking(directory);
         } finally {

@@ -5,7 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
-import controllers.PDSController;
+import controllers.FeedbackController;
 
 import geometry.DistUnit;
 import geometry.Angle;
@@ -18,8 +18,8 @@ import paths.movements.Turn;
 public class FollowerVectorTest {
     @Test
     public void matchingMovingHeadingDoesNotCommandBrakingInEitherDirection() {
-        PDSController controller = new PDSController(
-                new PDSController.PDSCoefficients(4.1275, 0.7685, 0.24));
+        FeedbackController controller = new FeedbackController(
+                new FeedbackController.Coefficients().p(4.1275).d(0.7685).s(0.24));
         controller.setAngularController();
         for (double rate : new double[] {-2.0, 2.0}) {
             assertEquals("Zero heading error and matching turn rate need no correction",
@@ -30,8 +30,8 @@ public class FollowerVectorTest {
 
     @Test
     public void stationaryHeadingStillDampsUnwantedRotation() {
-        PDSController controller = new PDSController(
-                new PDSController.PDSCoefficients(4.0, 0.75, 0.0));
+        FeedbackController controller = new FeedbackController(
+                new FeedbackController.Coefficients().p(4.0).d(0.75).s(0.0));
         assertEquals(-0.375, Follower.calculatePathHeadingFeedback(
                 controller, 0.0, 0.0, 0.5, false), 1e-12);
     }
@@ -224,12 +224,12 @@ public class FollowerVectorTest {
     public void stalledCrossTrackEndpointCommandAddsStaticFriction() {
         assertEquals(0.37125, Follower.ensureEndpointBreakawayPower(
                 0.14, 1.14, 0.0, 0.23125,
-                controllers.PDSController.LINEAR_STATIC_DEADBAND, 0.04), 1e-9);
+                FeedbackController.LINEAR_STATIC_DEADBAND, 0.04), 1e-9);
 
-        // Inside the PDS deadband, no breakaway command should be injected.
+        // Inside the feedback deadband, no breakaway command should be injected.
         assertEquals(0.02, Follower.ensureEndpointBreakawayPower(
                 0.02, 0.20, 0.0, 0.23125,
-                controllers.PDSController.LINEAR_STATIC_DEADBAND, 0.04), 1e-9);
+                FeedbackController.LINEAR_STATIC_DEADBAND, 0.04), 1e-9);
     }
 
     @Test

@@ -33,16 +33,17 @@ public class DriveController {
     }
 
     private double strafePenaltyRatio;
-    private final PDSController crossTrackPDS;
-    private final PDSController endDistancePDS;
-    private final PDSController turnPositionPDS;
+    private final FeedbackController crossTrackController;
+    private final FeedbackController endDistanceController;
+    private final FeedbackController turnPositionController;
+    private boolean crossTrackStaticCompensationEnabled = true;
 
     public DriveController(Dist maxForwardVelocity, Dist maxStrafeVelocity,
-                           PDSController.PDSCoefficients coefficients,
+                           FeedbackController.Coefficients coefficients,
                            boolean requireMecanumLimits) {
-        crossTrackPDS = new PDSController(coefficients);
-        endDistancePDS = new PDSController(coefficients);
-        turnPositionPDS = new PDSController(coefficients);
+        crossTrackController = new FeedbackController(coefficients);
+        endDistanceController = new FeedbackController(coefficients);
+        turnPositionController = new FeedbackController(coefficients);
         setVelocityLimits(maxForwardVelocity, maxStrafeVelocity, requireMecanumLimits);
     }
 
@@ -65,10 +66,10 @@ public class DriveController {
         strafePenaltyRatio = invalidLimits ? 1.0 : forwardVelocity / strafeVelocity;
     }
 
-    public void setCoefficients(PDSController.PDSCoefficients coefficients) {
-        crossTrackPDS.setCoefficients(coefficients);
-        endDistancePDS.setCoefficients(coefficients);
-        turnPositionPDS.setCoefficients(coefficients);
+    public void setCoefficients(FeedbackController.Coefficients coefficients) {
+        crossTrackController.setCoefficients(coefficients);
+        endDistanceController.setCoefficients(coefficients);
+        turnPositionController.setCoefficients(coefficients);
         reset();
     }
 
@@ -76,25 +77,32 @@ public class DriveController {
     public Vector calculatePointToPoint(Vector targetPos, Vector currentPos) {
         Vector fieldError = targetPos.minus(currentPos);
 
-        double basePower = turnPositionPDS.calculate(fieldError.getMag().getIn());
+        double basePower = turnPositionController.p().d().s()
+                .calculate(fieldError.getMag().getIn()).get();
         return Vector.fromPolar(Dist.fromIn(basePower), fieldError.getTheta());
     }
 
-    public double calculateCrossTrack(double error) { return crossTrackPDS.calculate(error); }
-
-    /** Calculates cross-track correction with optional static-friction compensation. */
-    public double calculateCrossTrack(double error, boolean applyStaticCompensation) {
-        return crossTrackPDS.calculate(error, applyStaticCompensation);
+    public double calculateCrossTrack(double error) {
+        return crossTrackController.p().d()
+                .s(crossTrackStaticCompensationEnabled ? Math.signum(error) : 0.0)
+                .calculate(error).get();
     }
 
-    public double calculateEndDistance(double error) { return endDistancePDS.calculate(error); }
+    /** Enables or disables static-friction compensation for cross-track correction. */
+    public void setCrossTrackStaticCompensationEnabled(boolean enabled) {
+        crossTrackStaticCompensationEnabled = enabled;
+    }
+
+    public double calculateEndDistance(double error) {
+        return endDistanceController.p().d().s().calculate(error).get();
+    }
 
     /**
      * Calculates endpoint power using a measured error rate instead of differentiating projected
      * path distance. For a fixed endpoint, pass the negative measured tangential velocity.
      */
     public double calculateEndDistance(double error, double errorRate) {
-        return endDistancePDS.calculate(error, errorRate);
+        return endDistanceController.p().d(errorRate).s().calculate(error).get();
     }
 
     /** Allocates one field-centric stage using mecanum direction-dependent wheel demand. */
@@ -139,8 +147,8 @@ public class DriveController {
     }
 
     public void reset() {
-        crossTrackPDS.reset();
-        endDistancePDS.reset();
-        turnPositionPDS.reset();
+        crossTrackController.reset();
+        endDistanceController.reset();
+        turnPositionController.reset();
     }
 }

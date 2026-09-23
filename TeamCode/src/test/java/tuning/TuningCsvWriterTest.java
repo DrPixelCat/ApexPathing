@@ -44,4 +44,29 @@ public class TuningCsvWriterTest {
             }
         }
     }
+
+    @Test
+    public void bufferedWriterDefersDiskIoUntilExplicitFlush() throws Exception {
+        String oldDirectory = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
+        try {
+            System.setProperty(ApexStorage.DIRECTORY_PROPERTY,
+                    temporaryFolder.getRoot().getAbsolutePath());
+            TuningCsvWriter writer = TuningCsvWriter.openBuffered(
+                    "buffered_capture", "time_s", "velocity");
+            writer.writeRow(0.02, 1.5);
+
+            assertEquals(0L, Files.size(Paths.get(writer.getPath())));
+            writer.flush();
+            assertEquals(2, Files.readAllLines(
+                    Paths.get(writer.getPath()), StandardCharsets.UTF_8).size());
+            writer.close();
+            assertNull(writer.getError());
+        } finally {
+            if (oldDirectory == null) {
+                System.clearProperty(ApexStorage.DIRECTORY_PROPERTY);
+            } else {
+                System.setProperty(ApexStorage.DIRECTORY_PROPERTY, oldDirectory);
+            }
+        }
+    }
 }

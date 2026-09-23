@@ -3,6 +3,7 @@ package core;
 import com.qualcomm.robotcore.util.Range;
 
 import controllers.DriveController;
+import controllers.FeedbackController;
 import drivetrains.BaseDrivetrain;
 import feedforward.MotionParameters;
 import geometry.Angle;
@@ -26,7 +27,11 @@ final class TankPathFollower {
     private final FollowerConstants constants;
     private final double distanceTolerance;
     private final double headingTolerance;
-    private final controllers.PDSController endpointHeadingController;
+    private final FeedbackController endpointHeadingController;
+    private final FeedbackController translationFeedforwardController;
+    private final FeedbackController headingFeedforwardController;
+    private final FeedbackController translationVelocityController;
+    private final FeedbackController headingVelocityController;
 
     TankPathFollower(BaseDrivetrain<?> drivetrain, DriveController driveController,
                      FollowerConstants constants, double distanceTolerance,
@@ -36,8 +41,16 @@ final class TankPathFollower {
         this.constants = constants;
         this.distanceTolerance = distanceTolerance;
         this.headingTolerance = headingTolerance;
-        endpointHeadingController = new controllers.PDSController(constants.angularCoeffs);
+        endpointHeadingController = new FeedbackController(constants.angularCoeffs);
         endpointHeadingController.setAngularController();
+        translationFeedforwardController = new FeedbackController(
+                new FeedbackController.Coefficients().vel(0.0).accel(0.0));
+        headingFeedforwardController = new FeedbackController(
+                new FeedbackController.Coefficients().vel(0.0).accel(0.0));
+        translationVelocityController = new FeedbackController(
+                new FeedbackController.Coefficients().p(0.0));
+        headingVelocityController = new FeedbackController(
+                new FeedbackController.Coefficients().p(0.0));
     }
 
     boolean update(Path path, PathSegment segment, Pose current, BaseLocalizer<?> localizer,
@@ -45,6 +58,12 @@ final class TankPathFollower {
                    double translationalKV, double translationalKA,
                    double angularKV, double angularKA,
                    double velocityFeedbackGain, double angularVelocityFeedbackGain) {
+        translationFeedforwardController.getCoefficients()
+                .vel(translationalKV).accel(translationalKA);
+        headingFeedforwardController.getCoefficients().vel(angularKV).accel(angularKA);
+        translationVelocityController.getCoefficients().p(velocityFeedbackGain);
+        headingVelocityController.getCoefficients().p(angularVelocityFeedbackGain);
+
         // region 1. Path Information
         // 1.1 Robot pose and path geometry
         Vector currentPosition = current.getVec();
@@ -116,15 +135,17 @@ final class TankPathFollower {
         state.velocitySampleAvailable = true;
 
         // 2.5 Velocity feedback and motion feedforward
-        double forwardVelocityFeedback =
-                (correctedVelocity - actualForwardVelocity) * velocityFeedbackGain;
-        double turnVelocityFeedback = angularVelocityFeedbackGain
-                * (correctedAngularVelocity - currentAngularVelocity);
-        double forwardFeedforward = MotionFeedforward.calculate(
-                correctedVelocity,
-                MotionFeedforward.scaleBrakingAcceleration(
-                        targetVelocity, targetAcceleration, actualForwardVelocity),
-                translationalKV, translationalKA, constants.translationalFeedforwardKS);
+        double forwardVelocityFeedback = translationVelocityController.p()
+                .calculate(correctedVelocity - actualForwardVelocity).get();
+        double turnVelocityFeedback = headingVelocityController.p()
+                .calculate(correctedAngularVelocity - currentAngularVelocity).get();
+        double scaledAcceleration = MotionFeedforward.scaleBrakingAcceleration(
+                targetVelocity, targetAcceleration, actualForwardVelocity);
+        double motionSign = MotionFeedforward.motionSign(correctedVelocity, scaledAcceleration);
+        double forwardFeedforward = translationFeedforwardController.vel(correctedVelocity)
+                .accel(scaledAcceleration)
+                .f(motionSign * constants.translationalFeedforwardKS)
+                .calculate(0.0).get();
 
         // 2.6 Blend into endpoint capture
         double endError = driveSign * Follower.pathEndpointTangentError(
@@ -138,9 +159,10 @@ final class TankPathFollower {
                 PathCompletionPolicy.distanceTolerance(distanceTolerance), distanceRemaining);
         double endpointBlend = Follower.endpointCaptureBlend(distanceRemaining);
         endpointHeadingController.setCoefficients(constants.angularCoeffs);
-        double endpointTurn = endpointHeadingController.calculate(
-                currentHeading.getShortestAngleTo(path.getEndPose().getHeading()).getRad(),
-                -currentAngularVelocity);
+        double endpointHeadingError = currentHeading
+                .getShortestAngleTo(path.getEndPose().getHeading()).getRad();
+        double endpointTurn = endpointHeadingController.p().d(-currentAngularVelocity).s()
+                .calculate(endpointHeadingError).get();
         state.trackingEndpointBlend = endpointBlend;
         state.trackingFeedforward = forwardFeedforward;
         state.trackingVelocityFeedback = forwardVelocityFeedback;
@@ -158,13 +180,11 @@ final class TankPathFollower {
         }
 
         // 2.7 Angular feedforward for Ramsete's corrected chassis speed
-        double turnFeedforward = correctedAngularVelocity * angularKV
-                + targetAngularAcceleration * angularKA;
+        double turnFeedforward = headingFeedforwardController.vel(correctedAngularVelocity)
+                .accel(targetAngularAcceleration).calculate(0.0).get();
 
         // 2.8 Completion and stuck detection
         double endpointDistance = currentPosition.distanceTo(path.getEndPose().getVec()).getIn();
-        double endpointHeadingError = currentHeading
-                .getShortestAngleTo(path.getEndPose().getHeading()).getRad();
         boolean insideTolerance = PathCompletionPolicy.isInsideTolerance(
                 endpointDistance, endpointHeadingError, distanceTolerance, headingTolerance);
         boolean velocitySettled = PathCompletionPolicy.isVelocitySettled(
