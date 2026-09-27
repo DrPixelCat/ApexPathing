@@ -81,20 +81,15 @@ public class AutoTestSimulationTest {
             System.out.println("AUTO TEST EXTERNAL RUNTIME: " + routeRunSeconds + " s");
             System.out.println("AUTO TEST LOOP: " + auto.getAverageLoopMilliseconds() + " ms");
             validateVelocityTrace(new File(auto.getOutboundVelocityCsvPath()));
-            boolean brakingExperiment = "true".equalsIgnoreCase(
-                    System.getenv("APEX_BRAKING_EXPERIMENT"));
             // The saved corner fixture builds additional diagnostics on the host event loop.
-            double maximumLoopMs = useSavedConstants ? 30.0
-                    : brakingExperiment ? 25.0 : 23.0;
+            double maximumLoopMs = useSavedConstants ? 30.0 : 23.0;
             assertTrue("Auto Test loop exceeded fixture timing range: " +
                             auto.getAverageLoopMilliseconds(),
                     auto.getAverageLoopMilliseconds() >= 17.0 &&
                             auto.getAverageLoopMilliseconds() <= maximumLoopMs);
-            if (!brakingExperiment) {
-                assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
-                                "s, internal=" + auto.getMovementTimingReport(),
-                        routeRunSeconds <= MAX_TOTAL_MOVEMENT_SECONDS);
-            }
+            assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
+                            "s, internal=" + auto.getMovementTimingReport(),
+                    routeRunSeconds <= MAX_TOTAL_MOVEMENT_SECONDS);
             if (outbound.isProfiled()) {
                 File velocityCsv = new File(auto.getOutboundVelocityCsvPath());
                 assertTrue("Profiled outbound velocity CSV was not created: path=" +
@@ -163,21 +158,12 @@ public class AutoTestSimulationTest {
             actualVelocity.add(plotted);
             if (target == 0) { continue; } // Endpoint has taken over.
             double measured = Double.parseDouble(row[columns.get("controller_measured_in_s")]);
-            double feedback = Double.parseDouble(row[columns.get("signed_velocity_feedback")]);
             assertEquals("CSV must show the feedback measurement", plotted, measured, 1e-5);
             assertTrue("Tracking target must respect the velocity floor", target >= 6);
-            if (FollowerConstants.getInstance().brakingResponse
-                    == FollowerConstants.BrakingResponse.STANDARD) {
-                assertEquals("Feedback must oppose overspeed, including during acceleration",
-                        (target - measured) * FollowerConstants.getInstance().velocityFeedbackGain,
-                        feedback, 1e-5);
-            }
             double acceleration = Double.parseDouble(row[columns.get("target_accel_in_s2")]);
             double rawVelocity = Double.parseDouble(row[columns.get("raw_velocity_in_s")]);
             double dt = elapsed - previousElapsed;
-            if (FollowerConstants.getInstance().brakingResponse
-                    == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE
-                    && acceleration < -20.0 && previousAcceleration < -20.0
+            if (acceleration < -20.0 && previousAcceleration < -20.0
                     && target < previousTargetVelocity
                     && dt > 0.01 && dt < 0.06) {
                 // One sample can include heading allocation and estimator projection.
@@ -259,10 +245,6 @@ public class AutoTestSimulationTest {
         }
         String gain = System.getenv("APEX_TRANSLATION_FEEDBACK_GAIN");
         if (gain != null) { constants.velocityFeedbackGain = Double.parseDouble(gain); }
-        String response = System.getenv("APEX_BRAKING_RESPONSE");
-        if (response != null) {
-            constants.brakingResponse = FollowerConstants.BrakingResponse.valueOf(response);
-        }
         String tolerance = System.getenv("APEX_BRAKING_OVERSPEED_TOLERANCE_IN");
         constants.brakingOverspeedToleranceIn = tolerance == null
                 ? 3.0 : Double.parseDouble(tolerance);
@@ -279,16 +261,6 @@ public class AutoTestSimulationTest {
         String neutralMargin = System.getenv("APEX_BRAKING_NEUTRAL_MARGIN");
         constants.brakingNeutralPowerMargin = neutralMargin == null
                 ? 0.02 : Double.parseDouble(neutralMargin);
-        String regenRate = System.getenv("APEX_BRAKING_REGEN_RATE");
-        constants.brakingRegenerationRatePerSecond = regenRate == null
-                ? 9.99 : Double.parseDouble(regenRate);
-        constants.brakingNaturalDecelerationIn = 150 * .06 / (1.0 - .06);
-        String densityFeedbackRate = System.getenv("APEX_BRAKING_DENSITY_FEEDBACK_RATE");
-        constants.brakingDensityFeedbackRatePerSecond = densityFeedbackRate == null
-                ? 10.0 : Double.parseDouble(densityFeedbackRate);
-        String brakingScale = System.getenv("APEX_BRAKING_KA_SCALE");
-        constants.brakingKAScaleAboveBoundary = brakingScale == null
-                ? 1.0 : Double.parseDouble(brakingScale);
         String forwardAccelLimit = System.getenv("APEX_FORWARD_ACCEL_LIMIT_IN");
         if (forwardAccelLimit != null) {
             constants.forwardAccelLimitIn = Double.parseDouble(forwardAccelLimit);

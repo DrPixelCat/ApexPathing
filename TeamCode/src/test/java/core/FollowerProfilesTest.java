@@ -65,19 +65,27 @@ public class FollowerProfilesTest {
 
     @Test public void finalBrakingAndProfileSettingsSurviveSaving() throws Exception {
         FollowerConstants constants = legacy("MECANUM");
-        assertEquals(FollowerConstants.BrakingResponse.TOLERANCE_BRAKE,
-                constants.brakingResponse);
+        constants.brakingVelocityFeedbackGain = 0.12;
         constants.brakingCornerToleranceIn = -1.5;
         constants.tankBrakingPulsePower = 0.1;
         constants.profileCornerSpeedScale = 0.8;
         constants.profileVelocityPowerCoefficient = 0.014;
         FollowerConstants restored = FollowerConstants.fromJson(constants.toJson());
-        assertEquals(FollowerConstants.BrakingResponse.TOLERANCE_BRAKE,
-                restored.brakingResponse);
+        assertEquals(0.12, restored.brakingVelocityFeedbackGain, 0);
         assertEquals(-1.5, restored.brakingCornerToleranceIn, 0);
         assertEquals(0.1, restored.tankBrakingPulsePower, 0);
         assertEquals(0.8, restored.profileCornerSpeedScale, 0);
         assertEquals(0.014, restored.profileVelocityPowerCoefficient, 0);
+    }
+
+    @Test public void obsoleteBrakingSelectorCannotChangeTheSavedResponse() throws Exception {
+        JSONObject saved = new JSONObject().put("drivetrainType", "MECANUM")
+                .put("brakingResponse", "STANDARD")
+                .put("brakingPulsePower", 0.27);
+        FollowerConstants restored = FollowerConstants.fromJson(saved);
+        JSONObject rewritten = restored.toJson();
+        assertFalse(rewritten.toString().contains("brakingResponse"));
+        assertEquals(0.27, restored.brakingPulsePower, 0);
     }
 
     @Test public void rejectsUnknownSchemaAndInvalidProfileAndNonfiniteSave() throws Exception {

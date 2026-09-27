@@ -33,7 +33,6 @@ final class SimulatorTuning {
         target.translationalKA = c.translationalKA;
         target.translationalFeedforwardKS = c.translationalFeedforwardKS;
         target.velocityFeedbackGain = c.velocityFeedbackGain;
-        target.brakingResponse = c.brakingResponse;
         target.brakingVelocityFeedbackGain = c.brakingVelocityFeedbackGain;
         target.brakingOverspeedToleranceIn = c.brakingOverspeedToleranceIn;
         target.brakingPulsePower = c.brakingPulsePower;

@@ -18,17 +18,7 @@ import controllers.FeedbackController.Coefficients;
  * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
-    /** Profiled translation braking responses. */
-    public enum BrakingResponse {
-        STANDARD, VELOCITY_FEEDBACK, PULSE_DENSITY, PULSE_DENSITY_FEEDBACK,
-        TOLERANCE_BRAKE, COAST
-    }
-
-    public BrakingResponse brakingResponse = BrakingResponse.TOLERANCE_BRAKE;
     public double brakingVelocityFeedbackGain = 0.0;
-    public double brakingRegenerationRatePerSecond = 0.0;
-    public double brakingNaturalDecelerationIn = 0.0;
-    public double brakingDensityFeedbackRatePerSecond = 0.0;
     public double brakingOverspeedToleranceIn = 3.0;
     public double brakingPulsePower = 0.30;
     public double tankBrakingPulsePower = 0.10;
@@ -41,7 +31,6 @@ public class FollowerConstants {
     /** Overspeed trigger used when entering a tight curve while decelerating. */
     public double brakingCornerToleranceIn = 3.0;
     public double tankBrakingCornerToleranceIn = 3.0;
-    public double brakingKAScaleAboveBoundary = 1.0;
     /** Desired first-order velocity-error time constant used after kV/kA characterization. */
     public static final double VELOCITY_FEEDBACK_TIME_CONSTANT_SECONDS = 0.10;
     /** Feedback-power limits protect translation from large localization-error commands. */
@@ -259,9 +248,6 @@ public class FollowerConstants {
         translationalFeedforwardKS = json.has("translationalFeedforwardS")
                 ? loadDouble(json, "translationalFeedforwardS") : translationalCoeffs.kS;
         velocityFeedbackGain = loadDouble(json, "velocityFeedbackGain");
-        brakingResponse = json.has("brakingResponse")
-                ? BrakingResponse.valueOf(json.optString("brakingResponse"))
-                : BrakingResponse.TOLERANCE_BRAKE;
         brakingVelocityFeedbackGain = json.has("brakingVelocityFeedbackGain")
                 ? loadDouble(json, "brakingVelocityFeedbackGain") : velocityFeedbackGain;
         brakingOverspeedToleranceIn = json.has("brakingOverspeedToleranceIn")
@@ -310,7 +296,6 @@ public class FollowerConstants {
             json.put("angularFeedforwardS", angularFeedforwardKS);
             json.put("translationalFeedforwardS", translationalFeedforwardKS);
             json.put("velocityFeedbackGain", velocityFeedbackGain);
-            json.put("brakingResponse", brakingResponse.name());
             json.put("brakingVelocityFeedbackGain", brakingVelocityFeedbackGain);
             json.put("brakingOverspeedToleranceIn", brakingOverspeedToleranceIn);
             json.put("brakingPulsePower", brakingPulsePower);

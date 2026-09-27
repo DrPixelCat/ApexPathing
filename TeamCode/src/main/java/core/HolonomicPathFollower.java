@@ -205,109 +205,38 @@ final class HolonomicPathFollower {
                         .calculate(velocityTarget - robotTangentialVelocity).get();
                 double cruisePower = motionSign * constants.translationalFeedforwardKS
                         + constants.translationalKV * velocityTarget;
-                boolean densityFeedback = targets.getTangentialAccel() < 0.0
-                        && constants.brakingResponse
-                        == FollowerConstants.BrakingResponse.PULSE_DENSITY_FEEDBACK;
-                boolean toleranceBrake = constants.brakingResponse
-                        == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE;
-                boolean belowBrakingBoundary = targets.getTangentialAccel() < 0
-                        && feedforward <= 0.0;
-                if (toleranceBrake) {
-                    double overspeed = robotTangentialVelocity - velocityTarget;
-                    double pulseTolerance = targets.getTangentialAccel() < -5.0
-                            && Math.abs(curvature) > 0.005
-                            ? constants.brakingCornerToleranceIn
-                            : constants.brakingOverspeedToleranceIn;
-                    if (state.brakingPulseCooldown > 0) {
-                        state.brakingPulseCooldown--;
-                    }
-                    if (overspeed > pulseTolerance
-                            && state.brakingPulseCooldown == 0) {
-                        // One opposing feedforward cycle. Keep position and
-                        // heading corrections ahead of this brake request.
-                        feedforward = -constants.brakingPulsePower;
-                        tangentVelocityFeedback = 0.0;
-                        state.brakingPulseCooldown =
-                                Math.max(0, constants.brakingPulseCooldownCycles) + 1;
-                    } else if (targets.getTangentialAccel() < 0.0) {
-                        double netDrive = cruisePower + constants.brakingVelocityFeedbackGain
-                                * (velocityTarget - robotTangentialVelocity);
-                        if (targets.getTangentialAccel() < -5.0) {
-                            // During sustained braking, feedback may relax the
-                            // brake but must not command recovery acceleration.
-                            double neutralPower = constants.translationalFeedforwardKS
-                                    + constants.translationalKV
-                                    * Math.max(0.0, robotTangentialVelocity);
-                            netDrive = Math.min(netDrive,
-                                    neutralPower - constants.brakingNeutralPowerMargin);
-                        }
-                        // The near-flat velocity floor needs enough drive to
-                        // keep rolling through a corner after deceleration.
-                        feedforward = Math.max(0.001, netDrive);
-                        tangentVelocityFeedback = 0.0;
-                    }
-                } else if (densityFeedback) {
-                    // In this simulator, zero power is a distinct, strong BRAKE regime.
-                    // Distribute brake cycles instead of remaining in that regime for
-                    // several cycles after the continuous command crosses zero.
-                    double brakingMagnitude = constants.brakingRegenerationRatePerSecond
-                            * Math.max(0.0, robotTangentialVelocity)
-                            + constants.brakingNaturalDecelerationIn;
-                    double velocityError = velocityTarget - robotTangentialVelocity;
-                    double requestedDeceleration = -targets.getTangentialAccel()
-                            - constants.brakingDensityFeedbackRatePerSecond * velocityError;
-                    if (brakingMagnitude > 0.0 && Double.isFinite(brakingMagnitude)) {
-                        double fraction = Range.clip(
-                                requestedDeceleration / brakingMagnitude, 0.0, 1.0);
-                        state.brakingPulseCredit += fraction;
-                        boolean brakeCycle = state.brakingPulseCredit >= 1.0;
-                        if (brakeCycle) state.brakingPulseCredit -= 1.0;
-                        feedforward = brakeCycle ? 0.0 : cruisePower;
-                        tangentVelocityFeedback = 0.0;
-                    } else {
-                        // An uncalibrated selector must preserve ordinary braking.
-                        state.brakingPulseCredit = 0.5;
-                    }
-                } else if (targets.getTangentialAccel() < 0 && !belowBrakingBoundary
-                        && constants.brakingKAScaleAboveBoundary != 1.0) {
-                    // Keep this sweep on the original positive-power side of the boundary.
-                    feedforward = Math.max(0.001, cruisePower
-                            + constants.brakingKAScaleAboveBoundary
-                            * constants.translationalKA * accelerationTarget);
+                double overspeed = robotTangentialVelocity - velocityTarget;
+                double pulseTolerance = targets.getTangentialAccel() < -5.0
+                        && Math.abs(curvature) > 0.005
+                        ? constants.brakingCornerToleranceIn
+                        : constants.brakingOverspeedToleranceIn;
+                if (state.brakingPulseCooldown > 0) {
+                    state.brakingPulseCooldown--;
                 }
-                if (belowBrakingBoundary && !densityFeedback && !toleranceBrake) {
-                    switch (constants.brakingResponse) {
-                        case VELOCITY_FEEDBACK:
-                            feedforward = cruisePower;
-                            tangentVelocityFeedback = constants.brakingVelocityFeedbackGain
-                                    * (velocityTarget - robotTangentialVelocity);
-                            break;
-                        case PULSE_DENSITY:
-                            double brakingMagnitude = constants.brakingRegenerationRatePerSecond
-                                    * velocityTarget + constants.brakingNaturalDecelerationIn;
-                            if (brakingMagnitude > 0.0) {
-                                double fraction = Range.clip(
-                                        -targets.getTangentialAccel() / brakingMagnitude, 0.0, 1.0);
-                                state.brakingPulseCredit += fraction;
-                                boolean brakeCycle = state.brakingPulseCredit >= 1.0;
-                                if (brakeCycle) state.brakingPulseCredit -= 1.0;
-                                feedforward = brakeCycle ? 0.0 : cruisePower;
-                                tangentVelocityFeedback = 0.0;
-                            }
-                            break;
-                        case COAST:
-                            // Exact zero invokes FTCodeSim's strong BRAKE branch.
-                            feedforward = 0.001;
-                            tangentVelocityFeedback = 0.0;
-                            break;
-                        default:
-                            break;
+                if (overspeed > pulseTolerance
+                        && state.brakingPulseCooldown == 0) {
+                    // One opposing feedforward cycle. Keep position and
+                    // heading corrections ahead of this brake request.
+                    feedforward = -constants.brakingPulsePower;
+                    tangentVelocityFeedback = 0.0;
+                    state.brakingPulseCooldown =
+                            Math.max(0, constants.brakingPulseCooldownCycles) + 1;
+                } else if (targets.getTangentialAccel() < 0.0) {
+                    double netDrive = cruisePower + constants.brakingVelocityFeedbackGain
+                            * (velocityTarget - robotTangentialVelocity);
+                    if (targets.getTangentialAccel() < -5.0) {
+                        // During sustained braking, feedback may relax the
+                        // brake but must not command recovery acceleration.
+                        double neutralPower = constants.translationalFeedforwardKS
+                                + constants.translationalKV
+                                * Math.max(0.0, robotTangentialVelocity);
+                        netDrive = Math.min(netDrive,
+                                neutralPower - constants.brakingNeutralPowerMargin);
                     }
-                } else if (!densityFeedback) {
-                    state.brakingPulseCredit = 0.5;
-                }
-                if (!toleranceBrake) {
-                    state.brakingPulseCooldown = 0;
+                    // The near-flat velocity floor needs enough drive to
+                    // keep rolling through a corner after deceleration.
+                    feedforward = Math.max(0.001, netDrive);
+                    tangentVelocityFeedback = 0.0;
                 }
                 state.trackingVelocityTarget = velocityTarget;
                 state.trackingFeedforward = feedforward;

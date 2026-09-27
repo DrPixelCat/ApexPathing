@@ -81,8 +81,7 @@ public class CornerTrackingSimulationTest {
         double brakingRms = Math.sqrt(brakingSquaredError / brakingSamples);
         assertTrue("Braking velocity RMS: " + brakingRms, brakingRms < 8);
         FollowerConstants tuning = FollowerConstants.getInstance();
-        if (tuning.brakingResponse == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE
-                && tuning.brakingCornerToleranceIn < 0.0) {
+        if (tuning.brakingCornerToleranceIn < 0.0) {
             assertTrue("Expected curved braking samples", cornerEntrySamples > 10);
             assertTrue("Corner entry should lean below target speed: "
                             + cornerEntryError / cornerEntrySamples,

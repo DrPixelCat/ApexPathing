@@ -147,8 +147,7 @@ final class TankPathFollower {
                 .f(motionSign * constants.translationalFeedforwardKS)
                 .calculate(0.0).get();
         if (state.t < 1.0
-                && distanceRemaining > Follower.PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES
-                && constants.brakingResponse == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE) {
+                && distanceRemaining > Follower.PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES) {
             double progressSpeed = driveSign * actualForwardVelocity;
             double progressAcceleration = driveSign * targetAcceleration;
             double overspeed = progressSpeed - Math.abs(targetVelocity);

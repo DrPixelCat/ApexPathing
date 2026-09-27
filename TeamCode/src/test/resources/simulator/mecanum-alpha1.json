@@ -3,7 +3,6 @@
   "profiles": {
     "DEFAULT": {
       "velocityFeedbackGain": 0.06652120505574205,
-      "brakingResponse": "TOLERANCE_BRAKE",
       "translationalD": 0.02024725491002294,
       "translationKV": 0.006241447491199932,
       "headingP": 1.4856040860569153,

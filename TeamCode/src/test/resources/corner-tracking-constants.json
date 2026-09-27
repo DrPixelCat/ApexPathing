@@ -1,6 +1,5 @@
 {
     "velocityFeedbackGain": 0.025,
-    "brakingResponse": "TOLERANCE_BRAKE",
     "profileVelocityPowerCoefficient": 0.014,
     "profileCornerSpeedScale": 0.8,
     "brakingCornerToleranceIn": -1.5,
