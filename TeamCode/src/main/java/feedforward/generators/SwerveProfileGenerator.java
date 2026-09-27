@@ -36,7 +36,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
         double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
                 finalTangent);
 
-        double maxPhysicalVel = constants.forwardVelLimitIn;
+        double maxPhysicalVel = cornerVelocityLimit(constants.forwardVelLimitIn, kappa);
         double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
                 maxAngAccel);
@@ -113,7 +113,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
         double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
         double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa, finalTangent);
 
-        double tanPow = vel * constants.translationalKV
+        double tanPow = vel * profileKV()
                 + accel * constants.getTranslationalKA(vel, accel)
                 + signedStatic(vel, accel, constants.translationalFeedforwardKS);
 

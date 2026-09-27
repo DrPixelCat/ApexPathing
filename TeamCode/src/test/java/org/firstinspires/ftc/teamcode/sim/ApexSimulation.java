@@ -157,8 +157,9 @@ public final class ApexSimulation {
             org.codeblooded.ftcodesim.hardware.devices.SimMotor motor =
                     (org.codeblooded.ftcodesim.hardware.devices.SimMotor) hardwareMap.get(
                             com.qualcomm.robotcore.hardware.DcMotorEx.class, name);
+            // alpha.1 evaluates five model terms; the final term is unused in this linear fit.
             double[] coefficients = {1.0 / (kA * config.wheelRadius * config.nominalVoltage),
-                    0.0, kV / kA, kS / (kA * config.wheelRadius)};
+                    0.0, kV / kA, kS / (kA * config.wheelRadius), 0.0};
             motor.config.modelCoefficients = coefficients;
             motor.config.zeroPowerBrakeCoefficients = coefficients.clone();
         }

@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
 import core.ApexStorage;
+import core.FollowerConstants;
 import org.junit.Test;
 
 import java.io.File;
@@ -48,7 +49,8 @@ public class CornerTrackingSimulationTest {
         for (int i = 0; i < header.length; i++) { columns.put(header[i], i); }
         double peakCrossTrack = 0, peakCurveError = 0, peakHeadingError = 0;
         double brakingSquaredError = 0;
-        int curveSamples = 0, brakingSamples = 0;
+        double cornerEntryError = 0;
+        int curveSamples = 0, brakingSamples = 0, cornerEntrySamples = 0;
         for (int i = 1; i < lines.size(); i++) {
             String[] row = lines.get(i).split(",");
             double crossTrack = Math.abs(value(row, columns, "cross_track_error_in"));
@@ -64,6 +66,10 @@ public class CornerTrackingSimulationTest {
                 double error = value(row, columns, "controller_measured_in_s") - target;
                 brakingSquaredError += error * error;
                 brakingSamples++;
+                if (Math.abs(value(row, columns, "curvature_in_inv")) > 0.05) {
+                    cornerEntryError += error;
+                    cornerEntrySamples++;
+                }
             }
         }
         assertTrue("Expected corner and braking measurements", curveSamples > 30 && brakingSamples > 30);
@@ -74,9 +80,18 @@ public class CornerTrackingSimulationTest {
                 peakHeadingError < Math.toRadians(25));
         double brakingRms = Math.sqrt(brakingSquaredError / brakingSamples);
         assertTrue("Braking velocity RMS: " + brakingRms, brakingRms < 8);
+        FollowerConstants tuning = FollowerConstants.getInstance();
+        if (tuning.brakingResponse == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE
+                && tuning.brakingCornerToleranceIn < 0.0) {
+            assertTrue("Expected curved braking samples", cornerEntrySamples > 10);
+            assertTrue("Corner entry should lean below target speed: "
+                            + cornerEntryError / cornerEntrySamples,
+                    cornerEntryError / cornerEntrySamples < 0.0);
+        }
         System.out.println("CORNER REGRESSION: outboundPeak=" + peakCrossTrack
                 + " curvePeak=" + peakCurveError + " headingPeakDeg="
-                + Math.toDegrees(peakHeadingError) + " brakingRms=" + brakingRms);
+                + Math.toDegrees(peakHeadingError) + " brakingRms=" + brakingRms
+                + " cornerEntryBias=" + cornerEntryError / cornerEntrySamples);
     }
 
     private static double value(String[] row, Map<String, Integer> columns, String column) {

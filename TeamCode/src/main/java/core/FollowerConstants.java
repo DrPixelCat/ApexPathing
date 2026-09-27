@@ -18,6 +18,30 @@ import controllers.FeedbackController.Coefficients;
  * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
+    /** Profiled translation braking responses. */
+    public enum BrakingResponse {
+        STANDARD, VELOCITY_FEEDBACK, PULSE_DENSITY, PULSE_DENSITY_FEEDBACK,
+        TOLERANCE_BRAKE, COAST
+    }
+
+    public BrakingResponse brakingResponse = BrakingResponse.TOLERANCE_BRAKE;
+    public double brakingVelocityFeedbackGain = 0.0;
+    public double brakingRegenerationRatePerSecond = 0.0;
+    public double brakingNaturalDecelerationIn = 0.0;
+    public double brakingDensityFeedbackRatePerSecond = 0.0;
+    public double brakingOverspeedToleranceIn = 3.0;
+    public double brakingPulsePower = 0.30;
+    public double tankBrakingPulsePower = 0.10;
+    public int brakingPulseCooldownCycles = 1;
+    public double brakingNeutralPowerMargin = 0.02;
+    /** Scale applied to curved-path velocity ceilings before reachability sweeps. */
+    public double profileCornerSpeedScale = 1.0;
+    /** Optional conservative velocity power slope for profile reachability. */
+    public double profileVelocityPowerCoefficient = 0.0;
+    /** Overspeed trigger used when entering a tight curve while decelerating. */
+    public double brakingCornerToleranceIn = 3.0;
+    public double tankBrakingCornerToleranceIn = 3.0;
+    public double brakingKAScaleAboveBoundary = 1.0;
     /** Desired first-order velocity-error time constant used after kV/kA characterization. */
     public static final double VELOCITY_FEEDBACK_TIME_CONSTANT_SECONDS = 0.10;
     /** Feedback-power limits protect translation from large localization-error commands. */
@@ -235,8 +259,31 @@ public class FollowerConstants {
         translationalFeedforwardKS = json.has("translationalFeedforwardS")
                 ? loadDouble(json, "translationalFeedforwardS") : translationalCoeffs.kS;
         velocityFeedbackGain = loadDouble(json, "velocityFeedbackGain");
+        brakingResponse = json.has("brakingResponse")
+                ? BrakingResponse.valueOf(json.optString("brakingResponse"))
+                : BrakingResponse.TOLERANCE_BRAKE;
+        brakingVelocityFeedbackGain = json.has("brakingVelocityFeedbackGain")
+                ? loadDouble(json, "brakingVelocityFeedbackGain") : velocityFeedbackGain;
+        brakingOverspeedToleranceIn = json.has("brakingOverspeedToleranceIn")
+                ? loadDouble(json, "brakingOverspeedToleranceIn") : 3.0;
+        brakingPulsePower = json.has("brakingPulsePower")
+                ? loadDouble(json, "brakingPulsePower") : 0.30;
+        tankBrakingPulsePower = json.has("tankBrakingPulsePower")
+                ? loadDouble(json, "tankBrakingPulsePower") : 0.10;
+        brakingPulseCooldownCycles = json.has("brakingPulseCooldownCycles")
+                ? json.optInt("brakingPulseCooldownCycles") : 1;
+        brakingNeutralPowerMargin = json.has("brakingNeutralPowerMargin")
+                ? loadDouble(json, "brakingNeutralPowerMargin") : 0.02;
         angularVelocityFeedbackGain = loadDouble(json, "angularVelocityFeedbackGain");
         kCentripetal = loadDouble(json, "kCentripetal");
+        profileCornerSpeedScale = json.has("profileCornerSpeedScale")
+                ? loadDouble(json, "profileCornerSpeedScale") : 1.0;
+        profileVelocityPowerCoefficient = json.has("profileVelocityPowerCoefficient")
+                ? loadDouble(json, "profileVelocityPowerCoefficient") : 0.0;
+        brakingCornerToleranceIn = json.has("brakingCornerToleranceIn")
+                ? loadDouble(json, "brakingCornerToleranceIn") : 3.0;
+        tankBrakingCornerToleranceIn = json.has("tankBrakingCornerToleranceIn")
+                ? loadDouble(json, "tankBrakingCornerToleranceIn") : 3.0;
 
         forwardVelLimitIn = loadDouble(json, "forwardVelLimitIn");
         forwardAccelLimitIn = loadDouble(json, "forwardAccelLimitIn");
@@ -263,8 +310,19 @@ public class FollowerConstants {
             json.put("angularFeedforwardS", angularFeedforwardKS);
             json.put("translationalFeedforwardS", translationalFeedforwardKS);
             json.put("velocityFeedbackGain", velocityFeedbackGain);
+            json.put("brakingResponse", brakingResponse.name());
+            json.put("brakingVelocityFeedbackGain", brakingVelocityFeedbackGain);
+            json.put("brakingOverspeedToleranceIn", brakingOverspeedToleranceIn);
+            json.put("brakingPulsePower", brakingPulsePower);
+            json.put("tankBrakingPulsePower", tankBrakingPulsePower);
+            json.put("brakingPulseCooldownCycles", brakingPulseCooldownCycles);
+            json.put("brakingNeutralPowerMargin", brakingNeutralPowerMargin);
             json.put("angularVelocityFeedbackGain", angularVelocityFeedbackGain);
             json.put("kCentripetal", kCentripetal);
+            json.put("profileCornerSpeedScale", profileCornerSpeedScale);
+            json.put("profileVelocityPowerCoefficient", profileVelocityPowerCoefficient);
+            json.put("brakingCornerToleranceIn", brakingCornerToleranceIn);
+            json.put("tankBrakingCornerToleranceIn", tankBrakingCornerToleranceIn);
             json.put("forwardVelLimitIn", forwardVelLimitIn);
             json.put("forwardAccelLimitIn", forwardAccelLimitIn);
             json.put("strafeVelLimitIn", strafeVelLimitIn);
@@ -290,6 +348,7 @@ public class FollowerConstants {
         velocityFeedbackGain = velocityFeedbackGain(
                 translationalKV, translationalKA,
                 MAX_TRANSLATION_VELOCITY_FEEDBACK_GAIN);
+        brakingVelocityFeedbackGain = velocityFeedbackGain;
         angularVelocityFeedbackGain = velocityFeedbackGain(
                 angularKV, angularKA,
                 MAX_ANGULAR_VELOCITY_FEEDBACK_GAIN);

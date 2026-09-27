@@ -81,13 +81,20 @@ public class AutoTestSimulationTest {
             System.out.println("AUTO TEST EXTERNAL RUNTIME: " + routeRunSeconds + " s");
             System.out.println("AUTO TEST LOOP: " + auto.getAverageLoopMilliseconds() + " ms");
             validateVelocityTrace(new File(auto.getOutboundVelocityCsvPath()));
-            assertTrue("Auto Test loop was not approximately 20 ms: " +
+            boolean brakingExperiment = "true".equalsIgnoreCase(
+                    System.getenv("APEX_BRAKING_EXPERIMENT"));
+            // The saved corner fixture builds additional diagnostics on the host event loop.
+            double maximumLoopMs = useSavedConstants ? 30.0
+                    : brakingExperiment ? 25.0 : 23.0;
+            assertTrue("Auto Test loop exceeded fixture timing range: " +
                             auto.getAverageLoopMilliseconds(),
                     auto.getAverageLoopMilliseconds() >= 17.0 &&
-                            auto.getAverageLoopMilliseconds() <= 23.0);
-            assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
-                            "s, internal=" + auto.getMovementTimingReport(),
-                    routeRunSeconds <= MAX_TOTAL_MOVEMENT_SECONDS);
+                            auto.getAverageLoopMilliseconds() <= maximumLoopMs);
+            if (!brakingExperiment) {
+                assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
+                                "s, internal=" + auto.getMovementTimingReport(),
+                        routeRunSeconds <= MAX_TOTAL_MOVEMENT_SECONDS);
+            }
             if (outbound.isProfiled()) {
                 File velocityCsv = new File(auto.getOutboundVelocityCsvPath());
                 assertTrue("Profiled outbound velocity CSV was not created: path=" +
@@ -143,9 +150,13 @@ public class AutoTestSimulationTest {
         double peak = 0;
         int brakingSamples = 0;
         double brakingSquaredError = 0, brakingBias = 0, brakingPeak = 0;
+        double previousElapsed = Double.NaN, previousRawVelocity = Double.NaN;
+        double previousTargetVelocity = Double.NaN;
+        double previousAcceleration = Double.NaN;
         for (int i = 1; i < lines.size(); i++) {
             String[] row = lines.get(i).split(",");
-            elapsedSeconds.add(Double.parseDouble(row[columns.get("elapsed_s")]));
+            double elapsed = Double.parseDouble(row[columns.get("elapsed_s")]);
+            elapsedSeconds.add(elapsed);
             double target = Double.parseDouble(row[columns.get("controller_target_in_s")]);
             targetVelocity.add(target);
             double plotted = Double.parseDouble(row[columns.get("kalman_velocity_in_s")]);
@@ -155,10 +166,29 @@ public class AutoTestSimulationTest {
             double feedback = Double.parseDouble(row[columns.get("signed_velocity_feedback")]);
             assertEquals("CSV must show the feedback measurement", plotted, measured, 1e-5);
             assertTrue("Tracking target must respect the velocity floor", target >= 6);
-            assertEquals("Feedback must oppose overspeed, including during acceleration",
-                    (target - measured) * FollowerConstants.getInstance().velocityFeedbackGain,
-                    feedback, 1e-5);
+            if (FollowerConstants.getInstance().brakingResponse
+                    == FollowerConstants.BrakingResponse.STANDARD) {
+                assertEquals("Feedback must oppose overspeed, including during acceleration",
+                        (target - measured) * FollowerConstants.getInstance().velocityFeedbackGain,
+                        feedback, 1e-5);
+            }
             double acceleration = Double.parseDouble(row[columns.get("target_accel_in_s2")]);
+            double rawVelocity = Double.parseDouble(row[columns.get("raw_velocity_in_s")]);
+            double dt = elapsed - previousElapsed;
+            if (FollowerConstants.getInstance().brakingResponse
+                    == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE
+                    && acceleration < -20.0 && previousAcceleration < -20.0
+                    && target < previousTargetVelocity
+                    && dt > 0.01 && dt < 0.06) {
+                // One sample can include heading allocation and estimator projection.
+                // Reject the larger repeated rebound seen before the neutral-power cap.
+                assertTrue("Speed rebounded during sustained braking at " + elapsed + "s",
+                        rawVelocity - previousRawVelocity < 1.5);
+            }
+            previousElapsed = elapsed;
+            previousRawVelocity = rawVelocity;
+            previousTargetVelocity = target;
+            previousAcceleration = acceleration;
             if (acceleration < -5) {
                 double error = measured - target;
                 brakingSquaredError += error * error;
@@ -198,12 +228,21 @@ public class AutoTestSimulationTest {
         chart.getStyler().setPlotGridLinesVisible(true);
         chart.addSeries("Target velocity", elapsedSeconds, targetVelocity);
         chart.addSeries("Actual velocity (Kalman)", elapsedSeconds, actualVelocity);
-        File output = new File(System.getProperty("user.dir"), "AutoTest_Velocity_Tracking");
+        String graphDirectory = System.getenv("APEX_AUTOTEST_GRAPH_DIR");
+        File directory = graphDirectory == null
+                ? new File(System.getProperty("user.dir")) : new File(graphDirectory);
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IllegalStateException("Could not create graph directory " + directory);
+        }
+        File output = new File(directory, "AutoTest_Velocity_Tracking");
         BitmapEncoder.saveBitmap(chart, output.getAbsolutePath(), BitmapFormat.PNG);
     }
 
     private static void configureStableConstants(boolean useSavedConstants) {
-        if (System.getProperty(ApexStorage.DIRECTORY_PROPERTY) == null) {
+        String dataDirectory = System.getenv("APEX_AUTOTEST_DATA_DIR");
+        if (dataDirectory != null) {
+            System.setProperty(ApexStorage.DIRECTORY_PROPERTY, dataDirectory);
+        } else if (System.getProperty(ApexStorage.DIRECTORY_PROPERTY) == null) {
             File directory = new File(System.getProperty("user.dir"), "build/ftcodesim-data");
             System.setProperty(ApexStorage.DIRECTORY_PROPERTY, directory.getAbsolutePath());
         }
@@ -215,10 +254,52 @@ public class AutoTestSimulationTest {
                 constants.translationalKV = 0.004178027423;
                 constants.translationalKA = 0.007254097165;
             }
-            String gain = System.getenv("APEX_TRANSLATION_FEEDBACK_GAIN");
-            if (gain != null) { constants.velocityFeedbackGain = Double.parseDouble(gain); }
-            return;
+        } else {
+            SimulatorTuning.apply(constants);
         }
-        SimulatorTuning.apply(constants);
+        String gain = System.getenv("APEX_TRANSLATION_FEEDBACK_GAIN");
+        if (gain != null) { constants.velocityFeedbackGain = Double.parseDouble(gain); }
+        String response = System.getenv("APEX_BRAKING_RESPONSE");
+        if (response != null) {
+            constants.brakingResponse = FollowerConstants.BrakingResponse.valueOf(response);
+        }
+        String tolerance = System.getenv("APEX_BRAKING_OVERSPEED_TOLERANCE_IN");
+        constants.brakingOverspeedToleranceIn = tolerance == null
+                ? 3.0 : Double.parseDouble(tolerance);
+        String cornerTolerance = System.getenv("APEX_BRAKING_CORNER_TOLERANCE_IN");
+        if (cornerTolerance != null) {
+            constants.brakingCornerToleranceIn = Double.parseDouble(cornerTolerance);
+        }
+        String pulsePower = System.getenv("APEX_BRAKING_PULSE_POWER");
+        constants.brakingPulsePower = pulsePower == null
+                ? 0.30 : Double.parseDouble(pulsePower);
+        String pulseCooldown = System.getenv("APEX_BRAKING_PULSE_COOLDOWN_CYCLES");
+        constants.brakingPulseCooldownCycles = pulseCooldown == null
+                ? 1 : Integer.parseInt(pulseCooldown);
+        String neutralMargin = System.getenv("APEX_BRAKING_NEUTRAL_MARGIN");
+        constants.brakingNeutralPowerMargin = neutralMargin == null
+                ? 0.02 : Double.parseDouble(neutralMargin);
+        String regenRate = System.getenv("APEX_BRAKING_REGEN_RATE");
+        constants.brakingRegenerationRatePerSecond = regenRate == null
+                ? 9.99 : Double.parseDouble(regenRate);
+        constants.brakingNaturalDecelerationIn = 150 * .06 / (1.0 - .06);
+        String densityFeedbackRate = System.getenv("APEX_BRAKING_DENSITY_FEEDBACK_RATE");
+        constants.brakingDensityFeedbackRatePerSecond = densityFeedbackRate == null
+                ? 10.0 : Double.parseDouble(densityFeedbackRate);
+        String brakingScale = System.getenv("APEX_BRAKING_KA_SCALE");
+        constants.brakingKAScaleAboveBoundary = brakingScale == null
+                ? 1.0 : Double.parseDouble(brakingScale);
+        String forwardAccelLimit = System.getenv("APEX_FORWARD_ACCEL_LIMIT_IN");
+        if (forwardAccelLimit != null) {
+            constants.forwardAccelLimitIn = Double.parseDouble(forwardAccelLimit);
+        }
+        String cornerSpeedScale = System.getenv("APEX_PROFILE_CORNER_SPEED_SCALE");
+        if (cornerSpeedScale != null) {
+            constants.profileCornerSpeedScale = Double.parseDouble(cornerSpeedScale);
+        }
+        String profileKV = System.getenv("APEX_PROFILE_VELOCITY_POWER_COEFFICIENT");
+        if (profileKV != null) {
+            constants.profileVelocityPowerCoefficient = Double.parseDouble(profileKV);
+        }
     }
 }

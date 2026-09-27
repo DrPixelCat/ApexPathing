@@ -167,6 +167,7 @@ public class TankPathFollowingSimulationTest {
                 .put("angularKV", 0.061).put("angularKA", 0.03)
                 .put("angularFeedforwardS", 0.24)
                 .put("velocityFeedbackGain", 0.02)
+                .put("profileCornerSpeedScale", 0.8)
                 .put("angularVelocityFeedbackGain", 0.15)
                 .put("forwardVelLimitIn", 20).put("forwardAccelLimitIn", 30)
                 .put("angularVelLimitRad", 2).put("angularAccelLimitRad", 4);

@@ -50,7 +50,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
         double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
                 finalTangent);
 
-        double maxPhysicalVel = constants.forwardVelLimitIn;
+        double maxPhysicalVel = cornerVelocityLimit(constants.forwardVelLimitIn, kappa);
 
         double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
@@ -95,7 +95,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
      * motor output budget.
      */
     private double evaluatePower(double v, double fPrime, double fDoublePrime) {
-        double transPower = Math.abs(v * constants.translationalKV +
+        double transPower = Math.abs(v * profileKV() +
                         signedStatic(v, 0.0, constants.translationalFeedforwardKS));
 
         double omega = fPrime * v;
@@ -124,7 +124,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
         double omega = fPrime * v;
         double alpha = fDoublePrime * (v * v) + fPrime * a_t;
 
-        double pForward = v * constants.translationalKV +
+        double pForward = v * profileKV() +
                 a_t * constants.getTranslationalKA(v, a_t)
                         + signedStatic(v, a_t, constants.translationalFeedforwardKS);
 

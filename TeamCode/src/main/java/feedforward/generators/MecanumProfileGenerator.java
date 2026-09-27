@@ -48,7 +48,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
                 finalTangent);
 
         DirectionalKinematics dirK = limitCalculator.getKinematics(tangent, headingAtPoint);
-        double maxPhysicalVel = dirK.maxVel;
+        double maxPhysicalVel = cornerVelocityLimit(dirK.maxVel, kappa);
 
         double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
@@ -90,7 +90,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
     private double evaluatePower(double v, double kappa, double fPrime,
                                  double fDoublePrime, DirectionalKinematics tangentKinematics) {
         // Apply the LUT as power cost multipliers instead of pretending strafe is as efficient.
-        double boostedKV = constants.translationalKV * tangentKinematics.velMultiplier;
+        double boostedKV = profileKV() * tangentKinematics.velMultiplier;
         double transPower = v * boostedKV
                 + signedStatic(v, 0.0, constants.translationalFeedforwardKS);
 
@@ -128,7 +128,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         double omega = fPrime * v;
         double alpha = fDoublePrime * (v * v) + fPrime * a_t;
 
-        double pForward = v * constants.translationalKV * dirK.velMultiplier
+        double pForward = v * profileKV() * dirK.velMultiplier
                 + a_t * constants.getTranslationalKA(v, a_t) * dirK.accelMultiplier
                 + signedStatic(v, a_t, constants.translationalFeedforwardKS);
 

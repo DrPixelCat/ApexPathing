@@ -63,6 +63,23 @@ public class FollowerProfilesTest {
         assertThrows(IllegalStateException.class, () -> dual.forProfile(TANK));
     }
 
+    @Test public void finalBrakingAndProfileSettingsSurviveSaving() throws Exception {
+        FollowerConstants constants = legacy("MECANUM");
+        assertEquals(FollowerConstants.BrakingResponse.TOLERANCE_BRAKE,
+                constants.brakingResponse);
+        constants.brakingCornerToleranceIn = -1.5;
+        constants.tankBrakingPulsePower = 0.1;
+        constants.profileCornerSpeedScale = 0.8;
+        constants.profileVelocityPowerCoefficient = 0.014;
+        FollowerConstants restored = FollowerConstants.fromJson(constants.toJson());
+        assertEquals(FollowerConstants.BrakingResponse.TOLERANCE_BRAKE,
+                restored.brakingResponse);
+        assertEquals(-1.5, restored.brakingCornerToleranceIn, 0);
+        assertEquals(0.1, restored.tankBrakingPulsePower, 0);
+        assertEquals(0.8, restored.profileCornerSpeedScale, 0);
+        assertEquals(0.014, restored.profileVelocityPowerCoefficient, 0);
+    }
+
     @Test public void rejectsUnknownSchemaAndInvalidProfileAndNonfiniteSave() throws Exception {
         assertThrows(IllegalArgumentException.class, () -> FollowerConstants.fromJson(
                 new JSONObject().put("schemaVersion", 99).put("drivetrainType", "DUAL_ACTUATED")));

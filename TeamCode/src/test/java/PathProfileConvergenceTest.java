@@ -56,6 +56,8 @@ public class PathProfileConvergenceTest {
         constants.velocityFeedbackGain = 2.5;
         constants.translationalKV = 0.0135;
         constants.translationalKA = 0.0026;
+        constants.profileVelocityPowerCoefficient = 0.0;
+        constants.profileCornerSpeedScale = 1.0;
         constants.angularKV = 0.011;
         constants.angularKA = 0.0021;
         constants.kCentripetal = 0.001;
@@ -165,13 +167,16 @@ public class PathProfileConvergenceTest {
     }
 
     @Test
-    public void testMecanumAndTankProfilesGenerateFiniteOutput() {
+    public void testAllDrivetrainProfilesGenerateFiniteCurvedOutput() {
+        constants.profileVelocityPowerCoefficient = 0.014;
+        constants.profileCornerSpeedScale = 0.8;
         Path mecanumPath = new HolonomicPathBuilder(
                 geometry.pose(0, -50, 90), geometry.arcPose(0, 50, 30),
                 geometry.pose(100, 50, 0))
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .quickBuild();
         assertUsableProfile("mecanum", new MecanumProfileGenerator(constants, mecanumPath).generate());
+        assertUsableProfile("swerve", new SwerveProfileGenerator(constants, mecanumPath).generate());
 
         Path tankPath = new TankPathBuilder(
                 geometry.pose(0, -50, 90), geometry.arcPose(0, 50, 30),
@@ -186,6 +191,31 @@ public class PathProfileConvergenceTest {
         double diagonalMax = maxVelocity(generateStraightMecanumProfile(45));
         assertTrue("45-degree mecanum profile should have a lower peak velocity",
                 diagonalMax < forwardMax - 1.0);
+    }
+
+    @Test
+    public void testMotorSlopeReducesReachablePeakForAllDrivetrains() {
+        Path holonomic = new HolonomicPathBuilder(
+                geometry.pose(0, 0, 0), geometry.pose(60, 0, 0))
+                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
+        Path tank = new TankPathBuilder(
+                geometry.pose(0, 0, 0), geometry.pose(60, 0, 0)).quickBuild();
+        double mecanumOriginal = maxVelocity(
+                new MecanumProfileGenerator(constants, holonomic).generate());
+        double swerveOriginal = maxVelocity(
+                new SwerveProfileGenerator(constants, holonomic).generate());
+        double tankOriginal = maxVelocity(
+                new TankProfileGenerator(constants, tank).generate());
+        constants.profileVelocityPowerCoefficient = 0.02;
+        assertTrue("Mecanum peak must respect speed-dependent motor power",
+                maxVelocity(new MecanumProfileGenerator(constants, holonomic).generate())
+                        < mecanumOriginal - 1.0);
+        assertTrue("Swerve peak must respect speed-dependent motor power",
+                maxVelocity(new SwerveProfileGenerator(constants, holonomic).generate())
+                        < swerveOriginal - 1.0);
+        assertTrue("Tank peak must respect speed-dependent motor power",
+                maxVelocity(new TankProfileGenerator(constants, tank).generate())
+                        < tankOriginal - 1.0);
     }
 
     @Test

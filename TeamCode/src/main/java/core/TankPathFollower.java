@@ -146,6 +146,37 @@ final class TankPathFollower {
                 .accel(scaledAcceleration)
                 .f(motionSign * constants.translationalFeedforwardKS)
                 .calculate(0.0).get();
+        if (state.t < 1.0
+                && distanceRemaining > Follower.PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES
+                && constants.brakingResponse == FollowerConstants.BrakingResponse.TOLERANCE_BRAKE) {
+            double progressSpeed = driveSign * actualForwardVelocity;
+            double progressAcceleration = driveSign * targetAcceleration;
+            double overspeed = progressSpeed - Math.abs(targetVelocity);
+            double curvature = segment.getSignedCurvature(state.t);
+            double tolerance = progressAcceleration < -5.0 && Math.abs(curvature) > 0.005
+                    ? constants.tankBrakingCornerToleranceIn
+                    : constants.brakingOverspeedToleranceIn;
+            if (state.brakingPulseCooldown > 0) { state.brakingPulseCooldown--; }
+            if (overspeed > tolerance && state.brakingPulseCooldown == 0) {
+                forwardFeedforward = -driveSign * constants.tankBrakingPulsePower;
+                forwardVelocityFeedback = 0.0;
+                state.brakingPulseCooldown =
+                        Math.max(0, constants.brakingPulseCooldownCycles) + 1;
+            } else if (progressAcceleration < 0.0) {
+                double speedTarget = Math.abs(targetVelocity);
+                double drive = constants.translationalFeedforwardKS
+                        + translationalKV * speedTarget
+                        + constants.brakingVelocityFeedbackGain
+                        * (speedTarget - progressSpeed);
+                if (progressAcceleration < -5.0) {
+                    double neutral = constants.translationalFeedforwardKS
+                            + translationalKV * Math.max(0.0, progressSpeed);
+                    drive = Math.min(drive, neutral - constants.brakingNeutralPowerMargin);
+                }
+                forwardFeedforward = driveSign * Math.max(0.001, drive);
+                forwardVelocityFeedback = 0.0;
+            }
+        }
 
         // 2.6 Blend into endpoint capture
         double endError = driveSign * Follower.pathEndpointTangentError(

@@ -47,6 +47,21 @@ public abstract class BaseProfileGenerator {
         this.path = path;
     }
 
+    protected double profileKV() {
+        return Double.isFinite(constants.profileVelocityPowerCoefficient)
+                && constants.profileVelocityPowerCoefficient > 0.0
+                ? constants.profileVelocityPowerCoefficient : constants.translationalKV;
+    }
+
+    protected double cornerVelocityLimit(double velocityLimit, double curvature) {
+        double scale = constants.profileCornerSpeedScale;
+        if (!Double.isFinite(scale) || scale <= 0.0 || scale >= 1.0) {
+            return velocityLimit;
+        }
+        double curveWeight = Math.min(1.0, Math.abs(curvature) / 0.08);
+        return velocityLimit * (1.0 - (1.0 - scale) * curveWeight);
+    }
+
     /** @return diagnostics from the last call to {@link #generate()} */
     public DebugReport getLastDebugReport() { return lastReport; }
 
@@ -247,7 +262,7 @@ public abstract class BaseProfileGenerator {
         double[] velocityLimits = new double[points.length];
         DynamicMotionProfile.PowerModel powerModel = new DynamicMotionProfile.PowerModel(
                 config.forwardVelLimitIn, config.forwardAccelLimitIn,
-                config.translationalKV, config.translationalKA,
+                profileKV(), config.translationalKA,
                 config.translationalFeedforwardKS);
         for (int i = 0; i < points.length; i++) {
             positions[i] = path.getParametricPath().getLengthIn()
