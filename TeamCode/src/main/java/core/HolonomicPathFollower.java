@@ -19,7 +19,6 @@ final class HolonomicPathFollower {
     private final DriveController driveController;
     private final FeedbackController headingController;
     private final FeedbackController translationFeedforwardController;
-    private final FeedbackController headingFeedforwardController;
     private final FeedbackController translationVelocityController;
     private final FeedbackController headingVelocityController;
     private final FeedbackController centripetalController;
@@ -41,8 +40,6 @@ final class HolonomicPathFollower {
         this.headingTolerance = headingTolerance;
         translationFeedforwardController = new FeedbackController(
                 new FeedbackController.Coefficients().vel(0.0).accel(0.0));
-        headingFeedforwardController = new FeedbackController(
-                new FeedbackController.Coefficients().vel(0.0).accel(0.0));
         translationVelocityController = new FeedbackController(
                 new FeedbackController.Coefficients().p(0.0));
         headingVelocityController = new FeedbackController(
@@ -59,7 +56,6 @@ final class HolonomicPathFollower {
                    double velocityFeedbackGain, double angularVelocityFeedbackGain) {
         translationFeedforwardController.getCoefficients()
                 .vel(translationalKV).accel(translationalKA);
-        headingFeedforwardController.getCoefficients().vel(angularKV).accel(angularKA);
         translationVelocityController.getCoefficients().p(velocityFeedbackGain);
         headingVelocityController.getCoefficients().p(angularVelocityFeedbackGain);
 
@@ -129,13 +125,8 @@ final class HolonomicPathFollower {
             targetAngularVelocity = targets.getAngularVel() * headingTimeScale;
             double targetAngularAcceleration = targets.getAngularAccel()
                     * headingTimeScale * headingTimeScale;
-            double movingFriction = Math.abs(targetAngularVelocity) > 1e-6
-                    ? Math.signum(targetAngularVelocity) * constants.angularFeedforwardKS : 0.0;
-            headingFeedforward = headingFeedforwardController.vel(targetAngularVelocity)
-                    .accel(targetAngularAcceleration).f(movingFriction)
-                    .calculate(0.0).get();
-            headingFeedforward = constants.characterizedPower(MotionCharacterization.Axis.ANGULAR,
-                    targetAngularVelocity, targetAngularAcceleration, headingFeedforward);
+            headingFeedforward = HolonomicFeedforward.heading(constants,
+                    targetAngularVelocity, targetAngularAcceleration);
         }
 
         double currentAngularVelocity = localizer.getVel().getHeading().getRad();
@@ -200,16 +191,12 @@ final class HolonomicPathFollower {
                         .calculate(velocityTarget - robotTangentialVelocity).get();
                 double motionSign = MotionFeedforward.profiledStaticSign(
                         velocityTarget, accelerationTarget, tangentVelocityFeedback, translationalKV);
-                double feedforward = translationFeedforwardController.vel(velocityTarget)
-                        .accel(accelerationTarget)
-                        .f(motionSign * constants.translationalFeedforwardKS)
-                        .calculate(0.0).get();
                 // Feedforward describes the reference motion, as it does in the planner.
                 // Pose error belongs to feedback, not to an extra strafe holding-power demand.
                 Vector bodyDirection = unitTangent.rotate(headingTarget.times(-1));
-                Vector power = constants.characterizedTranslation(bodyDirection, velocityTarget,
-                        accelerationTarget, bodyDirection.times(feedforward)).rotate(headingTarget);
-                feedforward = power.getX().getIn() * unitTangent.getX().getIn()
+                Vector power = HolonomicFeedforward.translation(constants, bodyDirection, velocityTarget,
+                        accelerationTarget, translationalKV, motionSign).rotate(headingTarget);
+                double feedforward = power.getX().getIn() * unitTangent.getX().getIn()
                         + power.getY().getIn() * unitTangent.getY().getIn();
                 normalFeedforward = power.minus(unitTangent.times(feedforward));
                 state.trackingVelocityTarget = velocityTarget;
@@ -262,6 +249,10 @@ final class HolonomicPathFollower {
             tangentFeedforward = 0.0;
         }
 
+        // The planned normal force shares the propulsion budget. Combine its signed vector
+        // before allocation, so mecanum axis cancellation and heading demand match the planner.
+        Vector centripetalFeedforward = profiled ? state.centripetalCorrection : unitTangent.times(0);
+
         // 2.4 Blend into endpoint capture
         if (profiled) {
             double endpointPower = driveController.calculateEndDistance(
@@ -277,6 +268,7 @@ final class HolonomicPathFollower {
             tangentVelocityFeedback *= 1.0 - endpointBlend;
             tangentFeedforward *= 1.0 - endpointBlend;
             normalFeedforward = normalFeedforward.times(1.0 - endpointBlend);
+            centripetalFeedforward = centripetalFeedforward.times(1.0 - endpointBlend);
         }
 
         // 2.5 Reconcile propulsion and braking
@@ -297,9 +289,9 @@ final class HolonomicPathFollower {
 
         // 2.6 Allocate available motor power
         HolonomicCommandAllocator.Result command = allocator.allocate(
-                state.crossTrackCorrection, state.centripetalCorrection, unitTangent,
+                state.crossTrackCorrection, profiled ? unitTangent.times(0) : state.centripetalCorrection, unitTangent,
                 currentHeading, tangentFeedback, headingFeedback, tangentFeedforward,
-                tangentVelocityFeedback, headingVelocityFeedback, headingFeedforward, normalFeedforward);
+                tangentVelocityFeedback, headingVelocityFeedback, headingFeedforward, normalFeedforward, centripetalFeedforward);
         // Characterized forward/strafe feedforward can differ in direction from the path tangent.
         state.lastCommandDemand = command.demand;
 

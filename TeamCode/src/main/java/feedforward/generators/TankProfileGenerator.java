@@ -6,192 +6,35 @@ import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
-/**
- * Generates path profiles for differential/tank drives.
- *
- * <p>Tank drives spend the same left/right wheel voltage budget on forward motion and heading
- * motion. This generator therefore treats forward and angular power as additive normalized
- * utilization.
- *
- * @author DrPixelCat - 7842 alum
- */
+/** Differential-drive reference powers with physical traction and heading limits. */
 public class TankProfileGenerator extends BaseProfileGenerator {
+    public TankProfileGenerator(FollowerConstants constants, Path path) { super(constants, path); }
+    public TankProfileGenerator(FollowerConstants constants, Path path, double powerLimit) { super(constants, path, powerLimit); }
     static double tractionLimitedVelocity(double velocity, double curvature, double acceleration) {
-        if (!Double.isFinite(acceleration) || acceleration <= 0.0
-                || Math.abs(curvature) <= EPSILON) {
-            return velocity;
+        return !Double.isFinite(acceleration) || acceleration <= 0 || Math.abs(curvature) <= EPSILON
+                ? velocity : Math.min(velocity, Math.sqrt(acceleration / Math.abs(curvature)));
+    }
+    @Override protected double calculateMaxTangentialVelocity(PathPoint point, Path path, double maxAngVel, double maxAngAccel) {
+        double ceiling = cornerVelocityLimit(calibratedVelocityLimit(Axis.FORWARD, constants.forwardVelLimitIn), point.getSignedCurvature());
+        ceiling = tractionLimitedVelocity(ceiling, point.getSignedCurvature(), constants.maxCentripetalAccelIn);
+        double prime = path.getInterpolator().getHeadingFirstDerivative(point.getDistanceToEndIn(), point.getSignedCurvature(), path.getParametricPath().getFirstDerivative(1));
+        if (Math.abs(prime) > 1e-12) {
+            ceiling = Math.min(ceiling, Math.min(maxAngVel, calibratedVelocityLimit(Axis.ANGULAR, constants.angularVelLimitRad)) / Math.abs(prime));
         }
-        return Math.min(velocity, Math.sqrt(acceleration / Math.abs(curvature)));
+        return ceiling;
     }
-    /** Number of binary-search steps used for velocity ceilings. */
-    private static final int VELOCITY_SEARCH_ITERATIONS = 8;
-
-    /** Creates a tank profile generator for a path. */
-    public TankProfileGenerator(FollowerConstants constants, Path path) {
-        super(constants, path);
-    }
-
-    /**
-     * Computes the maximum path speed at one sample.
-     * 
-     * <p>The heading interpolator supplies {@code dtheta/ds} and {@code d2theta/ds2}. Those convert
-     * path speed into heading speed and acceleration: {@code omega = f' * v} and 
-     * {@code alpha = f'' * v^2} when tangential acceleration is zero.
-     */
-    @Override
-    protected double calculateMaxTangentialVelocity(PathPoint point,
-                                                    Path path, double maxAngVel,
-                                                    double maxAngAccel) {
-        double s = point.getDistanceToEndIn();
-        double kappa = point.getSignedCurvature();
-        double dKappa = point.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
-                finalTangent);
-
-        double maxPhysicalVel = cornerVelocityLimit(constants.calibratedVelocityLimit(Axis.FORWARD,
-                constants.forwardVelLimitIn), kappa);
-
-        double effectiveAngVelLimit = Math.min(constants.calibratedVelocityLimit(Axis.ANGULAR,
-                constants.angularVelLimitRad), maxAngVel);
-        double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
-                maxAngAccel);
-
-        // Traction depends on curvature magnitude, independently of heading interpolation.
-        maxPhysicalVel = tractionLimitedVelocity(maxPhysicalVel, kappa,
-                constants.maxCentripetalAccelIn);
-
-        // Angular velocity limit: |f' * v| <= omega_max, so v <= omega_max / |f'|.
-        if (Math.abs(fPrime) > EPSILON) {
-            double maxVelFromOmega = effectiveAngVelLimit / Math.abs(fPrime);
-            maxPhysicalVel = Math.min(maxPhysicalVel, maxVelFromOmega);
-        }
-
-        // Angular acceleration limit at zero tangential accel: |f'' * v^2| <= alpha_max.
-        if (Math.abs(fDoublePrime) > EPSILON) {
-            double maxVelFromAlpha = Math.sqrt(effectiveAngAccelLimit / Math.abs(fDoublePrime));
-            maxPhysicalVel = Math.min(maxPhysicalVel, maxVelFromAlpha);
-        }
-
-        double min_v = 0.0;
-        double max_v = maxPhysicalVel;
-
-        // Rotation power depends on the path heading derivatives, so search the usable top speed.
-        for (int i = 0; i < VELOCITY_SEARCH_ITERATIONS; i++) {
-            double mid_v = (min_v + max_v) / 2.0;
-
-            if (evaluatePower(mid_v, fPrime, fDoublePrime) > utilizationLimit()) { max_v = mid_v; }
-            else { min_v = mid_v; }
-        }
-
-        return Math.min(min_v, maxPhysicalVel);
-    }
-
-    /**
-     * Estimates normalized tank power for a local state.
-     *
-     * <p>Translation uses {@code kV*v + kA*a + kS}. Heading adds its velocity and acceleration
-     * terms, but not another kS: the translation command has already broken static friction on
-     * both shared tank sides. The two absolute magnitudes are added because they share the same
-     * motor output budget.
-     */
-    private double evaluatePower(double v, double fPrime, double fDoublePrime) {
-        double transPower = Math.abs(v * profileKV() +
-                        signedStatic(v, 0.0, constants.translationalFeedforwardKS));
-        transPower = constants.characterizedAxisDemand(Axis.FORWARD, v, 0, transPower);
-
-        double omega = fPrime * v;
-        double alpha = fDoublePrime * (v * v) + fPrime * 0.0;
-        // Translation has already broken static friction on both tank sides. Adding the angular
-        // kS again would double-count the same wheels during a moving spatial path.
-        double rotPower = Math.abs(omega * constants.angularKV + alpha * constants.angularKA);
-        rotPower = Math.abs(constants.characterizedPower(Axis.ANGULAR, omega, alpha, rotPower));
-
-        return transPower + rotPower;
-    }
-
-    /** Evaluates the final power/utilization at a path segment. */
-    @Override
-    protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double v_prev,
-                                 double v, double a_t, EvaluationResult outResult) {
-        double s = current.getDistanceToEndIn();
-        double kappa = current.getSignedCurvature();
-        double dKappa = current.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
-                finalTangent);
-
-        // Tank translation and rotation share the same drivetrain output budget.
-        double omega = fPrime * v;
-        double alpha = fDoublePrime * (v * v) + fPrime * a_t;
-
-        double pForward = v * profileKV() +
-                a_t * constants.getTranslationalKA(v, a_t)
-                        + signedStatic(v, a_t, constants.translationalFeedforwardKS);
-
-        double pHeading = omega * constants.angularKV + alpha * constants.angularKA;
-        pForward = constants.characterizedAxisDemand(Axis.FORWARD, v, a_t, pForward);
-        pHeading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, pHeading);
-
-        outResult.pForward = Math.abs(pForward);
-        outResult.pLateral = 0.0;
-        outResult.pHeading = Math.abs(pHeading);
-        outResult.totalPower = outResult.pForward + outResult.pHeading;
-        outResult.maxUtilization = outResult.totalPower;
-    }
-
-    @Override
-    protected double getMaxTangentialAccel(double currentVel, PathPoint point, Path path,
-                                           double maxAngAccel) {
-        return calculateAngularLimitedTangentialAccel(currentVel, point, path, maxAngAccel, false);
-    }
-
-    @Override
-    protected double calculateDynamicMaxAccel(double currentVel, PathPoint point, Path path,
-                                              double maxAngAccel) {
-        return calculateAngularLimitedTangentialAccel(currentVel, point, path, maxAngAccel, true);
-    }
-
-    /**
-     * Limits tangential acceleration so heading acceleration stays within bounds.
-     *
-     * <p>Since {@code alpha = f'' * v^2 + f' * a}, solving {@code -alphaMax <= alpha <= alphaMax}
-     * gives an allowed interval for {@code a}. The caller asks for either the positive side
-     * (accelerating) or the negative side (braking).
-     */
-    private double calculateAngularLimitedTangentialAccel(double currentVel, PathPoint point,
-                                                          Path path, double maxAngAccel,
-                                                          boolean positiveAccel) {
-        double s = point.getDistanceToEndIn();
-        double kappa = point.getSignedCurvature();
-        double dKappa = point.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
-                finalTangent);
-
-        double maxPhysicalAccel = constants.forwardAccelLimitIn;
-        double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad, maxAngAccel);
-        if (effectiveAngAccelLimit < EPSILON) { return 0.0; }
-
-        double alphaBase = fDoublePrime * currentVel * currentVel;
-        if (Math.abs(fPrime) < EPSILON) {
-            // If heading does not depend on distance here, accel cannot trade against alpha.
-            return Math.abs(alphaBase) <= effectiveAngAccelLimit + EPSILON
-                    ? maxPhysicalAccel : 0.0;
-        }
-
-        double boundA = (-effectiveAngAccelLimit - alphaBase) / fPrime;
-        double boundB = (effectiveAngAccelLimit - alphaBase) / fPrime;
-        double minAccel = Math.min(boundA, boundB);
-        double maxAccel = Math.max(boundA, boundB);
-
-        double angularLimitedAccel = positiveAccel ? maxAccel : -minAccel;
-        return Math.min(maxPhysicalAccel, Math.max(0.0, angularLimitedAccel));
+    @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) { return constants.forwardAccelLimitIn; }
+    @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,
+                                            double velocity, double acceleration, EvaluationResult result) {
+        Vector end = path.getParametricPath().getFirstDerivative(1);
+        double prime = path.getInterpolator().getHeadingFirstDerivative(current.getDistanceToEndIn(), current.getSignedCurvature(), end);
+        double second = path.getInterpolator().getHeadingSecondDerivative(current.getDistanceToEndIn(), current.getCurvatureDerivative(), end);
+        double forward = velocity * profileKV() + acceleration * constants.getTranslationalKA(velocity, acceleration)
+                + signedStatic(velocity, acceleration, constants.translationalFeedforwardKS);
+        forward = constants.characterizedAxisDemand(Axis.FORWARD, velocity, acceleration, forward);
+        double omega = prime * velocity, alpha = second * velocity * velocity + prime * acceleration;
+        double heading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, omega * constants.angularKV + alpha * constants.angularKA);
+        result.pForward = Math.abs(forward); result.pLateral = 0; result.pHeading = Math.abs(heading);
+        result.totalPower = result.maxUtilization = Math.abs(forward) + Math.abs(heading);
     }
 }

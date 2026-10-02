@@ -118,6 +118,8 @@ records the source and fresh tuning. Earlier custom-plant braking graphs are his
 not validate stock FTCodeSim or a physical robot.
 Profiled paths now use [continuous displacement-based braking](doc/ProfiledBrakingImplementation.md)
 while retaining Apex's constrained profile generator and LUT interpolation.
+Use [the profile power ceiling](doc/ProfilePowerLimit.md) to configure the generated
+feedforward power budget per path or directly on a generator.
 
 Automatic PDS tuning derives a critically damped starting point from the accepted kV/kA plant
 model, then uses bounded Twiddle point-to-point tests to refine kP and kD. Every candidate is

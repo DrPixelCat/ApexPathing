@@ -33,6 +33,20 @@ public final class MotionCharacterization {
         return models[axis.ordinal()][direction < 0 ? 1 : 0];
     }
     public double velocityLimit(Axis axis) {
+        return velocityLimit(axis, profilePowerLimit());
+    }
+    /** Hard measured domain, independent of the acceleration-dependent power budget. */
+    public double maximumMeasuredVelocity(Axis axis) {
+        MotorPowerModel positive = model(axis, 1), negative = model(axis, -1);
+        return positive == null || negative == null ? 0
+                : Math.min(positive.maxVelocity, negative.maxVelocity);
+    }
+    /** Computes the measured cruising ceiling for the requested normalized power budget. */
+    public double velocityLimit(Axis axis, double powerLimit) {
+        if (!Double.isFinite(powerLimit) || powerLimit <= 0 || powerLimit > 1) {
+            throw new IllegalArgumentException("Profile power limit must be finite and in (0, 1].");
+        }
+        double availablePower = Math.min(powerLimit, availableMotorPower);
         double result = Double.POSITIVE_INFINITY;
         for (int direction = 0; direction < 2; direction++) {
             MotorPowerModel m = models[axis.ordinal()][direction];
@@ -40,7 +54,7 @@ public final class MotionCharacterization {
             double low = 0, high = m.maxVelocity;
             for (int i = 0; i < 30; i++) {
                 double mid = (low + high) / 2;
-                if (m.holdingPower(mid) <= profilePowerLimit()) { low = mid; }
+                if (m.holdingPower(mid) <= availablePower) { low = mid; }
                 else { high = mid; }
             }
             result = Math.min(result, low);

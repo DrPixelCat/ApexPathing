@@ -51,6 +51,21 @@ public class Path extends FollowerMovement {
     private boolean isAccelBoosted = false;
     private BuildMode buildMode = BuildMode.QUICK;
     private boolean reverseConstraintProgress;
+    private Double profilePowerLimit;
+
+    /** Optional normalized profile-power ceiling; null uses the active drivetrain's default. */
+    public Double getProfilePowerLimit() { return profilePowerLimit; }
+
+    /**
+     * Sets the profile-power ceiling in (0, 1]. The generator also respects calibrated available
+     * motor power. Call rebuildMotionProfile() to apply this to an already built path.
+     */
+    public void setProfilePowerLimit(double powerLimit) {
+        if (!Double.isFinite(powerLimit) || powerLimit <= 0.0 || powerLimit > 1.0) {
+            throw new IllegalArgumentException("Profile power limit must be finite and in (0, 1].");
+        }
+        profilePowerLimit = powerLimit;
+    }
 
     /**
      * Creates a path object for the robot to follow
@@ -218,6 +233,7 @@ public class Path extends FollowerMovement {
         result.reverseConstraintProgress = !reverseConstraintProgress;
         result.isAccelBoosted = isAccelBoosted;
         result.buildMode = buildMode;
+        result.profilePowerLimit = profilePowerLimit;
         for (String warning : buildWarnings) { result.addWarning(warning); }
         result.rebuildMotionProfile();
         return result;

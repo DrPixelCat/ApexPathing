@@ -59,4 +59,18 @@ public class HolonomicCommandAllocatorTest {
         assertEquals(.3, result.drive.getY().getIn(), 1e-9);
         assertEquals(.25, result.turn, 1e-9);
     }
+
+    @Test public void signedTangentAndNormalFeedforwardCombineBeforeChargingMotorBudget() {
+        Vector zero = Vector.of(0, 0, DistUnit.IN);
+        double component = Math.sqrt(.5);
+        Vector tangent = Vector.of(component, component, DistUnit.IN);
+        Vector normal = Vector.of(-component, component, DistUnit.IN).times(.4);
+        HolonomicCommandAllocator.Result result = allocator.allocate(zero, zero, tangent,
+                Angle.zero(), 0, 0, .6, 0, 0, .1, zero, normal);
+        assertEquals(1, result.demand.feedforwardScale, 0);
+        assertEquals(.2 * component, result.drive.getX().getIn(), 1e-12);
+        assertEquals(component, result.drive.getY().getIn(), 1e-12);
+        assertEquals(1.2 * component + .1, result.demand.feedforwardTotal, 1e-12);
+        assertEquals(.4, result.demand.centripetal, 1e-12);
+    }
 }

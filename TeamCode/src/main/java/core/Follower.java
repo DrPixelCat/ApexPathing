@@ -43,7 +43,7 @@ public class Follower {
     static final double PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES = 8.0;
     static final double ENDPOINT_STALLED_VELOCITY_IN_PER_SECOND = 0.25;
     private static final double PROFILED_HEADING_CAPTURE_RADIANS = Math.toRadians(10.0);
-    static final double MAX_CENTRIPETAL_POWER = 0.65;
+    static final double MAX_CENTRIPETAL_POWER = HolonomicFeedforward.MAX_CENTRIPETAL_POWER;
     private static final double SLOWED_VELOCITY_DELTA_IN_PER_SECOND = 6.0;
     private static final double STUCK_LINEAR_VELOCITY_IN_PER_SECOND = 0.5;
 

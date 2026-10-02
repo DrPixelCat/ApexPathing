@@ -71,6 +71,16 @@ final class HolonomicCommandAllocator {
                     Angle currentHeading, double tangentFeedback, double headingFeedback,
                     double tangentFeedforward, double tangentVelocityFeedback,
                     double headingVelocityFeedback, double headingFeedforward, Vector normalFeedforward) {
+        return allocate(crossTrackCorrection, centripetalCorrection, unitTangent, currentHeading,
+                tangentFeedback, headingFeedback, tangentFeedforward, tangentVelocityFeedback,
+                headingVelocityFeedback, headingFeedforward, normalFeedforward, unitTangent.times(0));
+    }
+
+    Result allocate(Vector crossTrackCorrection, Vector centripetalCorrection, Vector unitTangent,
+                    Angle currentHeading, double tangentFeedback, double headingFeedback,
+                    double tangentFeedforward, double tangentVelocityFeedback,
+                    double headingVelocityFeedback, double headingFeedforward, Vector normalFeedforward,
+                    Vector centripetalFeedforward) {
         boolean anisotropic = activeDriveModel() == DriveModel.ANISOTROPIC;
 
         Vector feedbackRobot = crossTrackCorrection.plus(centripetalCorrection)
@@ -84,7 +94,7 @@ final class HolonomicCommandAllocator {
         headingFeedback /= feedbackScale;
         double feedbackDemand = demand(feedbackRobot, headingFeedback, anisotropic);
 
-        Vector feedforwardRobot = unitTangent.times(tangentFeedforward).plus(normalFeedforward)
+        Vector feedforwardRobot = unitTangent.times(tangentFeedforward).plus(normalFeedforward).plus(centripetalFeedforward)
                 .rotate(Angle.fromRad(-currentHeading.getRad()));
         double rawHeadingFeedforwardDemand = Math.abs(headingFeedforward);
         double driveFeedforwardDemand = translationDemand(feedforwardRobot, anisotropic);
@@ -110,7 +120,7 @@ final class HolonomicCommandAllocator {
         Follower.CommandDemand commandDemand = new Follower.CommandDemand(true,
                 crossTrackCorrection.getMag().getIn(), Math.abs(tangentFeedback),
                 Math.abs(headingFeedback * feedbackScale),
-                centripetalCorrection.getMag().getIn(),
+                centripetalCorrection.getMag().getIn() + centripetalFeedforward.getMag().getIn(),
                 Math.abs(tangentVelocityFeedback), rawHeadingVelocityDemand,
                 Math.abs(tangentFeedforward), rawHeadingFeedforwardDemand,
                 rawFeedbackDemand, velocityFeedbackDemand, feedforwardDemand,

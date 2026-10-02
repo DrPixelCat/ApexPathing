@@ -44,6 +44,18 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
     }
 
     /**
+     * Sets the normalized motor-power ceiling for generated profiles, in (0, 1]. Omission uses
+     * the drivetrain default (1.0, or 0.88 of calibrated available power when characterized).
+     * A value of 1.0 uses all calibrated available power. Velocity and acceleration constraints
+     * still apply. Holonomic quickBuild() does not generate a profile and ignores this ceiling.
+     */
+    @SuppressWarnings("unchecked")
+    public T setProfilePowerLimit(double powerLimit) {
+        path.setProfilePowerLimit(powerLimit);
+        return (T) this;
+    }
+
+    /**
      * Adds a kinematic constraint to the path at a specific distance percentage.
      *
      * <p><strong> NOTE: Only velocity can be limited on a quickBuild.</strong>

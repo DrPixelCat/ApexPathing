@@ -1,187 +1,40 @@
 package feedforward.generators;
 
 import core.FollowerConstants;
+import core.HolonomicFeedforward;
 import core.MotionCharacterization.Axis;
+import geometry.Angle;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
-/**
- * Generates time-optimal motion profiles for Swerve drivetrains by evaluating
- * continuous voltage saturation constraints algebraically.
- *
- * <p>Swerve can point its traction vector, so translational tangent and normal power combine like a
- * vector. Heading power is still added because steering the robot body consumes the same normalized
- * power budget.
- *
- * @author DrPixelCat - 7842 alum
- */
+/** Isotropic translation with coupled heading and signed acceleration constraints. */
 public class SwerveProfileGenerator extends BaseProfileGenerator {
-    /** Number of binary-search steps used for local velocity ceilings. */
-    private static final int VELOCITY_SEARCH_ITERATIONS = 8;
-
-    /** Creates a swerve profile generator for a path. */
-    public SwerveProfileGenerator(FollowerConstants constants, Path path) {
-        super(constants, path);
-    }
-
-    @Override
-    protected double calculateMaxTangentialVelocity(PathPoint point, Path path,
-                                                    double maxAngVel, double maxAngAccel) {
-        double s = point.getDistanceToEndIn();
-        double kappa = point.getSignedCurvature();
-        double dKappa = point.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
-                finalTangent);
-
-        double maxPhysicalVel = cornerVelocityLimit(constants.calibratedVelocityLimit(Axis.FORWARD, constants.forwardVelLimitIn), kappa);
-        if (constants.motionCharacterization != null) { maxPhysicalVel = Math.min(maxPhysicalVel, constants.motionCharacterization.velocityLimit(Axis.STRAFE)); }
-        double effectiveAngVelLimit = Math.min(constants.calibratedVelocityLimit(Axis.ANGULAR, constants.angularVelLimitRad), maxAngVel);
-        double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
-                maxAngAccel);
-
-        double min_v = 0.0;
-        double max_v = maxPhysicalVel;
-
-        // Solve the velocity ceiling numerically because heading acceleration depends on v^2.
-        // At zero tangential acceleration, alpha = f'' * v^2.
-        for (int i = 0; i < VELOCITY_SEARCH_ITERATIONS; i++) {
-            double mid_v = (min_v + max_v) / 2.0;
-            double omega = fPrime * mid_v;
-            double alpha = fDoublePrime * mid_v * mid_v;
-            boolean violatesAngularLimit =
-                    Math.abs(omega) > effectiveAngVelLimit + EPSILON ||
-                            Math.abs(alpha) > effectiveAngAccelLimit + EPSILON;
-
-            if (violatesAngularLimit || calculatePowerUtilization(mid_v, path, point) > utilizationLimit()) {
-                max_v = mid_v;
-            } else {
-                min_v = mid_v;
-            }
+    public SwerveProfileGenerator(FollowerConstants constants, Path path) { super(constants, path); }
+    public SwerveProfileGenerator(FollowerConstants constants, Path path, double powerLimit) { super(constants, path, powerLimit); }
+    @Override protected double calculateMaxTangentialVelocity(PathPoint point, Path path, double maxAngVel, double maxAngAccel) {
+        double ceiling = cornerVelocityLimit(calibratedVelocityLimit(Axis.FORWARD, constants.forwardVelLimitIn), point.getSignedCurvature());
+        if (constants.motionCharacterization != null) { ceiling = Math.min(ceiling, calibratedVelocityLimit(Axis.STRAFE, Double.MAX_VALUE)); }
+        double prime = path.getInterpolator().getHeadingFirstDerivative(point.getDistanceToEndIn(), point.getSignedCurvature(), path.getParametricPath().getFirstDerivative(1));
+        if (Math.abs(prime) > 1e-12) {
+            ceiling = Math.min(ceiling, Math.min(maxAngVel, calibratedVelocityLimit(Axis.ANGULAR, constants.angularVelLimitRad)) / Math.abs(prime));
         }
-
-        return Math.min(min_v, maxPhysicalVel);
+        double normalCost = Math.abs(point.getSignedCurvature() * constants.kCentripetal);
+        if (normalCost > 1e-12) { ceiling = Math.min(ceiling, Math.sqrt(HolonomicFeedforward.MAX_CENTRIPETAL_POWER / normalCost)); }
+        return ceiling;
     }
-
-    @Override
-    protected double calculateDynamicMaxAccel(double currentVel, PathPoint point,
-                                              Path path, double maxAngAccel) {
-        return calculateAngularLimitedTangentialAccel(currentVel, point, path, maxAngAccel, true);
+    @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) { return constants.forwardAccelLimitIn; }
+    @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,
+                                            double velocity, double acceleration, EvaluationResult result) {
+        Vector end = path.getParametricPath().getFirstDerivative(1);
+        Angle heading = path.getInterpolator().getHeadingTarg(current.getDistanceToEndIn(), current.getFirstDerivative(), end);
+        Vector body = current.getFirstDerivative().normalize().rotate(heading.times(-1));
+        double prime = path.getInterpolator().getHeadingFirstDerivative(current.getDistanceToEndIn(), current.getSignedCurvature(), end);
+        double second = path.getInterpolator().getHeadingSecondDerivative(current.getDistanceToEndIn(), current.getCurvatureDerivative(), end);
+        Vector tangent = HolonomicFeedforward.translation(constants, body, velocity, acceleration, profileKV());
+        Vector normal = HolonomicFeedforward.centripetal(body, velocity, current.getSignedCurvature(), constants.kCentripetal);
+        double turn = HolonomicFeedforward.heading(constants, prime * velocity, second * velocity * velocity + prime * acceleration);
+        result.pForward = tangent.getMag().getIn(); result.pLateral = normal.getMag().getIn(); result.pHeading = Math.abs(turn);
+        result.totalPower = result.maxUtilization = tangent.plus(normal).getMag().getIn() + Math.abs(turn);
     }
-
-    @Override
-    protected double getMaxTangentialAccel(double currentVel, PathPoint point,
-                                           Path path, double maxAngAccel) {
-        return calculateAngularLimitedTangentialAccel(currentVel, point, path, maxAngAccel, false);
-    }
-
-    /**
-     * Calculates the theoretical total motor power required to execute a given kinematic state.
-     *
-     * @param vel path-relative velocity
-     * @param path path being sampled
-     * @param point sample to evaluate
-     * @return normalized utilization, where 1.0 is full available power
-     */
-    protected double calculatePowerUtilization(double vel, Path path, PathPoint point) {
-        EvaluationResult result = new EvaluationResult();
-        evaluateState(path, point, vel, 0.0, result);
-        return result.totalPower;
-    }
-
-    @Override
-    protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double v_prev,
-                                 double v, double a_t, EvaluationResult outResult) {
-        evaluateState(path, current, v, a_t, outResult);
-    }
-
-    /**
-     * Fills a utilization result for one swerve state.
-     *
-     * <p>Tangential power comes from speed and tangential acceleration. Normal power is the
-     * centripetal term {@code v^2 * kappa}, scaled by the tuned centripetal coefficient. Heading
-     * demand follows the chain-rule formulas {@code omega = f'v} and {@code alpha = f''v^2 + f'a}.
-     */
-    private void evaluateState(Path path, PathPoint point, double vel, double accel,
-                               EvaluationResult outResult) {
-        double s = point.getDistanceToEndIn();
-        double kappa = point.getSignedCurvature();
-        double dKappa = point.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa, finalTangent);
-
-        double tanPow = vel * profileKV()
-                + accel * constants.getTranslationalKA(vel, accel)
-                + signedStatic(vel, accel, constants.translationalFeedforwardKS);
-
-        double normPow = vel * vel * kappa * constants.kCentripetal;
-
-        double omega = fPrime * vel;
-        double alpha = fDoublePrime * (vel * vel) + fPrime * accel;
-
-        double headingKs = signedStatic(omega, alpha, constants.angularFeedforwardKS);
-        double heading = omega * constants.angularKV + alpha * constants.angularKA + headingKs;
-        heading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, heading);
-
-        // Swerve can point the traction vector, so translation combines as vector magnitude.
-        outResult.pForward = Math.abs(tanPow);
-        outResult.pLateral = Math.abs(normPow);
-        outResult.pHeading = Math.abs(heading);
-        outResult.totalPower = Math.hypot(tanPow, normPow) + Math.abs(heading);
-        if (constants.motionCharacterization != null && vel * accel >= -EPSILON) {
-            geometry.Angle h = path.getInterpolator().getHeadingTarg(s, point.getFirstDerivative(), finalTangent);
-            Vector bodyDirection = point.getFirstDerivative().normalize().rotate(h.times(-1));
-            Vector power = constants.characterizedTranslation(bodyDirection, vel, accel, bodyDirection.times(tanPow));
-            Vector normal = Vector.of(-bodyDirection.getY().getIn(), bodyDirection.getX().getIn(), geometry.DistUnit.IN);
-            outResult.pForward = power.getMag().getIn();
-            outResult.totalPower = power.plus(normal.times(normPow)).getMag().getIn() + Math.abs(heading);
-        }
-        outResult.maxUtilization = outResult.totalPower;
-    }
-
-    /**
-     * Computes the tangential acceleration cap imposed by angular acceleration limits.
-     *
-     * <p>Rearranging {@code alpha = f'' * v^2 + f' * a} gives a legal interval for {@code a}. This
-     * method returns the positive side for acceleration passes or the negative side for braking
-     * passes, always clamped by the physical forward acceleration limit.
-     */
-    private double calculateAngularLimitedTangentialAccel(double currentVel, PathPoint point,
-                                                          Path path, double maxAngAccel,
-                                                          boolean positiveAccel) {
-        double maxPhysicalAccel = constants.forwardAccelLimitIn;
-        double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad, maxAngAccel);
-        if (effectiveAngAccelLimit < EPSILON) { return 0.0; }
-
-        double s = point.getDistanceToEndIn();
-        double kappa = point.getSignedCurvature();
-        double dKappa = point.getCurvatureDerivative();
-        Vector finalTangent = path.getParametricPath().getFirstDerivative(1.0);
-
-        double fPrime = path.getInterpolator().getHeadingFirstDerivative(s, kappa, finalTangent);
-        double fDoublePrime = path.getInterpolator()
-                .getHeadingSecondDerivative(s, dKappa, finalTangent);
-        double alphaBase = fDoublePrime * currentVel * currentVel;
-
-        if (Math.abs(fPrime) < EPSILON) {
-            // Tangential accel cannot help if heading is not changing with path distance.
-            return Math.abs(alphaBase) <= effectiveAngAccelLimit + EPSILON
-                    ? maxPhysicalAccel : 0.0;
-        }
-
-        double boundA = (-effectiveAngAccelLimit - alphaBase) / fPrime;
-        double boundB = (effectiveAngAccelLimit - alphaBase) / fPrime;
-        double minAccel = Math.min(boundA, boundB);
-        double maxAccel = Math.max(boundA, boundB);
-
-        double angularLimitedAccel = positiveAccel ? maxAccel : -minAccel;
-        return Math.min(maxPhysicalAccel, Math.max(0.0, angularLimitedAccel));
-    }
-
-    // endregion
 }
