@@ -77,6 +77,15 @@ public class CentripetalPhase extends TuningPhase {
 
         // Center the complete 32x32 test footprint on the field, not merely its starting point.
         Pose[] forwardPoints = createTestArc(factory);
+        Path geometry = factory.holonomicPath(forwardPoints).quickBuild();
+        // Sampled-circle splines do not have exactly 0/90-degree endpoint tangents.
+        // Keep this experiment purely tangent-facing: a terminal heading blend would
+        // introduce characterized strafe feedforward and contaminate the lateral test.
+        forwardPoints[0] = new Pose(forwardPoints[0].getVec(),
+                geometry.getParametricPath().getFirstDerivative(0).getTheta());
+        int last = forwardPoints.length - 1;
+        forwardPoints[last] = new Pose(forwardPoints[last].getVec(),
+                geometry.getParametricPath().getFirstDerivative(1).getTheta());
         Pose start = forwardPoints[0];
         if (Boolean.getBoolean("apex.simulation.unlockTunerPhases")) {
             positionRobotForSimulation(start);
@@ -91,7 +100,6 @@ public class CentripetalPhase extends TuningPhase {
         double lower = 0.25 * nominalGain;
         double upper = 1.25 * nominalGain;
 
-        Path geometry = factory.holonomicPath(forwardPoints).quickBuild();
         double testVelocity = safeTestVelocity(geometry, upper,
                 context.constants.forwardVelLimitIn, context.constants.translationalKV,
                 context.constants.translationalFeedforwardKS);
@@ -105,8 +113,8 @@ public class CentripetalPhase extends TuningPhase {
             forwardArc = forwardBuilder.quickBuild();
             backwardArc = forwardArc.reversed();
         } finally {
-            // Generate both profiles against the worst search candidate without changing the
-            // value that manual mode seeds from or automatic mode will evaluate first.
+            // Restore the seed after constructing the test geometry; each online traversal
+            // plans against the candidate being evaluated.
             context.constants.kCentripetal = savedGain;
         }
 
