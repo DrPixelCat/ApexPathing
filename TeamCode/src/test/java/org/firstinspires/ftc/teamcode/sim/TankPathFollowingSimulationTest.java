@@ -93,7 +93,7 @@ public class TankPathFollowingSimulationTest {
             GeometryFactory factory = new GeometryFactory(follower)
                     .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
             Path path = factory.tankPath(factory.pose(0, 0, 0), factory.pose(60, 0, 0))
-                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).profiledBuild();
+                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).buildToMemory();
             follower.setPose(factory.pose(0, 4, 10));
             follower.follow(path);
             follower.update();
@@ -114,7 +114,12 @@ public class TankPathFollowingSimulationTest {
     }
 
     @Test(timeout = 70_000L)
-    public void tunedTankFollowsCurveTurnAndReversePath() throws Exception {
+    public void tunedTankFollowsCurveTurnAndReversePath() throws Exception { runCurveTurnReverse(true); }
+
+    @Test(timeout = 70_000L)
+    public void onlineTankFollowsCurveTurnAndReversePath() throws Exception { runCurveTurnReverse(false); }
+
+    private void runCurveTurnReverse(boolean stored) throws Exception {
         Field singleton = FollowerConstants.class.getDeclaredField("instance");
         singleton.setAccessible(true);
         Object prior = singleton.get(null);
@@ -128,13 +133,17 @@ public class TankPathFollowingSimulationTest {
             Pose start = factory.pose(0, 0, 0);
             Path curve = factory.tankPath(start, factory.pose(18, 0), factory.pose(30, 6),
                             factory.pose(36, 18, 45))
-                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).profiledBuild();
+                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).quickBuild();
             Turn turn = factory.turn(curve.getEndPose())
-                    .turnTo(factory.angle(-135)).profiledBuild();
+                    .turnTo(factory.angle(-135)).quickBuild();
             Path reverse = factory.tankPath(turn.getEndPose(), factory.pose(48, 30),
                             factory.pose(54, 36))
-                    .interpolateWith(InterpolationStyle.TANGENT_BACKWARD).profiledBuild();
+                    .interpolateWith(InterpolationStyle.TANGENT_BACKWARD).quickBuild();
 
+            if (stored) {
+                for (Path path : new Path[]{curve, reverse}) { path.setBuildMode(Path.BuildMode.MEMORY); path.precomputeTrajectory(); }
+                turn.setBuildMode(Path.BuildMode.MEMORY); turn.precomputeTrajectory();
+            }
             follower.setPose(start);
             follow(hardware, follower, curve, 15.0);
             follow(hardware, follower, turn, 15.0);

@@ -33,7 +33,8 @@ public class FFLut {
                 );
             }
         }
-        this.params = generatedParams;
+        this.params = new MotionParameters[generatedParams.length];
+        for (int i = 0; i < generatedParams.length; i++) { this.params[i] = copyOf(generatedParams[i]); }
     }
 
     /**
@@ -125,6 +126,42 @@ public class FFLut {
 
     /** @return final elapsed-time key, or zero for a displacement-only profile */
     public double getDurationSeconds() { return params[params.length - 1].getTimeSeconds(); }
+
+    public double getFirstIntervalEnd() { return params[Math.min(1, params.length - 1)].getProgression(); }
+    public double getLastIntervalStart() { return params[Math.max(0, params.length - 2)].getProgression(); }
+
+    /** Spatial kinematic interpolation preserves v^2 = v0^2 + 2*a*ds at launch and braking. */
+    public MotionParameters getKinematicParams(double distance) { return kinematic(distance, false); }
+    public MotionParameters getAngularKinematicParams(double distance) { return kinematic(distance, true); }
+
+    private MotionParameters kinematic(double distance, boolean angular) {
+        if (!Double.isFinite(distance)) { throw new IllegalArgumentException("Finite lookup coordinate required."); }
+        if (params.length == 1 || distance <= params[0].getProgression()) { return copyOf(params[0]); }
+        if (distance >= params[params.length - 1].getProgression()) { return copyOf(params[params.length - 1]); }
+        int low = 0, high = params.length - 1;
+        while (high - low > 1) {
+            int mid = (low + high) >>> 1;
+            if (params[mid].getProgression() <= distance) { low = mid; } else { high = mid; }
+        }
+        MotionParameters a = params[low], b = params[high];
+        double ds = b.getProgression() - a.getProgression();
+        if (ds <= 1e-9) { return copyOf(b); }
+        double fraction = (distance - a.getProgression()) / ds;
+        MotionParameters result = getFFParams(a, fraction, b, distance);
+        double v0 = angular ? a.getAngularVel() : a.getTangentialVel();
+        double v1 = angular ? b.getAngularVel() : b.getTangentialVel();
+        double sign = v0 + v1 < 0 ? -1 : 1;
+        double v = sign * Math.sqrt(Math.max(0, v0 * v0 + fraction * (v1 * v1 - v0 * v0)));
+        double acceleration = sign * (v1 * v1 - v0 * v0) / (2 * ds);
+        if (angular) { return result.setAngularVel(v).setAngularAccel(acceleration); }
+        double prime0 = Math.abs(v0) > 1e-9 ? a.getAngularVel() / v0
+                : Math.abs(a.getTangentialAccel()) > 1e-9 ? a.getAngularAccel() / a.getTangentialAccel()
+                : Math.abs(v1) > 1e-9 ? b.getAngularVel() / v1 : 0;
+        double prime1 = Math.abs(v1) > 1e-9 ? b.getAngularVel() / v1 : prime0;
+        double prime = prime0 + fraction * (prime1 - prime0);
+        return result.setTangentialVel(v).setTangentialAccel(acceleration)
+                .setAngularVel(prime * v).setAngularAccel(prime * acceleration + (prime1 - prime0) / ds * v * v);
+    }
 
     /**
      * Blends two neighboring rows of the lookup table.

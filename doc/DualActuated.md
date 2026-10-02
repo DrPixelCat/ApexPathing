@@ -65,7 +65,7 @@ turn for a different mode, select it before setting custom limits:
 Turn turn = new TurnBuilder(startPose)
         .setDriveProfile(FollowerConstants.Profile.TANK)
         .turnTo(Angle.fromDeg(90))
-        .profiledBuild();
+        .buildToMemory();
 ```
 
 The turn retains that mode when reversed. A directly constructed unbound `Turn`

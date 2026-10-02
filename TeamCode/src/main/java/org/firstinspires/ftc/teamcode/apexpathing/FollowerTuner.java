@@ -275,6 +275,7 @@ public class FollowerTuner extends LinearOpMode {
     }
 
     private static String phaseDisplayName(Phase phase) {
+        if (phase == Phase.PROFILED_TRACKING) { return "TRAJECTORY TRACKING"; }
         if (phase == Phase.DRIVE_FEEDFORWARD) { return "DRIVE FEEDFORWARD SYSID"; }
         if (phase == Phase.HEADING_FEEDFORWARD) { return "HEADING FEEDFORWARD SYSID"; }
         return phase.name().replace('_', ' ');

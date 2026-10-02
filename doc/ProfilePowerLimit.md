@@ -5,7 +5,7 @@ Set a normalized motor-power ceiling per path:
 ```java
 Path path = new HolonomicPathBuilder(startPose, endPose)
         .setProfilePowerLimit(0.95)
-        .profiledBuild();
+        .buildToMemory();
 ```
 
 `TankPathBuilder` accepts the same setting. Values must be finite and in `(0, 1]`.
@@ -30,13 +30,14 @@ double effectiveCeiling = generator.getProfilePowerLimit();
 ```
 
 The constructor override takes precedence over the path setting. Settings are captured
-when constructing a generator. To change an existing path, call
-`path.setProfilePowerLimit(value)` followed by `path.rebuildMotionProfile()`.
+when constructing a generator. Set the ceiling in the builder before building.
+A stored trajectory permanently retains the ceiling used for its precomputation.
 Reversing a path preserves its setting. These settings do not change the global
 follower constants or standalone turn profiles.
 
-Holonomic `quickBuild()` generates no feedforward profile, so this setting has no
-effect there. Tank quick profiles honor it. This API controls planned feedforward
+Both `quickBuild()` and `buildToMemory()` honor this ceiling for all drivetrain types.
+Online paths use planning settings when a traversal starts. Stored paths precompute once
+and keep their original data. This API controls planned feedforward
 utilization; the follower's feedback corrections can use additional available motor
 power. See the [feedforward audit and fixes](ProfileGeneratorAudit.md) for measured
 results and the limits of the sampled solver.

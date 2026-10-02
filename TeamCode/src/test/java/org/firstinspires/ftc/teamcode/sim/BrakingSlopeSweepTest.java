@@ -83,8 +83,8 @@ public class BrakingSlopeSweepTest {
                     StockSimTestSupport.setSpeed(bench.h,measured);
                     Sensor sensor = new Sensor(bench,0); sensor.sample(.02,0);
                     GeometryFactory g = new GeometryFactory();
-                    Path path = tank ? g.tankPath(g.pose(0,0,0),g.pose(LENGTH,0,0)).profiledBuild()
-                            : g.holonomicPath(g.pose(0,0,0),g.pose(LENGTH,0,0)).profiledBuild();
+                    Path path = tank ? g.tankPath(g.pose(0,0,0),g.pose(LENGTH,0,0)).buildToMemory()
+                            : g.holonomicPath(g.pose(0,0,0),g.pose(LENGTH,0,0)).buildToMemory();
                     FFLut lut = new FFLut(new MotionParameters[]{new MotionParameters(2,a,0,0,0),
                             new MotionParameters(2,a,0,0,LENGTH)});
                     path.setFeedforwardLut(lut);
@@ -127,7 +127,7 @@ public class BrakingSlopeSweepTest {
                     builder.addConstraint(new TranslationalConstraint(CHANGES[i]/LENGTH,
                             PathConstraint.Type.VELOCITY, Dist.fromIn(SPEEDS[i])));
                 }
-                Path path = builder.profiledBuild(); // Actual Apex generator, no injected RR profile.
+                Path path = builder.buildToMemory(); // Actual Apex generator, no injected RR profile.
                 FFLut original = path.getFeedforwardLut();
                 List<MotionParameters> before = new ArrayList<>();
                 for (PathPoint point : path.getGeneratedPoints()) {
@@ -250,8 +250,8 @@ public class BrakingSlopeSweepTest {
 
     private static Path path(boolean tank, DisplacementProfile profile) {
         GeometryFactory g = new GeometryFactory();
-        Path path = tank ? g.tankPath(g.pose(0,0,0), g.pose(LENGTH,0,0)).profiledBuild()
-                : g.holonomicPath(g.pose(0,0,0), g.pose(LENGTH,0,0)).profiledBuild();
+        Path path = tank ? g.tankPath(g.pose(0,0,0), g.pose(LENGTH,0,0)).buildToMemory()
+                : g.holonomicPath(g.pose(0,0,0), g.pose(LENGTH,0,0)).buildToMemory();
         MotionParameters[] samples = new MotionParameters[profile.disps.size()];
         for (int i = 0; i < samples.length; i++) samples[i] = new MotionParameters(profile.vels.get(i),
                 i < profile.accels.size() ? profile.accels.get(i) : 0, 0, 0, profile.disps.get(i));

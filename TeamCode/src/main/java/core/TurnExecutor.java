@@ -9,143 +9,106 @@ import geometry.Angle;
 import geometry.Pose;
 import geometry.Vector;
 import localizers.BaseLocalizer;
+import paths.movements.Path;
 import paths.movements.Turn;
+import trajectory.TrajectorySample;
 
-/** Executes point turns, including profiled turns and optional translation hold. */
+/** Executes PID quick turns and stored profiles, with continuous heading progress. */
 final class TurnExecutor {
-    private static final double SETTLED_ANGULAR_VELOCITY = 0.10;
-    private static final double STALLED_ANGULAR_VELOCITY = 0.05;
-    private static final double BREAKAWAY_RAMP_POWER_PER_SECOND = 0.25;
-    private static final double MAX_BREAKAWAY_SUPPLEMENT = 0.25;
-
+    private static final double SETTLED_ANGULAR_VELOCITY = .10;
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;
     private final TurnController turnController;
     private final HolonomicCommandAllocator allocator;
     private final FollowerConstants constants;
-    private final double headingTolerance;
-    private final double distanceTolerance;
-
-    private Angle targetHeading;
+    private final double headingTolerance, distanceTolerance;
+    private Angle targetHeading, previousHeading;
     private Vector targetPosition;
-    private double direction;
-    private double totalDisplacement;
-    private double elapsedSeconds;
-    private double stalledSeconds;
+    private double direction, totalDisplacement, progress;
     private long lastUpdateNanos;
+    private double stalledSeconds;
 
     TurnExecutor(BaseDrivetrain<?> drivetrain, DriveController driveController,
                  TurnController turnController, HolonomicCommandAllocator allocator,
                  FollowerConstants constants, double headingTolerance, double distanceTolerance) {
-        this.drivetrain = drivetrain;
-        this.driveController = driveController;
-        this.turnController = turnController;
-        this.allocator = allocator;
-        this.constants = constants;
-        this.headingTolerance = headingTolerance;
-        this.distanceTolerance = distanceTolerance;
+        this.drivetrain = drivetrain; this.driveController = driveController; this.turnController = turnController;
+        this.allocator = allocator; this.constants = constants;
+        this.headingTolerance = headingTolerance; this.distanceTolerance = distanceTolerance;
     }
 
-    void start(Turn turn, long nowNanos) {
-        targetHeading = turn.getEndPose().getHeading();
-        targetPosition = turn.getStartPose().getVec();
-        double signedTurn = turn.getStartPose().getHeading()
-                .getShortestAngleTo(turn.getEndPose().getHeading()).getRad();
-        direction = Math.signum(signedTurn);
-        totalDisplacement = Math.abs(signedTurn);
-        elapsedSeconds = 0.0;
-        stalledSeconds = 0.0;
-        lastUpdateNanos = nowNanos;
+    void start(Turn turn, long now) {
+        targetHeading = turn.getEndPose().getHeading(); targetPosition = turn.getStartPose().getVec();
+        previousHeading = turn.getStartPose().getHeading();
+        double signedTurn = previousHeading.getShortestAngleTo(targetHeading).getRad();
+        direction = Math.signum(signedTurn); totalDisplacement = Math.abs(signedTurn); progress = 0;
+        lastUpdateNanos = 0;
+        stalledSeconds = 0;
     }
 
     boolean update(Turn turn, Pose current, BaseLocalizer<?> localizer,
-                   MovementCallbackRunner callbacks, FollowerPathState state,
-                   boolean driveControllerEnabled) {
-        Angle currentHeading = current.getHeading();
-        double headingError = currentHeading.getShortestAngleTo(targetHeading).getRad();
+                   MovementCallbackRunner callbacks, FollowerPathState state, boolean driveControllerEnabled) {
         long now = System.nanoTime();
-        double deltaSeconds = lastUpdateNanos == 0L ? 0.0
-                : Math.max(0.0, (now - lastUpdateNanos) * 1e-9);
-        elapsedSeconds += deltaSeconds;
+        double dt = lastUpdateNanos == 0 ? .02 : Math.max(0, Math.min(.05, (now - lastUpdateNanos) * 1e-9));
         lastUpdateNanos = now;
-        callbacks.process(turn, -1.0, currentHeading);
-
-        double currentAngularVelocity = localizer.getVel().getHeading().getRad();
-        double effectiveHeadingTolerance = PathCompletionPolicy.headingTolerance(headingTolerance);
-        boolean profileComplete = turn.getFeedforwardLut() == null
-                || elapsedSeconds >= turn.getFeedforwardLut().getDurationSeconds();
-        if (profileComplete && Math.abs(headingError) < effectiveHeadingTolerance
-                && Math.abs(currentAngularVelocity) < SETTLED_ANGULAR_VELOCITY) {
-            return true;
+        Angle heading = current.getHeading();
+        observeHeading(heading);
+        double headingError = heading.getShortestAngleTo(targetHeading).getRad();
+        double angularVelocity = localizer.getVel().getHeading().getRad();
+        double tolerance = PathCompletionPolicy.headingTolerance(headingTolerance);
+        callbacks.process(turn, -1, heading);
+        // Compensate one control interval of motion before the new power takes effect.
+        // This is measured heading progress plus a bounded rate preview, never wall time.
+        double sampleProgress = Math.min(totalDisplacement, Math.max(0, progress)
+                + Math.max(0, direction * angularVelocity) * dt);
+        MotionParameters targets;
+        boolean stored = turn.getBuildMode() == Path.BuildMode.MEMORY;
+        if (stored) {
+            targets = turn.getFeedforwardLut().getAngularKinematicParams(sampleProgress);
+        } else { targets = new MotionParameters(); }
+        double boundedProgress = Math.max(0, Math.min(totalDisplacement, progress));
+        Angle referenceHeading = stored
+                ? turn.getStartPose().getHeading().plus(Angle.fromRad(direction * boundedProgress))
+                : targetHeading;
+        // Once captured inside tolerance, damp the remaining rate without commanding a
+        // small reverse correction. Completion still requires the existing settled rate.
+        if (stored && progress >= totalDisplacement && Math.abs(headingError) < tolerance) { referenceHeading = heading; }
+        double referenceError = heading.getShortestAngleTo(referenceHeading).getRad();
+        state.trajectorySample = new TrajectorySample(Vector.zero(), Vector.zero(), targetPosition.minus(current.getVec()),
+                Vector.zero(), targetPosition, 0, 0,
+                totalDisplacement > 1e-9 ? boundedProgress / totalDisplacement : 1, referenceHeading,
+                targets.getAngularVel(), targets.getAngularAccel(), false, false, boundedProgress, Math.max(0, totalDisplacement - progress));
+        state.trackingAngularVelocityTarget = targets.getAngularVel();
+        if (Math.abs(headingError) < tolerance && Math.abs(angularVelocity) < SETTLED_ANGULAR_VELOCITY) { return true; }
+        double turnPower = stored
+                ? turnController.calculateProfiled(referenceError, direction, targets, angularVelocity, constants)
+                : turnController.calculateQuick(headingError, angularVelocity, tolerance);
+        turnPower = Follower.ensureAngularEndpointBreakawayPower(turnPower, headingError, angularVelocity,
+                constants.angularCoeffs.kS, tolerance);
+        if (!stored) {
+            if (Math.abs(headingError) > tolerance && Math.abs(angularVelocity) < .05) {
+                stalledSeconds += dt;
+                // Preserve the existing stall-only breakaway ramp for unprofiled turns.
+                turnPower = Math.max(-1, Math.min(1, turnPower
+                        + Math.copySign(Math.min(.25, stalledSeconds * .25), headingError)));
+            } else { stalledSeconds = 0; }
         }
-
-        double turnPower;
-        if (turn.getFeedforwardLut() == null || totalDisplacement < 1e-9) {
-            turnPower = turnController.calculateQuick(
-                    headingError, currentAngularVelocity, effectiveHeadingTolerance);
-        } else {
-            MotionParameters targets = turn.getFeedforwardLut().getFFParamsByTime(elapsedSeconds);
-            state.trackingAngularVelocityTarget = targets.getAngularVel();
-            Angle profileHeading = turn.getStartPose().getHeading().plus(
-                    Angle.fromRad(direction * targets.getDistAlongCurve()));
-            double profileHeadingError = currentHeading.getShortestAngleTo(profileHeading).getRad();
-            turnPower = turnController.calculateProfiled(
-                    profileHeadingError, direction, targets, currentAngularVelocity, constants);
-        }
-
-        turnPower = Follower.ensureAngularEndpointBreakawayPower(
-                turnPower, headingError, currentAngularVelocity,
-                constants.angularCoeffs.kS, effectiveHeadingTolerance);
-        if (turn.getFeedforwardLut() == null) {
-            if (Math.abs(headingError) > effectiveHeadingTolerance
-                    && Math.abs(currentAngularVelocity) < STALLED_ANGULAR_VELOCITY) {
-                stalledSeconds += Math.min(deltaSeconds, 0.15);
-                // A characterized static term normally starts the turn. If saved gains are too
-                // weak, increase only while motion is absent, then drop the supplement on motion.
-                double supplement = Math.min(MAX_BREAKAWAY_SUPPLEMENT,
-                        stalledSeconds * BREAKAWAY_RAMP_POWER_PER_SECOND);
-                turnPower = Math.max(-1.0, Math.min(1.0,
-                        turnPower + Math.copySign(supplement, headingError)));
-            } else {
-                stalledSeconds = 0.0;
-            }
-        }
-
-        Vector positionError = targetPosition.minus(current.getVec());
-        if (driveControllerEnabled && drivetrain.isHolonomic()
-                && positionError.getMag().getIn() > distanceTolerance) {
-            Vector fieldFeedback = driveController.calculatePointToPoint(
-                    targetPosition, current.getVec());
-            AllocatedCommand positionHold = allocator.allocatePositionHold(
-                    fieldFeedback, currentHeading, 1.0 - Math.abs(turnPower));
-            Vector robotCommand = positionHold.getRobotCommand();
-            drivetrain.drive(robotCommand.getX().getIn(), robotCommand.getY().getIn(), turnPower);
-        } else {
-            drivetrain.drive(0.0, 0.0, turnPower);
-        }
+        Vector error = targetPosition.minus(current.getVec());
+        if (driveControllerEnabled && drivetrain.isHolonomic() && error.getMag().getIn() > distanceTolerance) {
+            Vector fieldFeedback = driveController.calculatePointToPoint(targetPosition, current.getVec());
+            AllocatedCommand hold = allocator.allocatePositionHold(fieldFeedback, heading, 1 - Math.abs(turnPower));
+            Vector command = hold.getRobotCommand();
+            drivetrain.drive(command.getX().getIn(), command.getY().getIn(), turnPower);
+        } else { drivetrain.drive(0, 0, turnPower); }
         return false;
     }
-
-    void pause() {
-        lastUpdateNanos = 0L;
-        stalledSeconds = 0.0;
+    void observeHeading(Angle heading) {
+        if (previousHeading != null) {
+            progress += direction * previousHeading.getShortestAngleTo(heading).getRad();
+            previousHeading = heading;
+        }
     }
-
-    void resume(long nowNanos) {
-        lastUpdateNanos = nowNanos;
-    }
-
-    void markTransitionTick(long nowNanos) {
-        lastUpdateNanos = nowNanos;
-    }
-
-    void reset() {
-        targetHeading = null;
-        targetPosition = null;
-        direction = 0.0;
-        totalDisplacement = 0.0;
-        elapsedSeconds = 0.0;
-        stalledSeconds = 0.0;
-        lastUpdateNanos = 0L;
-    }
+    void pause() { lastUpdateNanos = 0; stalledSeconds = 0; }
+    void resume(long now) { lastUpdateNanos = 0; }
+    void markTransitionTick(long now) { lastUpdateNanos = 0; }
+    void reset() { targetHeading = null; targetPosition = null; previousHeading = null; stalledSeconds = 0; lastUpdateNanos = 0; progress = 0; }
 }

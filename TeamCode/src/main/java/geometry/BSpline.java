@@ -159,4 +159,38 @@ public class BSpline implements ParametricSegment {
                 DistUnit.IN
         ).times(numSegments * numSegments); // Chain rule scaling
     }
+    @Override public double[] getBoundsIn() {
+        double[] bounds = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        for (int i = 0; i < numSegments; i++) {
+            double[] x = polynomialRange(cx[i]), y = polynomialRange(cy[i]);
+            bounds[0] = Math.min(bounds[0], x[0]); bounds[1] = Math.min(bounds[1], y[0]);
+            bounds[2] = Math.max(bounds[2], x[1]); bounds[3] = Math.max(bounds[3], y[1]);
+        }
+        return bounds;
+    }
+    private static double polynomial(double[] c, double t) { return ((c[0] * t + c[1]) * t + c[2]) * t + c[3]; }
+    private static double[] polynomialRange(double[] c) {
+        double start = polynomial(c, 0), end = polynomial(c, 1);
+        double[] range = {Math.min(start, end), Math.max(start, end)};
+        double a = 3 * c[0], b = 2 * c[1], d = c[2];
+        if (Math.abs(a) < 1e-12) {
+            if (Math.abs(b) > 1e-12) { includeRoot(range, c, -d / b); }
+        } else {
+            double discriminant = b * b - 4 * a * d;
+            if (discriminant >= 0) {
+                double q = -.5 * (b + Math.copySign(Math.sqrt(discriminant), b));
+                if (Math.abs(q) < 1e-15) { includeRoot(range, c, -b / (2 * a)); }
+                else { includeRoot(range, c, q / a); includeRoot(range, c, d / q); }
+            }
+        }
+        return range;
+    }
+    private static void includeRoot(double[] range, double[] c, double t) {
+        if (t > 0 && t < 1) {
+            double value = polynomial(c, t);
+            range[0] = Math.min(range[0], value); range[1] = Math.max(range[1], value);
+        }
+    }
+
 }

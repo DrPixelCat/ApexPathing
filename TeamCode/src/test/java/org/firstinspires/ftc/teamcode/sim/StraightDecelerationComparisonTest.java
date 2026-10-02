@@ -235,7 +235,7 @@ public class StraightDecelerationComparisonTest {
             b.addConstraint(new TranslationalConstraint(CHANGES[i] / LENGTH,
                     PathConstraint.Type.VELOCITY, Dist.fromIn(SPEEDS[i])));
         }
-        return b.profiledBuild();
+        return b.buildToMemory();
     }
 
     private static void verifyCourse(Path path) {

@@ -3,10 +3,10 @@ package controllers;
 import feedforward.MotionParameters;
 
 /**
- * Executes quick and displacement-profiled point turns.
+ * Heading feedback for quick turns and feedback/feedforward for stored point turns.
  *
- * <p>Quick turns use complete heading feedback. Profiled turns track a time-indexed
- * heading, angular velocity, and angular acceleration reference.
+ * <p>Quick turns target the final heading directly. Stored turns track angular velocity
+ * and acceleration sampled from their precomputed profile by measured heading progress.
  *
  * @author DrPixelCat - 7842 alum
  */
@@ -70,7 +70,7 @@ public class TurnController {
     }
 
     /**
-     * Calculates a profiled turn command from a time-indexed position and velocity error.
+     * Calculates a profiled turn command from heading-progress targets and measured angular velocity.
      */
     public double calculateProfiled(double headingError, double intendedDirection,
                                     MotionParameters targets, double measuredAngularVelocity) {

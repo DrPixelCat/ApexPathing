@@ -4,6 +4,21 @@ import geometry.Vector;
 
 /** Mutable path-execution state shared by the path executors and Follower diagnostics. */
 final class FollowerPathState {
+    trajectory.TrajectorySample trajectorySample;
+    trajectory.OnlineTrajectoryPlanner onlinePlanner;
+    private long targetSampleNanos;
+    void prepare(paths.movements.Path path) {
+        onlinePlanner = path.getBuildMode() == paths.movements.Path.BuildMode.ONLINE
+                ? new trajectory.OnlineTrajectoryPlanner(path, path.getPlanningConstants()) : null;
+        targetSampleNanos = 0;
+    }
+    trajectory.TrajectorySample target(paths.movements.Path path, Vector position, Vector velocity, double omega, long now) {
+        double dt = targetSampleNanos == 0 ? .02 : Math.max(0, (now - targetSampleNanos) * 1e-9);
+        targetSampleNanos = now;
+        trajectorySample = onlinePlanner != null ? onlinePlanner.sample(position, velocity, omega, dt)
+                : path.getTrajectoryField().sample(position);
+        return trajectorySample;
+    }
     final PathCompletionPolicy completion = new PathCompletionPolicy();
     final PathProgressEstimator progressEstimator = new PathProgressEstimator();
     final FollowerStuckWatchdog stuckWatchdog = new FollowerStuckWatchdog();
@@ -27,6 +42,7 @@ final class FollowerPathState {
     boolean velocitySampleAvailable;
 
     void reset() {
+        trajectorySample = null; onlinePlanner = null; targetSampleNanos = 0;
         completion.reset();
         progressEstimator.reset();
         stuckWatchdog.reset();
@@ -34,6 +50,7 @@ final class FollowerPathState {
     }
 
     void pause() {
+        trajectorySample = null; targetSampleNanos = 0; progressEstimator.reset(); completion.reset();
         velocitySampleAvailable = false;
         stuckWatchdog.reset();
     }

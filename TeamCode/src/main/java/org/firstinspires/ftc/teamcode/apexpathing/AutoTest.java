@@ -190,7 +190,7 @@ public class AutoTest extends LinearOpMode {
                         factory.arcPose(-30, -30, 7), factory.arcPose(-30, 30, 7),
                         factory.pose(30, 30, 0))
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
-                .addDistanceCallback(.5, route::outboundCallback).profiledBuild();
+                .addDistanceCallback(.5, route::outboundCallback).quickBuild();
         // This route ends tangent to 0 degrees; the turn stage only settles that heading.
         route.testTurn = factory.turn(route.testPath.getEndPose())
                 .setDriveProfile(FollowerConstants.Profile.TANK)
@@ -198,7 +198,7 @@ public class AutoTest extends LinearOpMode {
         route.returnPath = factory.tankPath(route.testTurn.getEndPose(),
                         factory.pose(0, 30), Pose.zero())
                 .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
-                .addDistanceCallback(.5, route::returnCallback).profiledBuild();
+                .addDistanceCallback(.5, route::returnCallback).quickBuild();
         return route;
     }
 
@@ -211,7 +211,7 @@ public class AutoTest extends LinearOpMode {
                         factory.arcPose(-30, -30, 7), factory.arcPose(-30, 30, 7),
                         factory.pose(30, 30, -90))
                 .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL)
-                .addDistanceCallback(.5, route::outboundCallback).profiledBuild();
+                .addDistanceCallback(.5, route::outboundCallback).quickBuild();
         route.testTurn = factory.turn(route.testPath.getEndPose())
                 .setDriveProfile(FollowerConstants.Profile.HOLONOMIC)
                 .turnTo(factory.angle(0))
@@ -220,12 +220,12 @@ public class AutoTest extends LinearOpMode {
                         factory.pose(0, 30), Pose.zero())
                 .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
                 .setDistanceToStartFinalTurn(factory.dist(30))
-                .addDistanceCallback(.5, route::returnCallback).profiledBuild();
+                .addDistanceCallback(.5, route::returnCallback).quickBuild();
         Pose strafeEnd = factory.pose(0, 24, 0);
         route.strafeOutPath = factory.holonomicPath(Pose.zero(), strafeEnd)
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).profiledBuild();
+                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
         route.strafeBackPath = factory.holonomicPath(strafeEnd, Pose.zero())
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).profiledBuild();
+                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
         return route;
     }
 
@@ -494,10 +494,6 @@ public class AutoTest extends LinearOpMode {
     }
 
     private void openOutboundVelocityCsv() {
-        if (!path.testPath.isProfiled()) {
-            outboundVelocityCsvPath = "Unavailable: testPath is not profiled";
-            return;
-        }
         try {
             File directory = ApexStorage.getDirectory();
             if (!directory.exists() && !directory.mkdirs()) {
@@ -541,19 +537,17 @@ public class AutoTest extends LinearOpMode {
         lastOutboundVelocityLogSeconds = elapsed;
 
         PathSegment segment = path.testPath.getParametricPath();
-        double t = follower.getBestT();
-        Vector closestPoint = segment.getPosition(t);
-        double remaining = segment.getDistanceToEndIn(closestPoint, t);
-        double traveled = segment.getLengthIn() - remaining;
-        MotionParameters target = path.testPath.getPathType() == Path.PathType.TANK
-                ? path.testPath.getFeedforwardLut().getTankFFParams(traveled)
-                : path.testPath.getFeedforwardLut().getFFParams(traveled);
-        Vector tangent = segment.getFirstDerivative(t).normalize();
+        trajectory.TrajectorySample sample = follower.getTrajectoryTarget();
+        if (sample == null) { return; }
+        double t = sample.pathT;
+        double traveled = sample.progressIn;
+        MotionParameters target = new MotionParameters(sample.tangentialVelocity(), sample.tangentialAcceleration(),
+                sample.angularVelocity, sample.angularAcceleration, sample.progressIn);
+        target.setMotorPower(follower.getLastCommandDemand().feedforwardTotal);
+        Vector tangent = sample.tangent;
         double rawVelocity = follower.getRawVelocity().getVec().dot(tangent).getIn();
         double kalmanVelocity = follower.getVelocity().getVec().dot(tangent).getIn();
-        Vector finalTangent = segment.getFirstDerivative(1.0).normalize();
-        double targetHeading = path.testPath.getInterpolator()
-                .getHeadingTarg(remaining, segment.getFirstDerivative(t), finalTangent).getRad();
+        double targetHeading = sample.heading.getRad();
         double headingError = follower.getPose().getHeading().getShortestAngleTo(
                 geometry.Angle.fromRad(targetHeading)).getRad();
         double crossTrackError = follower.getCrossTrackErrorIn();

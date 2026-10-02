@@ -386,10 +386,10 @@ public class ApexSimulationTest {
         Pose end = factory.pose(24, 0, 0);
         paths.movements.Path outbound = factory.holonomicPath(start, end)
                 .interpolateWith(paths.heading.InterpolationStyle.CONSTANT_START_HEADING)
-                .profiledBuild();
+                .buildToMemory();
         paths.movements.Path returning = factory.holonomicPath(end, start)
                 .interpolateWith(paths.heading.InterpolationStyle.CONSTANT_START_HEADING)
-                .profiledBuild();
+                .buildToMemory();
 
         follower.setPose(start);
         follower.follow(outbound);
@@ -427,7 +427,7 @@ public class ApexSimulationTest {
                 .setAngleUnit(geometry.AngleUnit.DEG);
         Pose start = factory.pose(-24, 0, 0);
         paths.movements.Turn turn = factory.turn(start)
-                .turnTo(factory.angle(90)).profiledBuild();
+                .turnTo(factory.angle(90)).buildToMemory();
         File reportDirectory = new File(System.getProperty("user.dir"), "build/reports");
         assertTrue(reportDirectory.exists() || reportDirectory.mkdirs());
         File csv = new File(reportDirectory, "profiled-turn-velocity.csv");
@@ -451,7 +451,8 @@ public class ApexSimulationTest {
                 follower.update();
                 double position = Math.max(0.0, turn.getStartPose().getHeading()
                         .getShortestAngleTo(follower.getPose().getHeading()).getRad());
-                MotionParameters target = turn.getFeedforwardLut().getFFParamsByTime(elapsed);
+                trajectory.TrajectorySample sample = follower.getTrajectoryTarget();
+                MotionParameters target = new MotionParameters().setAngularVel(sample.angularVelocity).setAngularAccel(sample.angularAcceleration);
                 minimumVelocity = Math.min(minimumVelocity,
                         follower.getVelocity().getHeading().getRad());
                 double remaining = Math.abs(follower.getPose().getHeading()
@@ -523,9 +524,9 @@ public class ApexSimulationTest {
         Pose start = factory.pose(-24, 0, 0);
         Pose turned = factory.pose(-24, 0, 90);
         paths.movements.Turn outbound = factory.turn(start)
-                .turnTo(turned.getHeading()).profiledBuild();
+                .turnTo(turned.getHeading()).buildToMemory();
         paths.movements.Turn returning = factory.turn(turned)
-                .turnTo(start.getHeading()).profiledBuild();
+                .turnTo(start.getHeading()).buildToMemory();
 
         follower.setPose(start);
         follower.follow(outbound);

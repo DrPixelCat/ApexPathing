@@ -42,7 +42,12 @@ public class DualActuatedPathFollowingSimulationTest {
     private static final double HEADING_TOLERANCE_DEG = 5.0;
 
     @Test(timeout = 50_000L)
-    public void followsHolonomicThenTankThenHolonomicPaths() throws Exception {
+    public void followsHolonomicThenTankThenHolonomicPaths() throws Exception { runModes(true); }
+
+    @Test(timeout = 50_000L)
+    public void followsOnlineHolonomicThenTankThenHolonomicPaths() throws Exception { runModes(false); }
+
+    private void runModes(boolean stored) throws Exception {
         Field singleton = FollowerConstants.class.getDeclaredField("instance");
         singleton.setAccessible(true);
         Object prior = singleton.get(null);
@@ -58,14 +63,19 @@ public class DualActuatedPathFollowingSimulationTest {
 
             Pose start = factory.pose(0, 0, 0);
             Path strafe = factory.holonomicPath(start, factory.pose(18, 12, 0))
-                    .profiledBuild();
+                    .quickBuild();
             Path traction = factory.tankPath(strafe.getEndPose(), factory.pose(30, 12),
                             factory.pose(42, 24, 45))
-                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).profiledBuild();
+                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).quickBuild();
             Path strafeAgain = factory.holonomicPath(
                             traction.getEndPose(), factory.pose(42, 8, 45))
-                    .profiledBuild();
+                    .quickBuild();
 
+            if (stored) {
+                for (Path path : new Path[]{strafe, traction, strafeAgain}) {
+                    path.setBuildMode(Path.BuildMode.MEMORY); path.precomputeTrajectory();
+                }
+            }
             follower.setPose(start);
             assertTrue(drivetrain.isHolonomic());
             assertEquals(HOLONOMIC_SERVO_POSITION, servoPosition[0], 0.0);

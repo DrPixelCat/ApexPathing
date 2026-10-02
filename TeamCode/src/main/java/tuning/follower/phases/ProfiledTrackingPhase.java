@@ -114,7 +114,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
 
     public ProfiledTrackingPhase(TunerContext context) { super(context); }
 
-    @Override protected String getPhaseName() { return "Profiled Tracking"; }
+    @Override protected String getPhaseName() { return "Trajectory Tracking"; }
     @Override protected String getTuningConstants() {
         return context.constants.motionCharacterization == null
                 ? "Velocity tracking gain, profile velocity power, corner speed scale"
@@ -144,7 +144,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
                 || (!tank() && (!positive(context.constants.strafeVelLimitIn)
                 || !positive(context.constants.strafeAccelLimitIn)
                 || !positive(context.constants.kCentripetal)))) {
-            throw new IllegalStateException("Profiled tracking requires accepted feedforward, "
+            throw new IllegalStateException("Trajectory tracking requires accepted feedforward, "
                     + "heading/drive feedback, motion limits, and holonomic centripetal tuning.");
         }
         courseMeasured = false;
@@ -198,10 +198,15 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         Pose end = localPose(start, 36.0, -36.0, -90.0);
         activePath = tank()
                 ? factory.tankPath(start, corner, end)
-                        .interpolateWith(InterpolationStyle.TANGENT_FORWARD).profiledBuild()
+                        .interpolateWith(InterpolationStyle.TANGENT_FORWARD).quickBuild()
                 : factory.holonomicPath(start, corner, end)
-                        .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL).profiledBuild();
-        if (referencePath == null) { referencePath = activePath; }
+                        .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL).quickBuild();
+        if (referencePath == null) {
+            referencePath = tank() ? factory.tankPath(start, corner, end)
+                    .interpolateWith(InterpolationStyle.TANGENT_FORWARD).buildToMemory()
+                    : factory.holonomicPath(start, corner, end)
+                    .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL).buildToMemory();
+        }
         trial++;
         brakingSamples = cornerSamples = accelerationSamples = pulseCount = 0;
         squaredBrakingError = signedBrakingError = squaredAccelerationError
@@ -232,33 +237,25 @@ public final class ProfiledTrackingPhase extends TuningPhase {
     }
 
     private void sample() {
-        double t = context.getFollower().getBestT();
+        trajectory.TrajectorySample target = context.getFollower().getTrajectoryTarget();
+        if (target == null) { return; }
+        double t = target.pathT;
         if (!Double.isFinite(t) || t < 0.0 || t >= 1.0) { return; }
         peakPathT = Math.max(peakPathT, t);
-        double remaining = activePath.getParametricPath().getDistanceToEndIn(
-                activePath.getParametricPath().getPosition(t), t);
-        double traveled = activePath.getParametricPath().getLengthIn() - remaining;
-        feedforward.MotionParameters target = tank()
-                ? activePath.getFeedforwardLut().getTankFFParams(traveled)
-                : activePath.getFeedforwardLut().getFFParams(traveled);
+        double traveled = target.progressIn;
         double targetSpeed = context.getFollower().getTrackingVelocityTarget();
-        double referenceSpeed = (tank() ? referencePath.getFeedforwardLut().getTankFFParams(traveled)
-                : referencePath.getFeedforwardLut().getFFParams(traveled)).getTangentialVel();
+        double referenceSpeed = referencePath.getTrajectoryField().sample(referencePath.getParametricPath()
+                .getPosition(referencePath.getParametricPath().getTAtDistance(traveled))).tangentialVelocity();
         double measured = context.getFollower().getTrackingProgressVelocity();
-        double raw = context.getFollower().getRawVelocity().getVec()
-                .rotate(Angle.fromRad(-activePath.getParametricPath().getFirstDerivative(t)
-                        .getTheta().getRad())).getX().getIn();
+        double raw = context.getFollower().getRawVelocity().getVec().dot(target.tangent).getIn();
         double curvature = activePath.getParametricPath().getSignedCurvature(t);
-        double headingError = context.getFollower().getPose().getHeading().getShortestAngleTo(
-                activePath.getInterpolator().getHeadingTarg(remaining,
-                        activePath.getParametricPath().getFirstDerivative(t),
-                        activePath.getParametricPath().getFirstDerivative(1.0))).getRad();
+        double headingError = context.getFollower().getPose().getHeading().getShortestAngleTo(target.heading).getRad();
         double blend = context.getFollower().getTrackingEndpointBlend();
         double feedforward = context.getFollower().getTrackingFeedforward();
         double elapsed = (System.nanoTime() - trialStartedNanos) * 1e-9;
         if (csv != null) {
             csv.writeRow(trial, "SINGLE_CORNER", elapsed, t, targetSpeed, referenceSpeed, measured, raw,
-                    target.getTangentialAccel(), curvature, blend, feedforward,
+                    target.tangentialAcceleration(), curvature, blend, feedforward,
                     context.getFollower().getTrackingVelocityFeedback(),
                     context.getFollower().getDrivetrain().getLastFlPower(),
                     context.getFollower().getDrivetrain().getLastFrPower(),
@@ -290,7 +287,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
                 Math.abs(context.getFollower().getCrossTrackErrorIn()));
         peakHeadingErrorDeg = Math.max(peakHeadingErrorDeg,
                 Math.abs(Math.toDegrees(headingError)));
-        if (target.getTangentialAccel() > ACCELERATION_THRESHOLD) {
+        if (target.tangentialAcceleration() > ACCELERATION_THRESHOLD) {
             double error = measured - targetSpeed;
             squaredAccelerationError += error * error;
             accelerationSamples++;
@@ -298,7 +295,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         boolean opposing = feedforward < -1e-6;
         if (opposing && !lastPowerOpposing) { pulseCount++; }
         lastPowerOpposing = opposing;
-        if (target.getTangentialAccel() < BRAKING_ACCELERATION_THRESHOLD) {
+        if (target.tangentialAcceleration() < BRAKING_ACCELERATION_THRESHOLD) {
             double error = measured - Math.abs(targetSpeed);
             squaredBrakingError += error * error;
             signedBrakingError += error;

@@ -10,6 +10,9 @@ import paths.movements.Path;
  * adding their logging libraries to the Robot Controller APK.</p>
  */
 public interface FollowerDiagnostics {
+    /** Physical target used by either trajectory source during this update. */
+    default void recordTrajectoryTarget(trajectory.TrajectorySample target) { }
+    default void recordTrajectoryFailure(String message) { }
     /** Publishes the follower's latest localized pose. */
     void recordPose(Pose pose);
 

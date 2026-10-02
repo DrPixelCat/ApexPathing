@@ -71,7 +71,9 @@ public class PathSegment {
 
         // Coarse search via LUT
         for (PathPoint point : LUTpoints) {
-            double distSq = point.getLocation().minus(location).getMagSq().getIn();
+            double dx = point.getLocation().getX().getIn() - location.getX().getIn();
+            double dy = point.getLocation().getY().getIn() - location.getY().getIn();
+            double distSq = dx * dx + dy * dy;
 
             if (distSq < minDistSq) {
                 minDistSq = distSq;
@@ -165,6 +167,32 @@ public class PathSegment {
 
     /** @return The length of the segment in inches. */
     public double getLengthIn() { return length; }
+    public double[] getBoundsIn() { return segment.getBoundsIn(); }
+
+    /** Maps physical arc length, rather than spline parameter, into the geometric LUT. */
+    public double getTAtDistance(double distanceIn) {
+        if (!Double.isFinite(distanceIn)) { throw new IllegalArgumentException("Finite arc length required."); }
+        if (distanceIn <= 0 || length <= 1e-9) { return 0; }
+        if (distanceIn >= length) { return 1; }
+        int low = 0, high = LUTpoints.length - 1;
+        while (high - low > 1) {
+            int mid = (low + high) >>> 1;
+            if (length - LUTpoints[mid].getDistanceToEndIn() <= distanceIn) { low = mid; }
+            else { high = mid; }
+        }
+        double a = length - LUTpoints[low].getDistanceToEndIn();
+        double b = length - LUTpoints[high].getDistanceToEndIn();
+        double fraction = b > a ? (distanceIn - a) / (b - a) : 0;
+        return LUTpoints[low].getT() + fraction * (LUTpoints[high].getT() - LUTpoints[low].getT());
+    }
+
+    /** Arc-length-indexed sample, including exact rolling-window boundaries. */
+    public PathPoint getPointAtDistance(double distanceIn) {
+        double distance = Math.max(0, Math.min(length, distanceIn));
+        double t = getTAtDistance(distance);
+        return new PathPoint(t, length - distance, getPosition(t), getFirstDerivative(t),
+                getSignedCurvature(t), getCurvatureDerivative(t));
+    }
 
     /**
      * Estimates the derivative of curvature with respect to arc length (dK/ds)

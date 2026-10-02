@@ -44,7 +44,7 @@ the mecanum simulator's saved constants.
 
 Do not select these tank-only OpModes from `SimulateApexPathing`; that launcher uses mecanum
 physics. The tank OpModes detect the wrong launcher, and `Tank Apex Auto Test` also checks that
-positive motion limits were saved by the follower tuner before building profiled movements.
+positive motion limits were saved by the follower tuner before following online movements or precomputing stored trajectories.
 
 ```powershell
 .\gradlew.bat :TeamCode:testDebugUnitTest `
@@ -72,7 +72,7 @@ line says `Robot can be driven with sticks` only while stick driving is availabl
 After a phase's results are accepted, Follower Tuner saves them and advances through every
 remaining phase in order: drive feedforward SysId, heading feedforward SysId,
 [motion characterization](doc/MotionCharacterization.md), heading feedback,
-drive feedback, movement limits, centripetal tuning (holonomic only), then profiled tracking.
+drive feedback, movement limits, centripetal tuning (holonomic only), then trajectory tracking.
   Motion characterization measures holding power and acceleration authority versus speed,
   then validates a separate power sequence. Accepted maps constrain profile power and
   speed; the follower uses the same maps for powered acceleration and cruise.
@@ -155,3 +155,13 @@ Accepted results are saved immediately to `FIRST/ApexPathing/localization.json`,
 one localizer across both modes by default. Override `usesSharedLocalizer()` and
 `localizerConstants(Profile)` in the robot's `ApexConstants` implementation when tank and
 holonomic modes need separate localizers.
+
+### Trajectory build modes
+
+Use `.quickBuild()` for online planning from measured speed through a fixed arc-length
+lookahead, or `.buildToMemory()` to precompute an interpolated vector field in RAM.
+For stationary turns, `.quickBuild()` uses PID heading feedback without profiling;
+`.buildToMemory()` precomputes the angular profile.
+`.profiledBuild()` has been removed. Both modes use the same feedback and feedforward
+control. See [online planning and stored fields](doc/TrajectoryPlanning.md) for lookahead,
+grid configuration, permanent precomputation, diagnostics, and migration examples.

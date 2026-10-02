@@ -36,6 +36,12 @@ public class HolonomicInterpolator implements HeadingInterpolator {
     @SuppressWarnings("PublicMethodNotExposedInInterface")
     public void setBlendWindow(double windowLengthInches) { this.blendWindow = windowLengthInches; }
 
+    @Override public HeadingInterpolator copyForTrajectory() {
+        HolonomicInterpolator copy = new HolonomicInterpolator(style, startHeading, endHeading, customOffset, headingSpline);
+        copy.pathLength = pathLength; copy.blendWindow = blendWindow;
+        return copy;
+    }
+
     /**
      * Calculates the blend parameter u (0.0 to 1.0) at the END of the path. s is distance
      * remaining. When s > blendWindow, u = 0. When s = 0, u = 1.

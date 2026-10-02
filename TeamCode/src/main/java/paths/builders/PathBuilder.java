@@ -47,7 +47,7 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
      * Sets the normalized motor-power ceiling for generated profiles, in (0, 1]. Omission uses
      * the drivetrain default (1.0, or 0.88 of calibrated available power when characterized).
      * A value of 1.0 uses all calibrated available power. Velocity and acceleration constraints
-     * still apply. Holonomic quickBuild() does not generate a profile and ignores this ceiling.
+     * still apply in both online and stored modes.
      */
     @SuppressWarnings("unchecked")
     public T setProfilePowerLimit(double powerLimit) {
@@ -55,10 +55,21 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
         return (T) this;
     }
 
+    /** Overrides the automatically sized, fixed online planning horizon. */
+    @SuppressWarnings("unchecked") public T setLookaheadDistance(Dist distance) {
+        path.setLookaheadDistanceIn(distance.getIn()); return (T) this;
+    }
+    @SuppressWarnings("unchecked") public T setMemoryGridSpacing(Dist spacing) {
+        path.setMemoryGridSpacingIn(spacing.getIn()); return (T) this;
+    }
+    @SuppressWarnings("unchecked") public T setMemoryGridPadding(Dist padding) {
+        path.setMemoryGridPaddingIn(padding.getIn()); return (T) this;
+    }
+
     /**
      * Adds a kinematic constraint to the path at a specific distance percentage.
      *
-     * <p><strong> NOTE: Only velocity can be limited on a quickBuild.</strong>
+     * <p>Both build modes enforce translational and angular velocity and acceleration limits.
      *
      * @param constraint The {@link PathConstraint} to be added to the path
      * @return The current PathBuilder instance for method chaining.
@@ -182,7 +193,7 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
 
     /**
      * Builds the path geometry without generating a physical motion profile. The follower will
-     * automatically use dynamic velocity-bounded feedback.
+     * plan a bounded trajectory online from measured speed.
      *
      * @return The constructed Path.
      */
@@ -190,9 +201,9 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
 
     /**
      * Builds the path geometry and solves a complete kinematically constrained feedforward
-     * motion profile.
+     * motion profile and a bilinearly interpolated vector field in RAM.
      *
-     * @return The constructed Path with a fully optimized Feedforward LUT attached.
+     * @return The constructed Path with its immutable stored field.
      */
-    public abstract Path profiledBuild();
+    public abstract Path buildToMemory();
 }

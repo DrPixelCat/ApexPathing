@@ -367,16 +367,15 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
     @Override
     public Path quickBuild() {
         compileGeometry();
-        path.setBuildMode(Path.BuildMode.QUICK);
-        path.rebuildMotionProfile();
+        path.setBuildMode(Path.BuildMode.ONLINE);
         return path;
     }
 
     @Override
-    public Path profiledBuild() {
+    public Path buildToMemory() {
         compileGeometry();
-        path.setBuildMode(Path.BuildMode.PROFILED);
-        path.rebuildMotionProfile();
+        path.setBuildMode(Path.BuildMode.MEMORY);
+        path.precomputeTrajectory();
         return path;
     }
 }

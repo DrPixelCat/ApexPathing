@@ -195,7 +195,7 @@ public class FeedforwardPhaseSimulationTest {
                 follower.setPose(start);
                 paths.movements.Path curve = factory.tankPath(start, factory.pose(18, 0),
                                 factory.pose(30, 6), factory.pose(36, 18, 45))
-                        .interpolateWith(paths.heading.InterpolationStyle.TANGENT_FORWARD).profiledBuild();
+                        .interpolateWith(paths.heading.InterpolationStyle.TANGENT_FORWARD).buildToMemory();
                 TankPathFollowingSimulationTest.follow(hardware, follower, curve, 15);
             }
         } finally {

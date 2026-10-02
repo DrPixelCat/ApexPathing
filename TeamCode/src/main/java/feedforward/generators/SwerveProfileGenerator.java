@@ -24,6 +24,27 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
         return ceiling;
     }
     @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) { return constants.forwardAccelLimitIn; }
+    @Override protected PowerEvaluator powerEvaluator(Path path, PathPoint point) {
+        Vector end = path.getParametricPath().getFirstDerivative(1);
+        Angle targetHeading = path.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(), point.getFirstDerivative(), end);
+        Vector body = point.getFirstDerivative().normalize().rotate(targetHeading.times(-1));
+        double bx = body.getX().getIn(), by = body.getY().getIn();
+        double normal = point.getSignedCurvature() * constants.kCentripetal;
+        return (v, a, omega, alpha, normalVelocity) -> {
+            double x, y;
+            if (constants.motionCharacterization == null) {
+                double tangent = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
+                x = bx * tangent - by * normal * normalVelocity * normalVelocity;
+                y = by * tangent + bx * normal * normalVelocity * normalVelocity;
+            } else {
+                Vector tangent = HolonomicFeedforward.translation(constants, body, v, a, profileKV());
+                x = tangent.getX().getIn() - by * normal * normalVelocity * normalVelocity;
+                y = tangent.getY().getIn() + bx * normal * normalVelocity * normalVelocity;
+            }
+            double turn = HolonomicFeedforward.heading(constants, omega, alpha);
+            return Math.hypot(x, y) + Math.abs(turn);
+        };
+    }
     @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,
                                             double velocity, double acceleration, EvaluationResult result) {
         Vector end = path.getParametricPath().getFirstDerivative(1);

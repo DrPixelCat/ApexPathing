@@ -24,6 +24,14 @@ public class TankProfileGenerator extends BaseProfileGenerator {
         return ceiling;
     }
     @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) { return constants.forwardAccelLimitIn; }
+    @Override protected PowerEvaluator powerEvaluator(Path path, PathPoint point) {
+        return (v, a, omega, alpha, normalVelocity) -> {
+            double forward = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
+            forward = constants.characterizedAxisDemand(Axis.FORWARD, v, a, forward);
+            double turn = constants.characterizedPower(Axis.ANGULAR, omega, alpha, omega * constants.angularKV + alpha * constants.angularKA);
+            return Math.abs(forward) + Math.abs(turn);
+        };
+    }
     @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,
                                             double velocity, double acceleration, EvaluationResult result) {
         Vector end = path.getParametricPath().getFirstDerivative(1);

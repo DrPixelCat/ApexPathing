@@ -3,6 +3,9 @@ package feedforward;
 /** Backward controllability and forward reachability over squared path speeds. */
 public final class CoupledMotionProfile {
     private static final int SEARCH_ITERATIONS = 32;
+    private static final java.util.concurrent.atomic.AtomicLong solveCount = new java.util.concurrent.atomic.AtomicLong();
+    /** Global solve count for performance diagnostics; includes precomputation. */
+    public static long getSolveCount() { return solveCount.get(); }
 
     public interface Transitions {
         /** Greatest feasible successor in [0, ceilingSquared], or NaN if none exists. */
@@ -21,6 +24,29 @@ public final class CoupledMotionProfile {
      */
     public static double[] solve(double[] positions, double[] ceilings, boolean boosted,
                                  double endVelocity, Transitions transitions) {
+        return solveInternal(positions, ceilings, boosted ? Double.NaN : 0, endVelocity, transitions);
+    }
+
+    /** Uses the actual initial speed. An uncontrollable initial state is never silently clipped. */
+    public static double[] solve(double[] positions, double[] ceilings, double startVelocity,
+                                 double endVelocity, Transitions transitions) {
+        if (!Double.isFinite(startVelocity) || startVelocity < 0) {
+            throw new IllegalArgumentException("A finite nonnegative initial speed is required.");
+        }
+        return solveInternal(positions, ceilings, startVelocity, endVelocity, transitions);
+    }
+
+    public static final class OverspeedException extends IllegalStateException {
+        public final double maximumStartVelocity;
+        public OverspeedException(double maximumStartVelocity) {
+            super("Initial speed exceeds stopping envelope: " + maximumStartVelocity);
+            this.maximumStartVelocity = maximumStartVelocity;
+        }
+    }
+
+    private static double[] solveInternal(double[] positions, double[] ceilings, double startVelocity,
+                                         double endVelocity, Transitions transitions) {
+        solveCount.incrementAndGet();
         if (positions == null || ceilings == null || positions.length != ceilings.length
                 || positions.length < 2 || transitions == null
                 || !Double.isFinite(endVelocity) || endVelocity < 0) {
@@ -57,7 +83,10 @@ public final class CoupledMotionProfile {
         }
 
         double[] squared = new double[ceilings.length];
-        squared[0] = boosted ? controllable[0] : 0;
+        squared[0] = Double.isNaN(startVelocity) ? controllable[0] : startVelocity * startVelocity;
+        if (squared[0] > controllable[0] + 1e-6) {
+            throw new OverspeedException(Math.sqrt(controllable[0]));
+        }
         for (int i = 0; i < last; i++) {
             squared[i + 1] = positions[i + 1] - positions[i] <= 1e-9
                     ? squared[i] : transitions.maximumNextSquared(i, squared[i], controllable[i + 1]);

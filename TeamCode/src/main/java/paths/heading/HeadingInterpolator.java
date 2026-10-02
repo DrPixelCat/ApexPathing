@@ -22,4 +22,8 @@ public interface HeadingInterpolator {
 
     /** Sets the total path length, primarily used for terminal blending math. */
     void setPathLength(double lengthInches);
+
+    /** Detached configuration for stored trajectories. Immutable implementations may return
+     * themselves; custom mutable interpolators must override this method. */
+    default HeadingInterpolator copyForTrajectory() { return this; }
 }

@@ -13,7 +13,7 @@ import geometry.Vector;
 import localizers.BaseLocalizer;
 import paths.movements.Path;
 
-/** Executes profiled paths for non-holonomic drivetrains using Ramsete feedback. */
+/** Tracks online and stored vector targets for differential drives using Ramsete feedback. */
 final class TankPathFollower {
     private static final double INCHES_TO_METRES = 0.0254;
     // Conventional Ramsete tuning assumes SI: b has units rad^2/m^2 and zeta has units 1/rad.
@@ -67,21 +67,18 @@ final class TankPathFollower {
         // 1.1 Robot pose and path geometry
         Vector currentPosition = current.getVec();
         Angle currentHeading = current.getHeading();
-        state.t = segment.getBestT(currentPosition);
-        Vector closestPathPoint = segment.getPosition(state.t);
-        double distanceRemaining = segment.getDistanceToEndIn(closestPathPoint, state.t);
-
-        // 1.2 Progress callbacks
-        double pathProgress = 1.0 - distanceRemaining / segment.getLengthIn();
-        callbacks.process(path, Range.clip(pathProgress, 0.0, 1.0), currentHeading);
-
-        // 1.3 Path targets and measured velocity
-        Vector pathDerivative = segment.getFirstDerivative(state.t);
         Vector robotVelocity = localizer.getVel().getVec();
-        Angle headingTarget = path.getInterpolator().getHeadingTarg(
-                distanceRemaining, pathDerivative, segment.getFirstDerivative(1.0));
-        double distanceTraveled = path.getParametricPath().getLengthIn() - distanceRemaining;
-        MotionParameters targets = path.getFeedforwardLut().getTankFFParams(distanceTraveled);
+        trajectory.TrajectorySample sample = state.target(path, currentPosition, robotVelocity, localizer.getVel().getHeading().getRad(), System.nanoTime());
+        state.t = sample.pathT;
+        Vector closestPathPoint = sample.positionOnPath;
+        state.closestPathPoint = closestPathPoint;
+        double distanceRemaining = sample.remainingIn;
+        double pathProgress = segment.getLengthIn() > 1e-9 ? sample.progressIn / segment.getLengthIn() : 1;
+        callbacks.process(path, Range.clip(pathProgress, 0.0, 1.0), currentHeading);
+        Vector pathDerivative = sample.tangent;
+        Angle headingTarget = sample.heading;
+        MotionParameters targets = new MotionParameters(sample.tangentialVelocity(), sample.tangentialAcceleration(),
+                sample.angularVelocity, sample.angularAcceleration, sample.progressIn);
 
         // endregion
 
@@ -96,7 +93,7 @@ final class TankPathFollower {
         double targetAngularAcceleration = targets.getAngularAccel();
 
         // 2.2 Tracking error in the robot frame
-        Vector globalError = closestPathPoint.minus(currentPosition);
+        Vector globalError = sample.toPath;
         Vector tangent = pathDerivative.normalize();
         state.crossTrackError = globalError.getY().getIn() * tangent.getX().getIn()
                 - globalError.getX().getIn() * tangent.getY().getIn();

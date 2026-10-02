@@ -137,21 +137,15 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
     @Override
     public Path quickBuild() {
         compileGeometry();
-        if (path.getConstraints().length == 0) {
-            // noinspection ConstantExpression
-            path.addWarning("APEX WARNING: quickBuild() called on Tank drive with no constraints!" +
-                    " The naive profile will attempt maximum speed through all curves.");
-        }
-        path.setBuildMode(Path.BuildMode.QUICK);
-        path.rebuildMotionProfile();
+        path.setBuildMode(Path.BuildMode.ONLINE);
         return path;
     }
 
     @Override
-    public Path profiledBuild() {
+    public Path buildToMemory() {
         compileGeometry();
-        path.setBuildMode(Path.BuildMode.PROFILED);
-        path.rebuildMotionProfile();
+        path.setBuildMode(Path.BuildMode.MEMORY);
+        path.precomputeTrajectory();
         return path;
     }
 }

@@ -39,7 +39,7 @@ import paths.heading.ReversedHeadingInterpolator;
  */
 public class Path extends FollowerMovement {
     public enum PathType { HOLONOMIC, TANK }
-    public enum BuildMode { QUICK, PROFILED }
+    public enum BuildMode { ONLINE, MEMORY }
 
     private final List<String> buildWarnings = new ArrayList<String>();
     private final ArrayList<PathConstraint> constraints = new ArrayList<PathConstraint>();
@@ -49,7 +49,37 @@ public class Path extends FollowerMovement {
     private HeadingInterpolator interpolator;
     private FFLut FFLut;
     private boolean isAccelBoosted = false;
-    private BuildMode buildMode = BuildMode.QUICK;
+    private BuildMode buildMode = BuildMode.ONLINE;
+    private trajectory.TrajectoryField2D trajectoryField;
+    private Double lookaheadDistanceIn;
+    private double memoryGridSpacingIn = 1.0, memoryGridPaddingIn = 12.0;
+
+    public Double getLookaheadDistanceIn() { return lookaheadDistanceIn; }
+    public void setLookaheadDistanceIn(double distance) {
+        requirePositive("Lookahead distance", distance); lookaheadDistanceIn = distance;
+    }
+    public double getMemoryGridSpacingIn() { return memoryGridSpacingIn; }
+    public void setMemoryGridSpacingIn(double spacing) {
+        requirePositive("Grid spacing", spacing); memoryGridSpacingIn = spacing;
+    }
+    public double getMemoryGridPaddingIn() { return memoryGridPaddingIn; }
+    public void setMemoryGridPaddingIn(double padding) {
+        if (!Double.isFinite(padding) || padding < 0) { throw new IllegalArgumentException("Grid padding must be finite and nonnegative."); }
+        memoryGridPaddingIn = padding;
+    }
+    private static void requirePositive(String name, double value) {
+        if (!Double.isFinite(value) || value <= 0) { throw new IllegalArgumentException(name + " must be finite and positive."); }
+    }
+    public trajectory.TrajectoryField2D getTrajectoryField() { return trajectoryField; }
+    public FollowerConstants getPlanningConstants() {
+        return FollowerConstants.getInstance().forProfile(pathType == PathType.TANK
+                ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC);
+    }
+    public BaseProfileGenerator createGenerator(FollowerConstants constants) {
+        return pathType == PathType.TANK ? new TankProfileGenerator(constants, this)
+                : constants.drivetrainType == BaseDrivetrain.DrivetrainType.COAXIAL_SWERVE
+                ? new SwerveProfileGenerator(constants, this) : new MecanumProfileGenerator(constants, this);
+    }
     private boolean reverseConstraintProgress;
     private Double profilePowerLimit;
 
@@ -58,7 +88,7 @@ public class Path extends FollowerMovement {
 
     /**
      * Sets the profile-power ceiling in (0, 1]. The generator also respects calibrated available
-     * motor power. Call rebuildMotionProfile() to apply this to an already built path.
+     * motor power. Stored trajectories retain the ceiling used when they were built.
      */
     public void setProfilePowerLimit(double powerLimit) {
         if (!Double.isFinite(powerLimit) || powerLimit <= 0.0 || powerLimit > 1.0) {
@@ -93,14 +123,14 @@ public class Path extends FollowerMovement {
     public PathConstraint[] getConstraints() { return constraints.toArray(new PathConstraint[0]); }
 
     /**
-     * Evaluates the active velocity constraints for unprofiled quick builds. Acts as a step
+     * Legacy inspection of the authored velocity schedule. Acts as a step
      * function: the velocity limit changes when the robot crosses a constraint's 't' threshold.
      *
      * @param t The current path percentage [0.0, 1.0].
      * @param defaultLimit The hardware maximum velocity from FollowerConstants.
      * @return The active velocity limit in inches per second.
      */
-    public double getQuickVelocityLimit(double t, double defaultLimit) {
+    @Deprecated public double getQuickVelocityLimit(double t, double defaultLimit) {
         double constraintProgress = constraintProgress(t);
         double currentLimit = defaultLimit;
         double highestS = -1.0;
@@ -158,8 +188,8 @@ public class Path extends FollowerMovement {
     /** @param FFLut The path's motion profile as a {@link FFLut} */
     public void setFeedforwardLut(FFLut FFLut) { this.FFLut = FFLut; }
 
-    /** @return true if built with profiledBuild(), false if built with quickBuild() */
-    public boolean isProfiled() { return FFLut != null; }
+    /** @return true if built with buildToMemory(), false if built with quickBuild() */
+    @Deprecated public boolean isProfiled() { return buildMode == BuildMode.MEMORY; }
 
     public BuildMode getBuildMode() { return buildMode; }
 
@@ -200,6 +230,7 @@ public class Path extends FollowerMovement {
     public Path reversed() {
         final PathSegment sourceSegment = parametricPath;
         PathSegment reversedSegment = new PathSegment(new ParametricSegment() {
+            @Override public double[] getBoundsIn() { return sourceSegment.getBoundsIn(); }
             @Override
             public Vector getPosition(double t) {
                 return sourceSegment.getPosition(1.0 - t);
@@ -234,50 +265,22 @@ public class Path extends FollowerMovement {
         result.isAccelBoosted = isAccelBoosted;
         result.buildMode = buildMode;
         result.profilePowerLimit = profilePowerLimit;
+        result.lookaheadDistanceIn = lookaheadDistanceIn;
+        result.memoryGridSpacingIn = memoryGridSpacingIn;
+        result.memoryGridPaddingIn = memoryGridPaddingIn;
         for (String warning : buildWarnings) { result.addWarning(warning); }
-        result.rebuildMotionProfile();
+        result.precomputeTrajectory();
         return result;
     }
 
-    /** Regenerates the profile appropriate to this path's drivetrain and build mode. */
-    public void rebuildMotionProfile() {
-        FollowerConstants constants = FollowerConstants.getInstance().forProfile(
-                pathType == PathType.TANK ? FollowerConstants.Profile.TANK
-                        : FollowerConstants.Profile.HOLONOMIC);
-        if (pathType == PathType.TANK) {
-            TankProfileGenerator generator = new TankProfileGenerator(constants, this);
-            if (buildMode == BuildMode.QUICK) {
-                setFeedforwardLut(generator.generateQuick(constants));
-            } else {
-                setFeedforwardLut(new FFLut(generator.generate()));
-            }
-            return;
-        }
-
-        if (buildMode == BuildMode.QUICK) {
-            setFeedforwardLut(null);
-            return;
-        }
-
-        BaseProfileGenerator generator = constants.drivetrainType ==
-                BaseDrivetrain.DrivetrainType.COAXIAL_SWERVE
-                ? new SwerveProfileGenerator(constants, this)
-                : new MecanumProfileGenerator(constants, this);
-        MotionParameters[] profile = generator.generate();
-        if (hasUsableStartup(profile)) {
-            setFeedforwardLut(new FFLut(profile));
-        } else {
-            setFeedforwardLut(null);
-            addWarning("APEX WARNING: Motion profile contained no movement; falling back " +
-                    "to closed-loop quick following.");
-        }
-    }
-
-    private static boolean hasUsableStartup(MotionParameters[] profile) {
-        if (profile == null || profile.length == 0) { return false; }
-        MotionParameters start = profile[0];
-        return start != null && (Math.abs(start.getTangentialVel()) > 1e-6 ||
-                Math.abs(start.getTangentialAccel()) > 1e-6);
+    /** Builder initialization: computes stored data once and never replaces it. */
+    public void precomputeTrajectory() {
+        if (buildMode == BuildMode.ONLINE || trajectoryField != null) { return; }
+        FollowerConstants constants = getPlanningConstants();
+        FFLut nominal = new FFLut(createGenerator(constants).generateRestToRest());
+        trajectory.TrajectoryField2D field = new trajectory.TrajectoryField2D(this, nominal,
+                memoryGridSpacingIn, memoryGridPaddingIn);
+        FFLut = nominal; trajectoryField = field;
     }
 
     private static PathConstraint copyConstraint(PathConstraint constraint) {

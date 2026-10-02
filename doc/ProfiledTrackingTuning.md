@@ -1,6 +1,6 @@
-# Profiled tracking in Follower Tuner
+# Trajectory tracking in Follower Tuner
 
-Run `PROFILED TRACKING` only after accepting drive and heading feedforward,
+Run `TRAJECTORY TRACKING` only after accepting drive and heading feedforward,
 [motion characterization](MotionCharacterization.md), heading
 and drive feedback, motion limits, and (for holonomic drives) centripetal tuning.
 The drive and heading SysId phases now reject a fit when any of their four runs
@@ -35,7 +35,7 @@ and corner speed scale. The measured power model replaces the arbitrary profile 
 power adjustment; legacy profiles without characterization retain that adjustment.
 Velocity gain applies during both
 acceleration and deceleration. Pulse/coast settings remain in saved JSON for
-compatibility but no longer affect the profiled follower or appear in the editor.
+compatibility but no longer affect trajectory following or appear in the editor.
 Manual mode uses X to run the course, LB/RB to select a setting, dpad Left/Right
 to change the step, and dpad Up/Down to edit. Every edit invalidates the prior
 measurement. A saves only after a passing course.
@@ -58,3 +58,8 @@ by moving the target. The phase writes `profiled_tracking_*.csv` beside
 heading and cross-track error, endpoint blend, and delivered front-wheel power.
 The full tuner to Auto Test simulation also checks acceleration underspeed,
 braking RMS, and moving-curve heading and cross-track error.
+
+The phase now displays **Trajectory Tracking** and runs online trajectories. A separately
+stored nominal reference supplies baseline comparisons; measured logging uses
+`Follower.getTrajectoryTarget()`. Existing calibration keys and CSV names remain compatible.
+See [trajectory planning](TrajectoryPlanning.md) for the build-mode API.

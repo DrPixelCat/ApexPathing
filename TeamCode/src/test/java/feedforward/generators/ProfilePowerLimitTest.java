@@ -56,14 +56,14 @@ public class ProfilePowerLimitTest {
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING);
     }
 
-    @Test public void builderCeilingChangesProfileAndSurvivesRebuildAndReversal() {
-        Path lower = builder().setProfilePowerLimit(.6).profiledBuild();
-        Path full = builder().setProfilePowerLimit(1).profiledBuild();
+    @Test public void builderCeilingChangesProfileAndSurvivesReversal() {
+        Path lower = builder().setProfilePowerLimit(.6).buildToMemory();
+        Path full = builder().setProfilePowerLimit(1).buildToMemory();
         assertEquals(.6, lower.getProfilePowerLimit(), 0);
         assertTrue(peakVelocity(lower) < peakVelocity(full) - 20);
         assertWithinBudget(new MecanumProfileGenerator(constants, lower), .6);
         double peak = peakVelocity(lower);
-        lower.rebuildMotionProfile();
+        lower.precomputeTrajectory();
         assertEquals(peak, peakVelocity(lower), 1e-6);
         Path reverse = lower.reversed();
         assertEquals(.6, reverse.getProfilePowerLimit(), 0);
@@ -114,9 +114,9 @@ public class ProfilePowerLimitTest {
 
     @Test public void characterizedCeilingsUseRequestedPowerAboveAndBelowDefault() {
         constants.motionCharacterization = characterization(1);
-        Path defaultPath = builder().profiledBuild();
-        Path full = builder().setProfilePowerLimit(1).profiledBuild();
-        Path lower = builder().setProfilePowerLimit(.6).profiledBuild();
+        Path defaultPath = builder().buildToMemory();
+        Path full = builder().setProfilePowerLimit(1).buildToMemory();
+        Path lower = builder().setProfilePowerLimit(.6).buildToMemory();
         assertTrue("Full power must escape the old 0.88 measured velocity ceiling",
                 peakVelocity(full) > peakVelocity(defaultPath) + 6);
         assertTrue(peakVelocity(defaultPath) > peakVelocity(lower) + 20);
@@ -126,7 +126,7 @@ public class ProfilePowerLimitTest {
 
     @Test public void calibratedAvailablePowerStillBoundsExplicitCeiling() {
         constants.motionCharacterization = characterization(.8);
-        Path path = builder().setProfilePowerLimit(1).profiledBuild();
+        Path path = builder().setProfilePowerLimit(1).buildToMemory();
         MecanumProfileGenerator generator = new MecanumProfileGenerator(constants, path);
         assertEquals(.8, generator.getProfilePowerLimit(), 0);
         assertWithinBudget(generator, .8);
@@ -138,7 +138,7 @@ public class ProfilePowerLimitTest {
         Path path = builder().setProfilePowerLimit(.9)
                 .addConstraint(new TranslationalConstraint(0, Type.VELOCITY, Dist.fromIn(15)))
                 .addConstraint(new TranslationalConstraint(0, Type.ACCELERATION, Dist.fromIn(5)))
-                .profiledBuild();
+                .buildToMemory();
         MotionParameters[] profile = new MecanumProfileGenerator(constants, path).generate();
         double maxPower = 0;
         for (MotionParameters point : profile) {
@@ -149,15 +149,18 @@ public class ProfilePowerLimitTest {
         assertTrue(maxPower < .2);
     }
 
-    @Test public void sharedPathApiAlsoHonorsTankSwerveAndTankQuickProfiles() {
+    @Test public void sharedPathApiAlsoHonorsTankSwerveAndTankMemoryFields() {
         Path holonomic = builder().setProfilePowerLimit(.6).quickBuild();
         assertWithinBudget(new SwerveProfileGenerator(constants, holonomic), .6);
         Path tank = new TankPathBuilder(geometry.pose(0, 0, 0), geometry.pose(500, 0, 0))
-                .setProfilePowerLimit(.6).profiledBuild();
+                .setProfilePowerLimit(.6).buildToMemory();
         assertWithinBudget(new TankProfileGenerator(constants, tank), .6);
         Path quick = new TankPathBuilder(geometry.pose(0, 0, 0), geometry.pose(500, 0, 0))
                 .setProfilePowerLimit(.4).quickBuild();
-        assertTrue(peakVelocity(quick) <= 40 + 1e-6);
+        assertNull(quick.getFeedforwardLut());
+        assertEquals(Path.BuildMode.ONLINE, quick.getBuildMode());
+        trajectory.OnlineTrajectoryPlanner planner = new trajectory.OnlineTrajectoryPlanner(quick, constants);
+        assertTrue(planner.sample(geometry.vector(0, 0), geometry.vector(40, 0), .02).tangentialVelocity() <= 40 + 1e-6);
         assertEquals(.5, new SwerveProfileGenerator(constants, holonomic, .5).getProfilePowerLimit(), 0);
         assertEquals(.5, new TankProfileGenerator(constants, tank, .5).getProfilePowerLimit(), 0);
     }

@@ -38,7 +38,12 @@ public class AutoTestSimulationTest {
         runAutoTest("true".equalsIgnoreCase(System.getenv("APEX_USE_SAVED_TUNER_CONSTANTS")));
     }
 
-    void runAutoTest(boolean useSavedConstants) throws Exception {
+    @Test(timeout = 130_000L)
+    public void storedAutoTestCompletesEveryMovement() throws Exception { runAutoTest(false, true); }
+
+    Path runAutoTest(boolean useSavedConstants) throws Exception { return runAutoTest(useSavedConstants, false); }
+
+    Path runAutoTest(boolean useSavedConstants, boolean stored) throws Exception {
         configureStableConstants(useSavedConstants);
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         List<String> frames = new CopyOnWriteArrayList<>();
@@ -61,6 +66,22 @@ public class AutoTestSimulationTest {
             }
             Path outbound = auto.getOutboundPath();
             assertTrue("Auto Test did not finish building its outbound path", outbound != null);
+            if (stored) {
+                java.lang.reflect.Field routeField = AutoTest.class.getDeclaredField("path");
+                routeField.setAccessible(true);
+                Object route = routeField.get(auto);
+                for (java.lang.reflect.Field field : route.getClass().getDeclaredFields()) {
+                    field.setAccessible(true);
+                    Object movement = field.get(route);
+                    if (movement instanceof Path) {
+                        ((Path) movement).setBuildMode(Path.BuildMode.MEMORY);
+                        ((Path) movement).precomputeTrajectory();
+                    } else if (movement instanceof paths.movements.Turn) {
+                        ((paths.movements.Turn) movement).setBuildMode(Path.BuildMode.MEMORY);
+                        ((paths.movements.Turn) movement).precomputeTrajectory();
+                    }
+                }
+            }
             long routeStartedNanos = System.nanoTime();
             SimLinearOpModeBridge.start(session);
             long deadline = System.nanoTime() + 100_000_000_000L;
@@ -97,13 +118,14 @@ public class AutoTestSimulationTest {
             assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
                             "s, internal=" + auto.getMovementTimingReport(),
                     routeRunSeconds <= maximumMovementSeconds);
-            if (outbound.isProfiled()) {
+            {
                 File velocityCsv = new File(auto.getOutboundVelocityCsvPath());
-                assertTrue("Profiled outbound velocity CSV was not created: path=" +
+                assertTrue("Outbound trajectory CSV was not created: path=" +
                                 auto.getOutboundVelocityCsvPath() + ", error=" +
                                 auto.getOutboundVelocityCsvError(),
                         velocityCsv.isFile() && velocityCsv.length() > 0L);
             }
+            return outbound;
         } finally {
             SimLinearOpModeBridge.stop(session);
         }

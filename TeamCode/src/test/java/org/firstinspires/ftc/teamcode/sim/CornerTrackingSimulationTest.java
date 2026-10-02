@@ -29,20 +29,22 @@ public class CornerTrackingSimulationTest {
                 Files.copy(constants, new File(directory, "constants.json").toPath());
             }
             System.setProperty(ApexStorage.DIRECTORY_PROPERTY, directory.getAbsolutePath());
-            new AutoTestSimulationTest().runAutoTest(true);
+            paths.movements.Path route = new AutoTestSimulationTest().runAutoTest(true);
+            feedforward.FFLut nominal = new feedforward.FFLut(route.createGenerator(
+                    FollowerConstants.getInstance()).generateRestToRest());
 
             File[] traces = directory.listFiles((dir, name) ->
                     name.startsWith("auto-test-outbound-velocity_") && name.endsWith(".csv"));
             assertTrue("Expected an outbound trace", traces != null && traces.length > 0);
             File trace = Arrays.stream(traces).max(Comparator.comparingLong(File::lastModified)).get();
-            assertTracking(trace);
+            assertTracking(trace, nominal);
         } finally {
             if (previousDirectory == null) { System.clearProperty(ApexStorage.DIRECTORY_PROPERTY); }
             else { System.setProperty(ApexStorage.DIRECTORY_PROPERTY, previousDirectory); }
         }
     }
 
-    private static void assertTracking(File trace) throws Exception {
+    private static void assertTracking(File trace, feedforward.FFLut nominal) throws Exception {
         List<String> lines = Files.readAllLines(trace.toPath());
         Map<String, Integer> columns = new HashMap<>();
         String[] header = lines.get(0).split(",");
@@ -67,7 +69,12 @@ public class CornerTrackingSimulationTest {
                 brakingSquaredError += error * error;
                 brakingSamples++;
                 if (Math.abs(value(row, columns, "curvature_in_inv")) > 0.05) {
-                    cornerEntryError += error;
+                    // This legacy preference describes speed relative to the nominal course.
+                    // A measured-state online preview during braking is necessarily slower
+                    // than its measured boundary, so its instantaneous error has the opposite
+                    // interpretation. Keep the existing bias threshold against that nominal LUT.
+                    cornerEntryError += value(row, columns, "controller_measured_in_s")
+                            - nominal.getFFParams(value(row, columns, "path_distance_in")).getTangentialVel();
                     cornerEntrySamples++;
                 }
             }

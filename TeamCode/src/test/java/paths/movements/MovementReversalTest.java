@@ -58,7 +58,7 @@ public class MovementReversalTest {
 
         assertEquals(12.0, reversed.getQuickVelocityLimit(0.25, 40.0), EPSILON);
         assertEquals(24.0, reversed.getQuickVelocityLimit(0.75, 40.0), EPSILON);
-        assertEquals(Path.BuildMode.QUICK, reversed.getBuildMode());
+        assertEquals(Path.BuildMode.ONLINE, reversed.getBuildMode());
     }
 
     @Test

@@ -36,4 +36,8 @@ public final class ReversedHeadingInterpolator implements HeadingInterpolator {
 
     @Override
     public void setPathLength(double lengthInches) { this.pathLength = lengthInches; }
+
+    @Override public HeadingInterpolator copyForTrajectory() {
+        return new ReversedHeadingInterpolator(source.copyForTrajectory(), pathLength, sourceFinalTangent);
+    }
 }

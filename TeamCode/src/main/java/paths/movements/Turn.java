@@ -20,6 +20,26 @@ public class Turn extends FollowerMovement {
     public void setDriveProfile(FollowerConstants.Profile profile) { driveProfile = profile; }
     private final Pose startPose;
     private FFLut FFLut;
+    private Path.BuildMode buildMode = Path.BuildMode.ONLINE;
+    public Path.BuildMode getBuildMode() { return buildMode; }
+    public void setBuildMode(Path.BuildMode mode) { buildMode = mode; }
+    public FollowerConstants getPlanningConstants() {
+        FollowerConstants constants = FollowerConstants.getInstance();
+        return driveProfile == null ? constants : constants.forProfile(driveProfile);
+    }
+    public double getAngularVelocityLimit(FollowerConstants c) {
+        return Double.isFinite(angularVelLimitRad) ? angularVelLimitRad : c.angularVelLimitRad;
+    }
+    public double getAngularAccelerationLimit(FollowerConstants c) {
+        return Double.isFinite(angularAccelLimitRad) ? angularAccelLimitRad : c.angularAccelLimitRad;
+    }
+    /** Builder initialization: computes the angular LUT once and never replaces it. */
+    public void precomputeTrajectory() {
+        if (buildMode == Path.BuildMode.MEMORY && FFLut == null) {
+            FollowerConstants c = getPlanningConstants();
+            FFLut = new TurnProfileGenerator(getAngularVelocityLimit(c), getAngularAccelerationLimit(c), c).generate(this);
+        }
+    }
     private final double angularVelLimitRad;
     private final double angularAccelLimitRad;
 
@@ -58,16 +78,8 @@ public class Turn extends FollowerMovement {
         Turn result = new Turn(endPose, startPose.getHeading(), angularVelLimitRad,
                 angularAccelLimitRad);
         result.setDriveProfile(driveProfile);
-        if (FFLut != null) {
-            FollowerConstants constants = FollowerConstants.getInstance();
-            if (driveProfile != null) { constants = constants.forProfile(driveProfile); }
-            double velocityLimit = Double.isFinite(angularVelLimitRad)
-                    ? angularVelLimitRad : constants.angularVelLimitRad;
-            double accelerationLimit = Double.isFinite(angularAccelLimitRad)
-                    ? angularAccelLimitRad : constants.angularAccelLimitRad;
-            result.setFeedforwardLut(new TurnProfileGenerator(
-                    velocityLimit, accelerationLimit, constants).generate(result));
-        }
+        result.buildMode = buildMode;
+        result.precomputeTrajectory();
         return result;
     }
 }

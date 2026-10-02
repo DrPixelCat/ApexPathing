@@ -102,7 +102,7 @@ public class CentripetalPhase extends TuningPhase {
                     .interpolateWith(InterpolationStyle.TANGENT_FORWARD);
             forwardBuilder.addConstraint(new TranslationalConstraint(0.0,
                     PathConstraint.Type.VELOCITY, Dist.fromIn(testVelocity)));
-            forwardArc = forwardBuilder.profiledBuild();
+            forwardArc = forwardBuilder.quickBuild();
             backwardArc = forwardArc.reversed();
         } finally {
             // Generate both profiles against the worst search candidate without changing the

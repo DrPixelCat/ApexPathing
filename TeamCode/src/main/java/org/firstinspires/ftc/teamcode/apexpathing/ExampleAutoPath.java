@@ -58,7 +58,7 @@ public class ExampleAutoPath {
                 )
                 .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL)
                 .addDistanceCallback(0.5, this::exampleDistanceCallback)
-                .profiledBuild();
+                .quickBuild();
         Angle turnStart = testPath.getEndPose().getHeading();
         Angle turnEnd = factory.angle(0);
         Angle turnSweep = turnStart.getShortestAngleTo(turnEnd);
@@ -76,13 +76,13 @@ public class ExampleAutoPath {
                 .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
                 .setDistanceToStartFinalTurn(factory.dist(30))
                 .addDistanceCallback(0.5, this::exampleReturnCallback)
-                .profiledBuild();
+                .quickBuild();
         Pose strafeEnd = factory.pose(0, 24, 0);
         strafeOutPath = factory.holonomicPath(startPose, strafeEnd)
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING)
-                .profiledBuild();
+                .quickBuild();
         strafeBackPath = factory.holonomicPath(strafeEnd, startPose)
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING)
-                .profiledBuild();
+                .buildToMemory();
     }
 }

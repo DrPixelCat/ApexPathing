@@ -47,7 +47,8 @@ public class DualActuatedProfilesTest {
             Path tankPath = new TankPathBuilder(Pose.zero(),
                     new Pose(Vector.of(24, 0, DistUnit.IN), Angle.zero())).quickBuild();
             assertEquals(FollowerConstants.Profile.HOLONOMIC, constants.getActiveProfile());
-            assertNotNull(tankPath.getFeedforwardLut());
+            assertNull(tankPath.getFeedforwardLut());
+            assertEquals(Path.BuildMode.ONLINE, tankPath.getBuildMode());
             follower.follow(tankPath);
             assertFalse(drive.isHolonomic());
             assertEquals(0.02, follower.getConstants().translationalKV, 0);
@@ -63,7 +64,7 @@ public class DualActuatedProfilesTest {
             follower.stop();
             Turn turn = new TurnBuilder(Pose.zero())
                     .setDriveProfile(FollowerConstants.Profile.HOLONOMIC)
-                    .turnTo(Angle.fromDeg(90)).profiledBuild();
+                    .turnTo(Angle.fromDeg(90)).buildToMemory();
             assertEquals(FollowerConstants.Profile.TANK, constants.getActiveProfile());
             follower.follow(turn.reversed());
             assertTrue(drive.isHolonomic());

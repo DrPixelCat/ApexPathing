@@ -68,6 +68,8 @@ public class Follower {
     private PathSegment segment;
     private Pose lastPose;
     private boolean paused;
+    private String trajectoryFailure;
+    private trajectory.TrajectorySample latestTrajectoryTarget;
     private boolean headingControllerEnabled = true;
     private boolean driveControllerEnabled = true;
 
@@ -195,6 +197,7 @@ public class Follower {
         localizer.update();
         diagnostics.recordPose(localizer.getPose());
         if (currentMovement == null || paused) {
+            if (paused && currentMovement instanceof Turn) { turnExecutor.observeHeading(getPose().getHeading()); }
             if (holdPose && lastPose != null) {
                 holdPose(lastPose);
             }
@@ -204,24 +207,32 @@ public class Follower {
         Pose current = getPose();
         pathState.lastCommandDemand = CommandDemand.ZERO;
         boolean complete;
-        if (currentMovement instanceof Turn) {
-            complete = turnExecutor.update((Turn) currentMovement, current, localizer,
-                    callbackRunner, pathState, driveControllerEnabled);
-        } else if (segment == null) {
-            complete = true;
-        } else if (drivetrain.isHolonomic()) {
-            complete = holonomicPathFollower.update(
-                    (Path) currentMovement, segment, current, localizer,
-                    callbackRunner, pathState, headingControllerEnabled, driveControllerEnabled,
-                    this.constants.translationalKV, this.constants.translationalKA, this.constants.angularKV, this.constants.angularKA, this.constants.kCentripetal,
-                    this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
-        } else {
-            complete = tankPathFollower.update(
-                    (Path) currentMovement, segment, current, localizer,
-                    callbackRunner, pathState, this.constants.translationalKV, this.constants.translationalKA,
-                    this.constants.angularKV, this.constants.angularKA, this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
-        }
+        try {
+            if (currentMovement instanceof Turn) {
+                complete = turnExecutor.update((Turn) currentMovement, current, localizer,
+                        callbackRunner, pathState, driveControllerEnabled);
+            } else if (segment == null) {
+                complete = true;
+            } else if (drivetrain.isHolonomic()) {
+                complete = holonomicPathFollower.update(
+                        (Path) currentMovement, segment, current, localizer,
+                        callbackRunner, pathState, headingControllerEnabled, driveControllerEnabled,
+                        this.constants.translationalKV, this.constants.translationalKA, this.constants.angularKV, this.constants.angularKA, this.constants.kCentripetal,
+                        this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
+            } else {
+                complete = tankPathFollower.update(
+                        (Path) currentMovement, segment, current, localizer,
+                        callbackRunner, pathState, this.constants.translationalKV, this.constants.translationalKA,
+                        this.constants.angularKV, this.constants.angularKA, this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
+            }
 
+        } catch (RuntimeException exception) {
+            latestTrajectoryTarget = null; trajectoryFailure = exception.getMessage();
+            stop();
+            diagnostics.recordTrajectoryFailure(trajectoryFailure);
+            throw exception;
+        }
+        if (pathState.trajectorySample != null) { latestTrajectoryTarget = pathState.trajectorySample; diagnostics.recordTrajectoryTarget(latestTrajectoryTarget); }
         if (complete) {
             stop();
         }
@@ -256,40 +267,50 @@ public class Follower {
                             + "executing a movement before starting a new one.");
         }
 
-        if (drivetrain instanceof DualActuated) {
-            FollowerConstants.Profile intended = movement instanceof Path
-                    ? (((Path) movement).getPathType() == Path.PathType.TANK
-                            ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC)
-                    : movement instanceof Turn && ((Turn) movement).getDriveProfile() != null
-                            ? ((Turn) movement).getDriveProfile()
-                            : (drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
-                                    : FollowerConstants.Profile.TANK);
-            constants.forProfile(intended);
-            if (intended == FollowerConstants.Profile.TANK) {
-                ((DualActuated) drivetrain).activateTractionState();
-            } else {
-                ((DualActuated) drivetrain).activateHolonomicState();
+        try {
+            if (drivetrain instanceof DualActuated) {
+                FollowerConstants.Profile intended = movement instanceof Path
+                        ? (((Path) movement).getPathType() == Path.PathType.TANK
+                                ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC)
+                        : movement instanceof Turn && ((Turn) movement).getDriveProfile() != null
+                                ? ((Turn) movement).getDriveProfile()
+                                : (drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
+                                        : FollowerConstants.Profile.TANK);
+                constants.forProfile(intended);
+                if (intended == FollowerConstants.Profile.TANK) {
+                    ((DualActuated) drivetrain).activateTractionState();
+                } else {
+                    ((DualActuated) drivetrain).activateHolonomicState();
+                }
+                synchronizeDriveProfile();
             }
+
+            currentMovement = movement;
+            pathState.reset();
+            trajectoryFailure = null; latestTrajectoryTarget = null;
+            if (movement instanceof Path) { pathState.prepare((Path) movement); }
+            movement.setStarted(true);
+            movement.setEnded(false);
+            lastPose = movement.getEndPose();
+            if (movement instanceof Turn) {
+                diagnostics.clearCurrentPath();
+                turnExecutor.start((Turn) movement, System.nanoTime());
+            } else if (movement instanceof Path) {
+                segment = ((Path) movement).getParametricPath();
+                diagnostics.recordCurrentPath((Path) movement);
+            }
+
             synchronizeDriveProfile();
+            resetControllers();
+            paused = false;
+            callbackRunner.reset();
+        } catch (RuntimeException exception) {
+            latestTrajectoryTarget = null;
+            trajectoryFailure = exception.getMessage();
+            stop();
+            diagnostics.recordTrajectoryFailure(trajectoryFailure);
+            throw exception;
         }
-
-        currentMovement = movement;
-        pathState.reset();
-        movement.setStarted(true);
-        movement.setEnded(false);
-        lastPose = movement.getEndPose();
-        if (movement instanceof Turn) {
-            diagnostics.clearCurrentPath();
-            turnExecutor.start((Turn) movement, System.nanoTime());
-        } else if (movement instanceof Path) {
-            segment = ((Path) movement).getParametricPath();
-            diagnostics.recordCurrentPath((Path) movement);
-        }
-
-        synchronizeDriveProfile();
-        resetControllers();
-        paused = false;
-        callbackRunner.reset();
     }
 
     /** Instantly stops the drivetrain and ends any ongoing movement. */
@@ -306,9 +327,10 @@ public class Follower {
     }
 
     public void pause() {
-        paused = true;
+        paused = true; latestTrajectoryTarget = null;
         turnExecutor.pause();
         pathState.pause();
+        resetControllers();
         drivetrain.stop();
     }
 
@@ -317,6 +339,7 @@ public class Follower {
             paused = false;
             turnExecutor.resume(System.nanoTime());
             pathState.pause();
+            resetControllers();
         }
     }
 
@@ -361,6 +384,8 @@ public class Follower {
     }
 
     public double getTrackingVelocityTarget() { return pathState.trackingVelocityTarget; }
+    public trajectory.TrajectorySample getTrajectoryTarget() { return latestTrajectoryTarget; }
+    public String getTrajectoryFailure() { return trajectoryFailure; }
     public double getTrackingMeasuredVelocity() { return pathState.trackingMeasuredVelocity; }
     public double getTrackingProgressVelocity() { return pathState.trackingProgressVelocity; }
     public double getTrackingFeedforward() { return pathState.trackingFeedforward; }

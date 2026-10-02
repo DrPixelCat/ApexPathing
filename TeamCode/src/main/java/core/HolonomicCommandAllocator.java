@@ -81,6 +81,16 @@ final class HolonomicCommandAllocator {
                     double tangentFeedforward, double tangentVelocityFeedback,
                     double headingVelocityFeedback, double headingFeedforward, Vector normalFeedforward,
                     Vector centripetalFeedforward) {
+        return allocate(crossTrackCorrection, centripetalCorrection, unitTangent, currentHeading,
+                tangentFeedback, headingFeedback, tangentFeedforward, tangentVelocityFeedback,
+                headingVelocityFeedback, headingFeedforward, normalFeedforward, centripetalFeedforward, Vector.zero());
+    }
+
+    Result allocate(Vector crossTrackCorrection, Vector centripetalCorrection, Vector unitTangent,
+                    Angle currentHeading, double tangentFeedback, double headingFeedback,
+                    double tangentFeedforward, double tangentVelocityFeedback,
+                    double headingVelocityFeedback, double headingFeedforward, Vector normalFeedforward,
+                    Vector centripetalFeedforward, Vector normalVelocityFeedback) {
         boolean anisotropic = activeDriveModel() == DriveModel.ANISOTROPIC;
 
         Vector feedbackRobot = crossTrackCorrection.plus(centripetalCorrection)
@@ -108,7 +118,7 @@ final class HolonomicCommandAllocator {
         remaining = Math.max(0.0,
                 remaining - feedforwardDemand * feedforwardScale);
 
-        Vector velocityFeedbackRobot = unitTangent.times(tangentVelocityFeedback)
+        Vector velocityFeedbackRobot = unitTangent.times(tangentVelocityFeedback).plus(normalVelocityFeedback)
                 .rotate(Angle.fromRad(-currentHeading.getRad()));
         double velocityFeedbackDemand = demand(
                 velocityFeedbackRobot, headingVelocityFeedback, anisotropic);

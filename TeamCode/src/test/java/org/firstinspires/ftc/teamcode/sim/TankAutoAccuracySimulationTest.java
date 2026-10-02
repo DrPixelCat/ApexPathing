@@ -124,7 +124,7 @@ public class TankAutoAccuracySimulationTest {
             assertTrue("Auto Test following regressed: external=" + routeRunSeconds +
                             "s, internal=" + auto.getMovementTimingReport(),
                     routeRunSeconds <= MAX_TOTAL_MOVEMENT_SECONDS);
-            if (outbound.isProfiled()) {
+            {
                 File velocityCsv = new File(auto.getOutboundVelocityCsvPath());
                 assertTrue("Profiled outbound velocity CSV was not created: path=" +
                                 auto.getOutboundVelocityCsvPath() + ", error=" +

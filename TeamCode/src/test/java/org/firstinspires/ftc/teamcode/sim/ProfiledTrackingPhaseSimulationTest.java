@@ -126,8 +126,8 @@ public class ProfiledTrackingPhaseSimulationTest {
             tuner.gamepad2 = new Gamepad();
             session = SimLinearOpModeBridge.initialize(tuner, () -> { });
             pump(session, tuner, telemetry, hardware, 100);
-            assertTrue("Profiled tracking should be the first incomplete phase: " + latest(frames),
-                    latest(frames).contains("PROFILED TRACKING <"));
+            assertTrue("Trajectory tracking should be the first incomplete phase: " + latest(frames),
+                    latest(frames).contains("TRAJECTORY TRACKING <"));
             pressA(session, tuner, telemetry, hardware);
             SimLinearOpModeBridge.start(session);
 

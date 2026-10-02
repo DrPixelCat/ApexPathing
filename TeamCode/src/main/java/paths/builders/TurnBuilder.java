@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.function.Consumer;
 
 import core.FollowerConstants;
-import feedforward.generators.TurnProfileGenerator;
 import geometry.Angle;
 import geometry.Pose;
 import paths.movements.Turn;
@@ -99,7 +98,7 @@ public class TurnBuilder {
     }
 
     /**
-     * Sets a custom angular velocity limit for this specific turn.
+     * Sets a custom angular velocity limit for the stored turn profile.
      *
      * @param limit The maximum angular velocity.
      * @return The current TurnBuilder instance for method chaining.
@@ -116,7 +115,7 @@ public class TurnBuilder {
     }
 
     /**
-     * Sets a custom angular acceleration limit for this specific turn.
+     * Sets a custom angular acceleration limit for the stored turn profile.
      *
      * @param limit The maximum angular acceleration.
      * @return The current TurnBuilder instance for method chaining.
@@ -155,31 +154,22 @@ public class TurnBuilder {
 
     /**
      * Compiles the turn, verifies callback bounds, and returns the executable Turn movement without
-     * motion profiling.
+     * profiling. Following uses PID feedback directly to the final heading.
      *
      * @return The fully constructed {@link Turn}.
      */
     public Turn quickBuild() { return compileTurn(); }
 
     /**
-     * Compiles the turn, verifies callback bounds, and returns the executable, profiled Turn
-     * movement. It is recommended to use .quickBuild() instead for faster turns and generation
-     * time. Profiles are not needed as much for {@link Turn} movements so much as Path movements.
+     * Compiles the turn and stores its nominal rest-to-rest angular trajectory in RAM.
+     * Following samples the table by measured angular displacement.
      *
      * @return The fully constructed {@link Turn} with an attached feedforward profile.
      */
-    public Turn profiledBuild() {
-        Turn finalTurn = compileTurn();
-
-        TurnProfileGenerator motionGen = new TurnProfileGenerator(
-                angularVelLimitRad,
-                angularAccelLimitRad,
-                constants
-        );
-
-        // Ensure TurnProfileGenerator generates a compatible LUT for the Turn object
-        finalTurn.setFeedforwardLut(motionGen.generate(finalTurn));
-
-        return finalTurn;
+    public Turn buildToMemory() {
+        Turn turn = compileTurn();
+        turn.setBuildMode(paths.movements.Path.BuildMode.MEMORY);
+        turn.precomputeTrajectory();
+        return turn;
     }
 }
