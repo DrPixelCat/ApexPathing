@@ -50,6 +50,7 @@ public class PathProfileConvergenceTest {
         System.setProperty(ApexStorage.DIRECTORY_PROPERTY,
                 new File("build/profile-tests").getAbsolutePath());
         constants = FollowerConstants.getInstance();
+        constants.motionCharacterization = null;
         constants.drivetrainType = DrivetrainType.MECANUM;
         constants.angularCoeffs = new Coefficients().p(0.8).d(0.04).s(0.0);
         constants.translationalCoeffs = new Coefficients().p(1.3).d(0.04).s(0.0);

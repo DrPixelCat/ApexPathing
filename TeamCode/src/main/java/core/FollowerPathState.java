@@ -24,14 +24,12 @@ final class FollowerPathState {
     double trackingVelocityFeedback;
     double trackingAngularVelocityTarget;
     double trackingEndpointBlend;
-    int brakingPulseCooldown;
     boolean velocitySampleAvailable;
 
     void reset() {
         completion.reset();
         progressEstimator.reset();
         stuckWatchdog.reset();
-        brakingPulseCooldown = 0;
         velocitySampleAvailable = false;
     }
 

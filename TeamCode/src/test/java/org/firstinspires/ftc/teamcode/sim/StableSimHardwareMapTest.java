@@ -18,18 +18,18 @@ public class StableSimHardwareMapTest {
         RecordingMechanism mechanism = new RecordingMechanism();
         hardwareMap.register(mechanism);
 
-        clock.advanceSeconds(0.243);
+        clock.advanceSeconds(0.035);
         hardwareMap.update();
 
-        assertEquals(25, mechanism.steps.size());
-        assertEquals(0.243, mechanism.totalSeconds(), 1e-9);
+        assertEquals(4, mechanism.steps.size());
+        assertEquals(0.035, mechanism.totalSeconds(), 1e-9);
         for (double step : mechanism.steps) {
             assertTrue(step <= StableSimHardwareMap.MAX_PHYSICS_STEP_SECONDS + 1e-12);
         }
     }
 
     @Test
-    public void debuggerPauseDoesNotTriggerUnboundedCatchUp() {
+    public void debuggerPauseAdvancesAtMostTwoPhysicsPeriods() {
         MutableClock clock = new MutableClock();
         StableSimHardwareMap hardwareMap = new StableSimHardwareMap(clock);
         RecordingMechanism mechanism = new RecordingMechanism();
@@ -38,6 +38,7 @@ public class StableSimHardwareMapTest {
         clock.advanceSeconds(5.0);
         hardwareMap.update();
 
+        assertEquals(4, mechanism.steps.size());
         assertEquals(StableSimHardwareMap.MAX_CATCH_UP_SECONDS,
                 mechanism.totalSeconds(), 1e-9);
     }

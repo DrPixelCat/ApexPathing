@@ -1,6 +1,5 @@
 package tuning.follower.phases;
 
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.Arrays;
@@ -114,13 +113,9 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     }
 
     /** Always relinquishes direct motor control, including Driver Station Stop. */
-    @Override public boolean run(LinearOpMode opMode) {
-        try { return super.run(opMode); }
-        finally {
-            context.getFollower().stop();
-            context.getFollower().enableControllers();
-            closeCsv();
-        }
+    @Override protected void onExit() {
+        context.getFollower().enableControllers();
+        closeCsv();
     }
 
     private boolean configureAxis() {
@@ -519,20 +514,12 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     }
 
     private void showProgress() {
-        context.getTelemetry().addLine(state == State.FAILED ? "Automatic kA tuning stopped."
-                : "Automatic kA tuning in progress.");
-        context.getTelemetry().addData("Axis", axis);
-        context.getTelemetry().addData("Search", search == null ? "not started"
-                : confirmation ? "confirmation"
-                : (search.completed() + 1) + " / " + search.rounds());
-        context.getTelemetry().addData("Candidate kA", number(candidateKA));
-        context.getTelemetry().addData("Motion", motionDescription());
-        context.getTelemetry().addData("Result", result);
-        context.getTelemetry().addData("CSV", csvPath);
+        context.getTelemetry().addData(axis == Axis.TRANSLATION ? "Translation kA" : "Angular kA",
+                number(candidateKA));
         if (state == State.FAILED) {
+            context.getTelemetry().addLine("Acceleration feedforward validation failed: " + result);
             context.getTelemetry().addLine("Press A to restart the complete search.");
         }
-        context.getTelemetry().update();
     }
 
     private void showManualProgress() {
@@ -546,7 +533,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         context.getTelemetry().addLine("Dpad Up/Down: change kA");
         context.getTelemetry().addLine("Dpad Left/Right: change increment");
         context.getTelemetry().addLine("A: run this axis");
-        context.getTelemetry().update();
+
     }
 
     private String motionDescription() {

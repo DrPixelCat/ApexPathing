@@ -57,6 +57,9 @@ public class LimitsPhase extends TuningPhase {
     private static final double MAX_ANGULAR_TRAVEL = Math.PI * 2.0;
     private static final double SIM_STAGING_OFFSET = 55.0;
     public static final double MARGIN_MULTIPLIER = 0.95;
+    // The 95th-percentile open-loop acceleration is a short peak. A path needs room
+    // for feedback and heading corrections while accelerating through a corner.
+    private static final double ACCELERATION_MARGIN_MULTIPLIER = 0.80;
 
     private final ElapsedTime timer = new ElapsedTime();
     private final double[][] maxima = new double[TRIALS.length][2];
@@ -96,6 +99,19 @@ public class LimitsPhase extends TuningPhase {
 
     @Override
     protected String getPhaseName() { return "Movement Limits"; }
+
+    @Override protected String getTuningConstants() {
+        return context.getFollower().getDrivetrain().isHolonomic()
+                ? "Forward, strafe and angular velocity/acceleration limits"
+                : "Forward and angular velocity/acceleration limits";
+    }
+
+    @Override protected void showPreRunInstructions() {
+        context.getTelemetry().addLine("Allow 72 inches of forward travel and space for a full rotation.");
+        if (context.getFollower().getDrivetrain().isHolonomic()) {
+            context.getTelemetry().addLine("Allow 72 inches of clear travel to the robot's left.");
+        }
+    }
 
     @Override
     protected boolean manualTuneIsPossible() { return false; }
@@ -335,11 +351,14 @@ public class LimitsPhase extends TuningPhase {
         }
 
         context.constants.forwardVelLimitIn = fullForwardVelocity * MARGIN_MULTIPLIER;
-        context.constants.forwardAccelLimitIn = fullForwardAcceleration * MARGIN_MULTIPLIER;
+        context.constants.forwardAccelLimitIn = fullForwardAcceleration
+                * ACCELERATION_MARGIN_MULTIPLIER;
         context.constants.strafeVelLimitIn = fullStrafeVelocity * MARGIN_MULTIPLIER;
-        context.constants.strafeAccelLimitIn = fullStrafeAcceleration * MARGIN_MULTIPLIER;
+        context.constants.strafeAccelLimitIn = fullStrafeAcceleration
+                * ACCELERATION_MARGIN_MULTIPLIER;
         context.constants.angularVelLimitRad = fullAngularVelocity * MARGIN_MULTIPLIER;
-        context.constants.angularAccelLimitRad = fullAngularAcceleration * MARGIN_MULTIPLIER;
+        context.constants.angularAccelLimitRad = fullAngularAcceleration
+                * ACCELERATION_MARGIN_MULTIPLIER;
 
     }
 
@@ -353,15 +372,14 @@ public class LimitsPhase extends TuningPhase {
                     return true;
                 }
                 LimitTrial promptedTrial = TRIALS[trial];
-                context.getTelemetry().addLine("Next limits run: " + promptedTrial.name());
                 context.getTelemetry().addLine("Point " + directionDescription(promptedTrial) + ".");
                 context.getTelemetry().addLine(isRotation(promptedTrial)
                         ? "Allow a full clear rotation around the robot."
-                        : "Allow at least 72 inches of clear travel (the powered run stops by 60)."
+                        : "Allow at least 72 inches of clear travel."
                 );
                 context.getTelemetry().addLine(
                         "Press A when the robot is stationary and the direction is safe.");
-                context.getTelemetry().update();
+
                 if (opMode.gamepad1.aWasPressed()) { beginTrial(); }
                 return false;
             case SETTLING:
@@ -376,25 +394,6 @@ public class LimitsPhase extends TuningPhase {
                 break;
         }
 
-        String step = trial >= TRIALS.length ? "Calculating" : TRIALS[trial].name();
-        if (stage == LimitStage.SETTLING) {
-            context.getTelemetry().addLine("Robot is stopping before the next limits run.");
-        } else if (stage == LimitStage.RUNNING) {
-            context.getTelemetry().addLine("Robot is running the " + step + " limits test.");
-        } else {
-            context.getTelemetry().addLine("Preparing the next limits run.");
-        }
-        if (context.isDebugMode()) {
-            context.getTelemetry().addData("Step", step);
-        }
-        if (stage == LimitStage.RUNNING) {
-            if (context.isDebugMode()) {
-                context.getTelemetry().addData("Stop detection",
-                        stableWindows + " / " + REQUIRED_STABLE_WINDOWS + " stable windows");
-                context.getTelemetry().addData("Travel", travelled);
-            }
-        }
-        context.getTelemetry().update();
         return false;
     }
 

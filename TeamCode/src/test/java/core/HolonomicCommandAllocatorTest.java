@@ -49,4 +49,14 @@ public class HolonomicCommandAllocatorTest {
         assertEquals(0.5, result.demand.correctionScale, 1e-12);
         assertEquals(0, result.demand.feedforwardScale, 1e-12);
     }
+    @Test public void independentStrafeFeedforwardSharesTranslationAndTurningBudget() {
+        Vector zero = Vector.of(0, 0, DistUnit.IN);
+        HolonomicCommandAllocator.Result result = allocator.allocate(zero, zero,
+                Vector.of(1, 0, DistUnit.IN), Angle.fromRad(0), 0, .1, .6, 0, 0, .2,
+                Vector.of(0, .4, DistUnit.IN));
+        assertEquals(.75, result.demand.feedforwardScale, 1e-9);
+        assertEquals(.45, result.drive.getX().getIn(), 1e-9);
+        assertEquals(.3, result.drive.getY().getIn(), 1e-9);
+        assertEquals(.25, result.turn, 1e-9);
+    }
 }

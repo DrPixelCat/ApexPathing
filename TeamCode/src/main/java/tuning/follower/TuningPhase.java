@@ -29,6 +29,16 @@ public abstract class TuningPhase {
     protected TuningPhase(TunerContext context) { this.context = context; }
 
     public boolean run(LinearOpMode opMode) {
+        try { return runPhase(opMode); }
+        finally {
+            context.getFollower().stop();
+            onExit();
+        }
+    }
+
+    protected void onExit() { }
+
+    private boolean runPhase(LinearOpMode opMode) {
         this.opMode = opMode;
         manualMode = false;
         increment = 0.001;
@@ -36,16 +46,15 @@ public abstract class TuningPhase {
         TuningState state = TuningState.SELECT_MODE;
 
         while (opMode.opModeIsActive()) {
+            context.beginFrame();
             if (context.getFollower().getDrivetrain() instanceof drivetrains.DualActuated
                     && ((drivetrains.DualActuated) context.getFollower().getDrivetrain()).isTransitioning()) {
                 context.getFollower().update(false);
-                context.getTelemetry().addLine("Waiting for drivetrain mode to settle...");
-                context.getTelemetry().update();
+                context.getTelemetry().addData("Tuning", getTuningConstants());
+                context.publishFrame(false);
                 context.pauseLoop();
                 continue;
             }
-            context.beginFrame();
-
             switch (state) {
                 case SELECT_MODE:
                     context.getFollower().update();
@@ -65,6 +74,9 @@ public abstract class TuningPhase {
                     break;
                 case TUNING:
                     context.getFollower().update(holdPointDuringRoutine());
+                    if (!manualMode) {
+                        context.getTelemetry().addData("Tuning", getTuningConstants());
+                    }
                     boolean complete;
                     if (manualMode) {
                         complete = manualTuned();
@@ -82,12 +94,12 @@ public abstract class TuningPhase {
                     context.getFollower().update();
                     showResults();
                     if (opMode.gamepad1.aWasPressed()) {
-                        return true;
+                        return opMode.opModeIsActive() && !opMode.isStopRequested();
                     }
                     context.getFollower().manual(opMode.gamepad1);
                     break;
             }
-
+            context.publishFrame(state != TuningState.TUNING || !routineMotionActive());
             // A LinearOpMode can otherwise spin much faster than the hardware/localizer can
             // provide new samples. Besides wasting CPU, differentiating the same pose repeatedly
             // and then one discrete update creates enormous acceleration spikes (especially in
@@ -96,33 +108,30 @@ public abstract class TuningPhase {
             context.pauseLoop();
         }
 
-        context.getFollower().stop();
         return false;
     }
 
     private void showModeSelector() {
-        context.getTelemetry().addLine(getPhaseName() + " phase initialized");
+        context.getTelemetry().addLine("Next phase: " + getPhaseName());
         if (manualTuneIsPossible() && autoTuneIsPossible()) {
             context.getTelemetry().addLine(
-                    "Use Dpad Left/Right to choose automatic or manual tuning.");
-            context.getTelemetry().addData("Selected Mode:", manualMode ? "Manual" : "Automatic");
+                    "Dpad Left/Right: Automatic / Manual");
+            context.getTelemetry().addData("Mode", manualMode ? "Manual" : "Automatic");
         } else {
             manualMode = manualTuneIsPossible();
-            context.getTelemetry().addData("Tuner Type:", manualMode ? "Manual" : "Automatic");
+            context.getTelemetry().addData("Mode", manualMode ? "Manual" : "Automatic");
         }
         showPreRunInstructions();
         context.getTelemetry().addLine("Press A to run this phase.");
-        context.getTelemetry().update();
     }
 
     /** Adds phase-specific positioning or safety guidance before the operator starts motion. */
     protected void showPreRunInstructions() { }
 
     private void showResults() {
-        context.getTelemetry().addLine(getPhaseName() + " phase complete with results:");
+        context.getTelemetry().addLine(getPhaseName() + " constants:");
         reportResults();
-        context.getTelemetry().addLine("Press A to continue.");
-        context.getTelemetry().update();
+        context.getTelemetry().addLine("Press A to save and continue.");
     }
 
     /**
@@ -164,6 +173,8 @@ public abstract class TuningPhase {
     }
 
     protected abstract String getPhaseName();
+
+    protected String getTuningConstants() { return getPhaseName(); }
 
     protected abstract boolean manualTuneIsPossible();
 

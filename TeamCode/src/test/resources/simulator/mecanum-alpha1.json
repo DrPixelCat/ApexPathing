@@ -1,33 +1,97 @@
 {
-  "schemaVersion": 2,
-  "profiles": {
-    "DEFAULT": {
-      "velocityFeedbackGain": 0.06652120505574205,
-      "translationalD": 0.02024725491002294,
-      "translationKV": 0.006241447491199932,
-      "headingP": 1.4856040860569153,
-      "headingD": 0.6462600581362252,
-      "maxCentripetalAccelIn": 0,
-      "angularFeedforwardS": 0.002890627190233272,
-      "forwardAccelLimitIn": 100.0,
-      "angularKA": 0.0928502553785572,
-      "kCentripetal": 0.004848838022952525,
-      "profileVelocityPowerCoefficient": 0.014,
-      "profileCornerSpeedScale": 0.80,
-      "brakingCornerToleranceIn": -1.5,
-      "strafeVelLimitIn": 64.89296810271468,
-      "angularAccelLimitRad": 9.209873757764186,
-      "strafeAccelLimitIn": 133.16656938084773,
-      "angularVelLimitRad": 4.865468109458274,
-      "translationalFeedforwardS": 0.004891713679570547,
-      "headingS": 0.08,
-      "angularKV": 0.09654198489223237,
-      "angularVelocityFeedbackGain": 0.25,
-      "translationalS": 0.08,
-      "forwardVelLimitIn": 64.78564909014041,
-      "translationalP": 0.09608861264983048,
-      "translationKA": 0.007276265254694199
-    }
-  },
-  "drivetrainType": "MECANUM"
+    "schemaVersion": 2,
+    "profiles": {"DEFAULT": {
+        "translationalD": 0.025612762241749853,
+        "brakingCornerToleranceIn": 3,
+        "translationKV": 0.008228337084495496,
+        "headingP": 3.1808454981858274,
+        "brakingVelocityFeedbackGain": 0.04464838061276286,
+        "headingD": 0.45924517313998964,
+        "angularFeedforwardS": 0,
+        "forwardAccelLimitIn": 92.47748310509925,
+        "profiledTrackingTuned": true,
+        "motionCharacterization": {
+            "STRAFE": {
+                "negative": {
+                    "dragSlope": -0.021083938814770865,
+                    "validationRms": 0.008163174031251618,
+                    "gain0": 191.55166096693264,
+                    "maxVelocity": 35.62479800017373,
+                    "drag0": 89.38245029120888,
+                    "gainSlope": -2.4368968229036563
+                },
+                "positive": {
+                    "dragSlope": -0.043330773078129235,
+                    "validationRms": 0.004736658038505391,
+                    "gain0": 193.64975393740676,
+                    "maxVelocity": 35.73079017762109,
+                    "drag0": 90.59143958661689,
+                    "gainSlope": -2.483785090726135
+                }
+            },
+            "availableMotorPower": 1,
+            "FORWARD": {
+                "negative": {
+                    "dragSlope": -0.021102283505336016,
+                    "validationRms": 0.009065660179778673,
+                    "gain0": 192.89888579955812,
+                    "maxVelocity": 51.80192443062658,
+                    "drag0": 52.87389474267237,
+                    "gainSlope": -2.4441167118515605
+                },
+                "positive": {
+                    "dragSlope": -0.058992670211280636,
+                    "validationRms": 0.004862107785951295,
+                    "gain0": 194.5691596629966,
+                    "maxVelocity": 51.23944684454316,
+                    "drag0": 54.4015505627923,
+                    "gainSlope": -2.4841845044429856
+                }
+            },
+            "version": 1,
+            "ANGULAR": {
+                "negative": {
+                    "dragSlope": -0.034055122474308176,
+                    "validationRms": 0.01490824535910844,
+                    "gain0": 20.952566144622367,
+                    "maxVelocity": 7.425978497254143,
+                    "drag0": 1.390801419077352,
+                    "gainSlope": -2.448827383785215
+                },
+                "positive": {
+                    "dragSlope": -0.013283282712115263,
+                    "validationRms": 0.019146504161860232,
+                    "gain0": 20.666396066478146,
+                    "maxVelocity": 7.405657000019981,
+                    "drag0": 1.245103243018305,
+                    "gainSlope": -2.4074541866108925
+                }
+            }
+        },
+        "strafeVelLimitIn": 39.625962466164445,
+        "angularVelLimitRad": 7.171926731539631,
+        "translationalFeedforwardS": 0.23817985799833982,
+        "headingS": 0.07304444,
+        "angularKV": 0.05795821154103542,
+        "angularVelocityFeedbackGain": 0.25,
+        "profileVelocityPowerCoefficient": 0,
+        "translationalS": 0.28550541,
+        "translationalP": 0.07309677454468996,
+        "brakingNeutralPowerMargin": 0.02,
+        "profileCornerSpeedScale": 1,
+        "translationKA": 0.005287671769725836,
+        "velocityFeedbackGain": 0.04464838061276286,
+        "brakingOverspeedToleranceIn": 3,
+        "maxCentripetalAccelIn": 0,
+        "brakingPulseCooldownCycles": 1,
+        "angularKA": 0.05538368348036419,
+        "kCentripetal": 0.0035663340295750325,
+        "tankBrakingPulsePower": 0.1,
+        "angularAccelLimitRad": 13.93691431042307,
+        "strafeAccelLimitIn": 68.67608949944184,
+        "brakingPulsePower": 0.3,
+        "tankBrakingCornerToleranceIn": 3,
+        "forwardVelLimitIn": 52.61130603334015
+    }},
+    "drivetrainType": "MECANUM"
 }

@@ -39,6 +39,11 @@ public final class FTCodeSimLinearOpModeRunner {
     }
 
     static void runLinearOpMode(OpModeLifecycle lifecycle) throws InterruptedException {
+        // OpModeLifecycle.wrap() unconditionally sleeps loopTimeMs after all the work in the
+        // iteration. Budget that work inside the period instead: motion makes physics and
+        // logging slower, and the unconditional sleep turns that extra work into timing jitter.
+        long originalLoopTimeMs = lifecycle.loopTimeMs;
+        long periodNanos = originalLoopTimeMs * 1_000_000L;
         LinearOpMode opMode = (LinearOpMode) lifecycle.opMode;
         opMode.telemetry = lifecycle.telemetry;
         opMode.hardwareMap = lifecycle.simHardwareMap;
@@ -57,6 +62,7 @@ public final class FTCodeSimLinearOpModeRunner {
         SimLinearOpModeBridge.Session session = null;
 
         try {
+            lifecycle.loopTimeMs = 0;
             session = SimLinearOpModeBridge.initialize(
                     opMode,
                     () -> userRequestedStop.set(true)
@@ -64,7 +70,7 @@ public final class FTCodeSimLinearOpModeRunner {
             while (!lifecycle.isStarted
                     && !lifecycle.isStopped
                     && !userRequestedStop.get()) {
-                runEventLoopIteration(lifecycle, session, apexLogger);
+                runEventLoopIteration(lifecycle, session, apexLogger, periodNanos);
             }
 
             if (lifecycle.isStarted
@@ -74,9 +80,10 @@ public final class FTCodeSimLinearOpModeRunner {
             }
 
             while (!lifecycle.isStopped && !userRequestedStop.get()) {
-                runEventLoopIteration(lifecycle, session, apexLogger);
+                runEventLoopIteration(lifecycle, session, apexLogger, periodNanos);
             }
         } finally {
+            lifecycle.loopTimeMs = originalLoopTimeMs;
             if (session != null) {
                 SimLinearOpModeBridge.stop(session);
             }
@@ -88,8 +95,10 @@ public final class FTCodeSimLinearOpModeRunner {
     private static void runEventLoopIteration(
             OpModeLifecycle lifecycle,
             SimLinearOpModeBridge.Session session,
-            ApexAdvantageScopeLogger apexLogger
+            ApexAdvantageScopeLogger apexLogger,
+            long periodNanos
     ) throws InterruptedException {
+        long iterationStartedNanos = System.nanoTime();
         Gamepad gamepad1 = new Gamepad();
         Gamepad gamepad2 = new Gamepad();
         gamepad1.fromByteArray(lifecycle.latestGamepad1Data);
@@ -100,5 +109,14 @@ public final class FTCodeSimLinearOpModeRunner {
             SimLinearOpModeBridge.eventLoopIteration(session, gamepad1, gamepad2);
             apexLogger.flush();
         });
+        long deadlineNanos = iterationStartedNanos + periodNanos;
+        // Windows timer granularity and scheduler stalls make even 1 ms sleeps miss many
+        // deadlines. This simulator runs on a desktop JVM; spin for a stable 50 Hz physics
+        // cadence instead of allowing the wait itself to introduce large motion jumps.
+        while (System.nanoTime() < deadlineNanos) {
+            Thread.onSpinWait();
+        }
+        Logger.recordOutput("OpMode/totalLoopTimeMs",
+                (System.nanoTime() - iterationStartedNanos) * 1e-6);
     }
 }

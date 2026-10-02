@@ -4,6 +4,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,6 +60,51 @@ public class SysIdRegressionTest {
         assertFalse(data.add(0, 0, 1, 1, 1.1));
         assertFalse(plant(.06, .012, -.006).fit(2).valid);
         assertTrue(plant(.06, .012, 0).fit(2).valid);
+    }
+    @Test public void excludesCollisionWindowsAndRecoversTheRecordedDriveFit() throws Exception {
+        SysIdRegression data = recordedFit("/sysid-regression-biased-drive.csv");
+        SysIdRegression.Fit fit = data.fit(2);
+        assertTrue("Filtered drive fit must be acceptable", fit.valid);
+        assertTrue("Collision must not collapse kA", fit.kA > 0.005);
+        assertTrue("Collision must not inflate kS", fit.kS < 0.03);
+    }
+    @Test public void rejectsRecordedBiasedHeadingFit() throws Exception {
+        SysIdRegression.Fit fit = recordedFit("/sysid-regression-biased-heading.csv").fit(0.2);
+        assertTrue("Pooled R² passed in this run", fit.rSquared > 0.90);
+        assertTrue("Dynamic reverse has a material signed residual", fit.maxRunBias > 0.05);
+        assertFalse("Poor heading feedforward must block later phases", fit.valid);
+    }
+    private SysIdRegression recordedFit(String resource) throws Exception {
+        SysIdRegression data = new SysIdRegression();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                getClass().getResourceAsStream(resource)))) {
+            reader.readLine();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] values = line.split(",");
+                data.add(Integer.parseInt(values[0]), Double.parseDouble(values[1]),
+                        Double.parseDouble(values[2]), Double.parseDouble(values[3]),
+                        Double.parseDouble(values[4]));
+            }
+        }
+        return data;
+    }
+    @Test public void rejectsRunBiasEvenWhenPooledRSquaredPasses() {
+        SysIdRegression data = new SysIdRegression();
+        for (int run = 0; run < 4; run++) {
+            double direction = run % 2 == 0 ? 1.0 : -1.0;
+            for (int i = 0; i < 40; i++) {
+                double velocity = direction * (2.0 + i * 0.4);
+                double acceleration = direction * (2.0 + 10.0 * (i % 2));
+                double power = 0.02 * direction + 0.03 * velocity + 0.007 * acceleration
+                        + (run >= 2 ? 0.20 * direction : 0.0);
+                data.add(run, 0.1 * i, velocity, acceleration, power);
+            }
+        }
+        SysIdRegression.Fit fit = data.fit(2);
+        assertTrue("Pooled fit should still look plausible", fit.rSquared > 0.90);
+        assertTrue("Each run is materially biased", fit.maxRunBias > 0.05);
+        assertFalse("Biased runs must block feedforward acceptance", fit.valid);
     }
     @Test public void writesXChartPngsForEveryTest() throws Exception {
         SysIdRegression data = plant(.06, .012, .006);

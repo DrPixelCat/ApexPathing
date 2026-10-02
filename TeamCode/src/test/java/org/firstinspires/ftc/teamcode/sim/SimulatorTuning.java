@@ -24,6 +24,7 @@ final class SimulatorTuning {
 
     static void apply(FollowerConstants target) {
         FollowerConstants c = snapshot();
+        target.motionCharacterization = c.motionCharacterization;
         target.angularCoeffs = c.angularCoeffs;
         target.translationalCoeffs = c.translationalCoeffs;
         target.angularKV = c.angularKV;

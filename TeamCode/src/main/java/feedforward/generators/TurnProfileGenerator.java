@@ -20,6 +20,7 @@ public class TurnProfileGenerator {
     private final double angularKV;
     private final double angularKA;
     private final double headingKS;
+    private FollowerConstants constants;
 
     /** Maximum angular velocity allowed for the turn, in radians per second. */
     private double omega_max;
@@ -30,6 +31,7 @@ public class TurnProfileGenerator {
     public TurnProfileGenerator(double omega_max, double alpha_max, FollowerConstants constants) {
         this(omega_max, alpha_max, constants.angularKV, constants.angularKA,
                 constants.angularFeedforwardKS);
+        this.constants = constants;
     }
 
     /**
@@ -91,6 +93,14 @@ public class TurnProfileGenerator {
         MotionParameters[] lut = new MotionParameters[steps];
         DynamicMotionProfile.PowerModel powerModel = new DynamicMotionProfile.PowerModel(
                 omega_max, alpha_max, angularKV, angularKA, headingKS);
+        if (constants != null && constants.motionCharacterization != null) {
+            double direction = Math.signum(signedTurn);
+            powerModel = new DynamicMotionProfile.PowerModel(
+                    constants.calibratedVelocityLimit(core.MotionCharacterization.Axis.ANGULAR, omega_max),
+                    alpha_max, angularKV, angularKA, headingKS, constants.profilePowerLimit(),
+                    (v, a) -> Math.abs(constants.characterizedPower(core.MotionCharacterization.Axis.ANGULAR,
+                            direction * v, direction * a, direction * (angularKV * v + angularKA * a + headingKS))));
+        }
         DynamicMotionProfile profile = DynamicMotionProfile.forPowerLimitedDistance(
                 turnLengthRads, steps, powerModel);
         DynamicMotionProfile.State[] scalarStates = profile.getStates();

@@ -23,15 +23,19 @@ public class FollowerTunerSequenceTest {
         assertArrayEquals(new FollowerTuner.Phase[] {
                 FollowerTuner.Phase.DRIVE_FEEDFORWARD,
                 FollowerTuner.Phase.HEADING_FEEDFORWARD,
+                FollowerTuner.Phase.MOTION_CHARACTERIZATION,
                 FollowerTuner.Phase.HEADING,
                 FollowerTuner.Phase.DRIVE,
                 FollowerTuner.Phase.LIMITS,
-                FollowerTuner.Phase.CENTRIPETAL
+                FollowerTuner.Phase.CENTRIPETAL,
+                FollowerTuner.Phase.PROFILED_TRACKING
         }, FollowerTuner.Phase.values());
     }
     @Test
-    public void centripetalIsTheFinalPhase() {
-        assertNull(FollowerTuner.nextPhase(FollowerTuner.Phase.CENTRIPETAL));
+    public void profiledTrackingFollowsCentripetal() {
+        assertEquals(FollowerTuner.Phase.PROFILED_TRACKING,
+                FollowerTuner.nextPhase(FollowerTuner.Phase.CENTRIPETAL));
+        assertNull(FollowerTuner.nextPhase(FollowerTuner.Phase.PROFILED_TRACKING));
     }
 
     @Test

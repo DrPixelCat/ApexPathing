@@ -1,6 +1,7 @@
 package feedforward.generators;
 
 import core.FollowerConstants;
+import core.MotionCharacterization.Axis;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
@@ -36,8 +37,9 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
         double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
                 finalTangent);
 
-        double maxPhysicalVel = cornerVelocityLimit(constants.forwardVelLimitIn, kappa);
-        double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
+        double maxPhysicalVel = cornerVelocityLimit(constants.calibratedVelocityLimit(Axis.FORWARD, constants.forwardVelLimitIn), kappa);
+        if (constants.motionCharacterization != null) { maxPhysicalVel = Math.min(maxPhysicalVel, constants.motionCharacterization.velocityLimit(Axis.STRAFE)); }
+        double effectiveAngVelLimit = Math.min(constants.calibratedVelocityLimit(Axis.ANGULAR, constants.angularVelLimitRad), maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
                 maxAngAccel);
 
@@ -54,7 +56,7 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
                     Math.abs(omega) > effectiveAngVelLimit + EPSILON ||
                             Math.abs(alpha) > effectiveAngAccelLimit + EPSILON;
 
-            if (violatesAngularLimit || calculatePowerUtilization(mid_v, path, point) > 1.0) {
+            if (violatesAngularLimit || calculatePowerUtilization(mid_v, path, point) > utilizationLimit()) {
                 max_v = mid_v;
             } else {
                 min_v = mid_v;
@@ -124,12 +126,21 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
 
         double headingKs = signedStatic(omega, alpha, constants.angularFeedforwardKS);
         double heading = omega * constants.angularKV + alpha * constants.angularKA + headingKs;
+        heading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, heading);
 
         // Swerve can point the traction vector, so translation combines as vector magnitude.
         outResult.pForward = Math.abs(tanPow);
         outResult.pLateral = Math.abs(normPow);
         outResult.pHeading = Math.abs(heading);
         outResult.totalPower = Math.hypot(tanPow, normPow) + Math.abs(heading);
+        if (constants.motionCharacterization != null && vel * accel >= -EPSILON) {
+            geometry.Angle h = path.getInterpolator().getHeadingTarg(s, point.getFirstDerivative(), finalTangent);
+            Vector bodyDirection = point.getFirstDerivative().normalize().rotate(h.times(-1));
+            Vector power = constants.characterizedTranslation(bodyDirection, vel, accel, bodyDirection.times(tanPow));
+            Vector normal = Vector.of(-bodyDirection.getY().getIn(), bodyDirection.getX().getIn(), geometry.DistUnit.IN);
+            outResult.pForward = power.getMag().getIn();
+            outResult.totalPower = power.plus(normal.times(normPow)).getMag().getIn() + Math.abs(heading);
+        }
         outResult.maxUtilization = outResult.totalPower;
     }
 

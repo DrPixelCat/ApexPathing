@@ -547,6 +547,16 @@ public class Follower {
         return Range.clip(requestedPower + Math.copySign(minimumPower, headingError), -1.0, 1.0);
     }
 
+    /** Do not repeat a brake pulse while the filtered estimate lags a raw speed drop. */
+    static boolean shouldPulseBrake(double filteredSpeed, double rawSpeed,
+                                    double targetSpeed, double tolerance, int cooldown,
+                                    boolean awaitingResponse) {
+        return cooldown == 0 && Double.isFinite(filteredSpeed)
+                && filteredSpeed - targetSpeed > tolerance
+                && (!awaitingResponse || Double.isFinite(rawSpeed)
+                    && rawSpeed >= targetSpeed);
+    }
+
     static Vector calculateCentripetalCorrection(Vector principalNormal,
                                                  double tangentialVelocity,
                                                  double signedCurvature, double gain) {

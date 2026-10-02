@@ -70,12 +70,25 @@ public class FollowerProfilesTest {
         constants.tankBrakingPulsePower = 0.1;
         constants.profileCornerSpeedScale = 0.8;
         constants.profileVelocityPowerCoefficient = 0.014;
+        constants.profiledTrackingTuned = true;
         FollowerConstants restored = FollowerConstants.fromJson(constants.toJson());
         assertEquals(0.12, restored.brakingVelocityFeedbackGain, 0);
         assertEquals(-1.5, restored.brakingCornerToleranceIn, 0);
         assertEquals(0.1, restored.tankBrakingPulsePower, 0);
         assertEquals(0.8, restored.profileCornerSpeedScale, 0);
         assertEquals(0.014, restored.profileVelocityPowerCoefficient, 0);
+        assertTrue(restored.profiledTrackingTuned);
+    }
+
+    @Test public void trackingReviewIsScopedToTheActiveDriveProfile() throws Exception {
+        FollowerConstants constants = legacy("DUAL_ACTUATED");
+        constants.configure(DrivetrainType.DUAL_ACTUATED, TANK, true);
+        assertFalse(constants.profiledTrackingTuned);
+        constants.profiledTrackingTuned = true;
+        constants.selectProfile(HOLONOMIC);
+        assertFalse(constants.profiledTrackingTuned);
+        constants.selectProfile(TANK);
+        assertTrue(constants.profiledTrackingTuned);
     }
 
     @Test public void obsoleteBrakingSelectorCannotChangeTheSavedResponse() throws Exception {

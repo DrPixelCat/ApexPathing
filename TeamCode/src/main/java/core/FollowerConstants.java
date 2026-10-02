@@ -18,6 +18,40 @@ import controllers.FeedbackController.Coefficients;
  * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
+    /** Optional measured speed-dependent authority, scoped to the active drivetrain profile. */
+    public MotionCharacterization motionCharacterization;
+
+    public double profilePowerLimit() {
+        return motionCharacterization == null ? 1.0 : motionCharacterization.profilePowerLimit();
+    }
+    public double calibratedVelocityLimit(MotionCharacterization.Axis axis, double configured) {
+        return motionCharacterization == null ? configured
+                : Math.min(configured, motionCharacterization.velocityLimit(axis));
+    }
+    public double characterizedPower(MotionCharacterization.Axis axis, double velocity,
+                                     double acceleration, double legacy) {
+        return motionCharacterization == null ? legacy
+                : motionCharacterization.power(axis, velocity, acceleration, legacy);
+    }
+    /** Conservative unsigned demand when a scalar profile does not encode travel direction. */
+    public double characterizedAxisDemand(MotionCharacterization.Axis axis, double velocity,
+                                          double acceleration, double legacy) {
+        if (motionCharacterization == null) { return legacy; }
+        return Math.max(Math.abs(characterizedPower(axis, velocity, acceleration, legacy)),
+                Math.abs(characterizedPower(axis, -velocity, -acceleration, -legacy)));
+    }
+    /** Robot-relative axis powers; braking and legacy profiles keep their original vector. */
+    public geometry.Vector characterizedTranslation(geometry.Vector unitDirection, double velocity,
+                                                    double acceleration, geometry.Vector legacy) {
+        if (motionCharacterization == null || velocity * acceleration < -1e-6) { return legacy; }
+        double x = unitDirection.getX().getIn(), y = unitDirection.getY().getIn();
+        return geometry.Vector.of(
+                characterizedPower(MotionCharacterization.Axis.FORWARD, velocity * x, acceleration * x, legacy.getX().getIn()),
+                characterizedPower(MotionCharacterization.Axis.STRAFE, velocity * y, acceleration * y, legacy.getY().getIn()),
+                geometry.DistUnit.IN);
+    }
+    /** Legacy pulse/coast settings retained for constants.json compatibility; profiled paths
+     * now use signed acceleration feedforward and velocityFeedbackGain instead. */
     public double brakingVelocityFeedbackGain = 0.0;
     public double brakingOverspeedToleranceIn = 3.0;
     public double brakingPulsePower = 0.30;
@@ -28,9 +62,11 @@ public class FollowerConstants {
     public double profileCornerSpeedScale = 1.0;
     /** Optional conservative velocity power slope for profile reachability. */
     public double profileVelocityPowerCoefficient = 0.0;
-    /** Overspeed trigger used when entering a tight curve while decelerating. */
+    /** Legacy corner pulse thresholds retained for constants.json compatibility. */
     public double brakingCornerToleranceIn = 3.0;
     public double tankBrakingCornerToleranceIn = 3.0;
+    /** Set only after the active profile has been checked on straight and corner courses. */
+    public boolean profiledTrackingTuned = false;
     /** Desired first-order velocity-error time constant used after kV/kA characterization. */
     public static final double VELOCITY_FEEDBACK_TIME_CONSTANT_SECONDS = 0.10;
     /** Feedback-power limits protect translation from large localization-error commands. */
@@ -231,6 +267,9 @@ public class FollowerConstants {
     }
 
     private void loadValues(JSONObject json) {
+        JSONObject characterization = json.optJSONObject("motionCharacterization");
+        motionCharacterization = characterization == null ? null
+                : MotionCharacterization.fromJson(characterization, characterization.has("STRAFE"));
         angularCoeffs.p(loadDouble(json, "headingP"));
         angularCoeffs.d(loadDouble(json, "headingD"));
         angularCoeffs.s(loadDouble(json, "headingS"));
@@ -270,6 +309,7 @@ public class FollowerConstants {
                 ? loadDouble(json, "brakingCornerToleranceIn") : 3.0;
         tankBrakingCornerToleranceIn = json.has("tankBrakingCornerToleranceIn")
                 ? loadDouble(json, "tankBrakingCornerToleranceIn") : 3.0;
+        profiledTrackingTuned = json.optBoolean("profiledTrackingTuned", false);
 
         forwardVelLimitIn = loadDouble(json, "forwardVelLimitIn");
         forwardAccelLimitIn = loadDouble(json, "forwardAccelLimitIn");
@@ -283,6 +323,9 @@ public class FollowerConstants {
     private JSONObject valuesToJson() {
         JSONObject json = new JSONObject();
         try {
+            if (motionCharacterization != null) {
+                json.put("motionCharacterization", motionCharacterization.toJson());
+            }
             json.put("headingP", angularCoeffs.kP);
             json.put("headingD", angularCoeffs.kD);
             json.put("headingS", angularCoeffs.kS);
@@ -308,6 +351,7 @@ public class FollowerConstants {
             json.put("profileVelocityPowerCoefficient", profileVelocityPowerCoefficient);
             json.put("brakingCornerToleranceIn", brakingCornerToleranceIn);
             json.put("tankBrakingCornerToleranceIn", tankBrakingCornerToleranceIn);
+            json.put("profiledTrackingTuned", profiledTrackingTuned);
             json.put("forwardVelLimitIn", forwardVelLimitIn);
             json.put("forwardAccelLimitIn", forwardAccelLimitIn);
             json.put("strafeVelLimitIn", strafeVelLimitIn);

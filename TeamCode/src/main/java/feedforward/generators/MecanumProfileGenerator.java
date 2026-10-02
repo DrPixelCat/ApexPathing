@@ -1,6 +1,7 @@
 package feedforward.generators;
 
 import core.FollowerConstants;
+import core.MotionCharacterization.Axis;
 import drivetrains.Mecanum;
 import drivetrains.Mecanum.DirectionalLut.DirectionalKinematics;
 import geometry.Angle;
@@ -49,8 +50,17 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
 
         DirectionalKinematics dirK = limitCalculator.getKinematics(tangent, headingAtPoint);
         double maxPhysicalVel = cornerVelocityLimit(dirK.maxVel, kappa);
+        Vector bodyDirection = tangent.normalize().rotate(headingAtPoint.times(-1));
+        if (constants.motionCharacterization != null) {
+            double dx = Math.abs(bodyDirection.getX().getIn()), dy = Math.abs(bodyDirection.getY().getIn());
+            if (dx > EPSILON) { maxPhysicalVel = Math.min(maxPhysicalVel,
+                    constants.motionCharacterization.velocityLimit(Axis.FORWARD) / dx); }
+            if (dy > EPSILON) { maxPhysicalVel = Math.min(maxPhysicalVel,
+                    constants.motionCharacterization.velocityLimit(Axis.STRAFE) / dy); }
+        }
 
-        double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
+        double effectiveAngVelLimit = Math.min(constants.calibratedVelocityLimit(Axis.ANGULAR,
+                constants.angularVelLimitRad), maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
                 maxAngAccel);
 
@@ -73,7 +83,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         for (int i = 0; i < VELOCITY_SEARCH_ITERATIONS; i++) {
             double mid_v = (min_v + max_v) / 2.0;
 
-            if (evaluatePower(mid_v, kappa, fPrime, fDoublePrime, dirK) > 1.0) {
+            if (evaluatePower(mid_v, kappa, fPrime, fDoublePrime, dirK, bodyDirection) > utilizationLimit()) {
                 max_v = mid_v;
             } else { min_v = mid_v; }
         }
@@ -88,11 +98,12 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
      * centripetal coefficient already represents the drivetrain's lateral acceleration authority.
      */
     private double evaluatePower(double v, double kappa, double fPrime,
-                                 double fDoublePrime, DirectionalKinematics tangentKinematics) {
+                                 double fDoublePrime, DirectionalKinematics tangentKinematics, Vector bodyDirection) {
         // Apply the LUT as power cost multipliers instead of pretending strafe is as efficient.
         double boostedKV = profileKV() * tangentKinematics.velMultiplier;
         double transPower = v * boostedKV
                 + signedStatic(v, 0.0, constants.translationalFeedforwardKS);
+        transPower = translationDemand(bodyDirection, v, 0, transPower);
 
         // kCentripetal is tuned directly from the drivetrain's full-power lateral acceleration.
         // Applying the directional acceleration multiplier here would charge the mecanum strafe
@@ -102,8 +113,8 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         double omega = fPrime * v;
         double alpha = fDoublePrime * (v * v);
         double headingKs = signedStatic(omega, alpha, constants.angularFeedforwardKS);
-        double rotPower =
-                Math.abs(omega * constants.angularKV + alpha * constants.angularKA + headingKs);
+        double rotPower = Math.abs(constants.characterizedPower(Axis.ANGULAR, omega, alpha,
+                omega * constants.angularKV + alpha * constants.angularKA + headingKs));
 
         return transPower + latPower + rotPower;
     }
@@ -131,12 +142,15 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         double pForward = v * profileKV() * dirK.velMultiplier
                 + a_t * constants.getTranslationalKA(v, a_t) * dirK.accelMultiplier
                 + signedStatic(v, a_t, constants.translationalFeedforwardKS);
+        pForward = translationDemand(current.getFirstDerivative().normalize().rotate(robotHeading.times(-1)),
+                v, a_t, pForward);
 
         // kCentripetal already maps lateral acceleration to motor power for this drivetrain.
         double pLateral = v * v * kappa * constants.kCentripetal;
 
         double headingKs = signedStatic(omega, alpha, constants.angularFeedforwardKS);
         double pHeading = omega * constants.angularKV + alpha * constants.angularKA + headingKs;
+        pHeading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, pHeading);
 
         outResult.pForward = Math.abs(pForward);
         outResult.pLateral = Math.abs(pLateral);
@@ -144,6 +158,12 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
 
         outResult.totalPower = outResult.pForward + outResult.pLateral + outResult.pHeading;
         outResult.maxUtilization = outResult.totalPower;
+    }
+
+    private double translationDemand(Vector direction, double velocity, double acceleration, double legacy) {
+        if (constants.motionCharacterization == null || velocity * acceleration < -EPSILON) { return legacy; }
+        Vector power = constants.characterizedTranslation(direction, velocity, acceleration, direction.times(legacy));
+        return Math.abs(power.getX().getIn()) + Math.abs(power.getY().getIn());
     }
 
     @Override

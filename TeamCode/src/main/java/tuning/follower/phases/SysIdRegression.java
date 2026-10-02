@@ -5,6 +5,9 @@ import java.util.List;
 
 /** Fits power = kS sign(v) + kV v + kA a from signed, time-averaged windows. */
 final class SysIdRegression {
+    // A pooled R² can hide opposite signed errors in the four excitation runs.
+    // Five percent of full motor power is already a material feedforward error.
+    private static final double MAX_RUN_BIAS_POWER = 0.05;
     static final class Sample {
         final int run;
         final double time, velocity, acceleration, power;
@@ -14,11 +17,12 @@ final class SysIdRegression {
         }
     }
     static final class Fit {
-        final double kS, kV, kA, rSquared, rms;
+        final double kS, kV, kA, rSquared, rms, maxRunBias;
         final boolean valid;
-        Fit(double[] k, double rSquared, double rms, boolean valid) {
+        Fit(double[] k, double rSquared, double rms, double maxRunBias, boolean valid) {
             kS = k[0]; kV = k[1]; kA = k[2];
-            this.rSquared = rSquared; this.rms = rms; this.valid = valid;
+            this.rSquared = rSquared; this.rms = rms;
+            this.maxRunBias = maxRunBias; this.valid = valid;
         }
         double predict(Sample s) {
             return kS * Math.signum(s.velocity) + kV * s.velocity + kA * s.acceleration;
@@ -28,13 +32,16 @@ final class SysIdRegression {
     boolean add(int run, double time, double velocity, double acceleration, double power) {
         if (run < 0 || run > 3 || !Double.isFinite(time) || !Double.isFinite(velocity)
                 || !Double.isFinite(acceleration) || !Double.isFinite(power)
-                || Math.abs(power) > 1 || Math.abs(velocity) < 1e-6) { return false; }
+                || Math.abs(power) > 1 || Math.abs(velocity) < 1e-6
+                || Math.signum(velocity) != (run % 2 == 0 ? 1.0 : -1.0)
+                || (run >= 2 && acceleration * velocity < 0.0)) { return false; }
         samples.add(new Sample(run, time, velocity, acceleration, power));
         return true;
     }
     Fit fit(double minimumSpan) {
         double[][] m = new double[3][4];
         int[] counts = new int[4];
+        double[] runResiduals = new double[4];
         double min = Double.POSITIVE_INFINITY, max = 0, mean = 0;
         for (Sample s : samples) {
             double[] x = {Math.signum(s.velocity), s.velocity, s.acceleration};
@@ -89,17 +96,26 @@ final class SysIdRegression {
         }
         mean /= samples.size();
         double error = 0, total = 0;
-        Fit candidate = new Fit(k, 0, 0, false);
+        Fit candidate = new Fit(k, 0, 0, 0, false);
         for (Sample s : samples) {
-            error += Math.pow(s.power - candidate.predict(s), 2);
+            double residual = s.power - candidate.predict(s);
+            error += residual * residual;
+            runResiduals[s.run] += residual;
             total += Math.pow(s.power - mean, 2);
         }
         double r2 = total > 0 ? 1 - error / total : Double.NaN;
         boolean valid = k[0] >= 0 && k[0] < .9 && k[1] > 0 && k[2] >= 0
                 && Double.isFinite(k[0]) && Double.isFinite(k[1]) && Double.isFinite(k[2])
                 && r2 >= .9 && max - min >= minimumSpan;
-        for (int count : counts) { valid &= count >= 5; }
-        return new Fit(k, r2, Math.sqrt(error / samples.size()), valid);
+        double maxRunBias = 0.0;
+        for (int run = 0; run < counts.length; run++) {
+            maxRunBias = Math.max(maxRunBias,
+                    Math.abs(runResiduals[run] / Math.max(1, counts[run])));
+            valid &= counts[run] >= 5;
+        }
+        valid &= maxRunBias <= MAX_RUN_BIAS_POWER;
+        return new Fit(k, r2, Math.sqrt(error / samples.size()), maxRunBias, valid);
     }
-    private Fit invalid() { return new Fit(new double[]{Double.NaN, Double.NaN, Double.NaN}, Double.NaN, Double.NaN, false); }
+    private Fit invalid() { return new Fit(new double[]{Double.NaN, Double.NaN, Double.NaN},
+            Double.NaN, Double.NaN, Double.NaN, false); }
 }

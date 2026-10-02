@@ -15,7 +15,6 @@ import paths.movements.Path;
 
 /** Executes profiled paths for non-holonomic drivetrains using Ramsete feedback. */
 final class TankPathFollower {
-    private static final double MIN_PROFILE_VELOCITY_IN_PER_SECOND = 6.0;
     private static final double INCHES_TO_METRES = 0.0254;
     // Conventional Ramsete tuning assumes SI: b has units rad^2/m^2 and zeta has units 1/rad.
     // Short FTC paths need faster lateral convergence than the conventional b=2 default.
@@ -91,7 +90,7 @@ final class TankPathFollower {
         double driveSign = Math.cos(headingTarget.getRad() - pathDerivative.getTheta().getRad()) < 0
                 ? -1.0 : 1.0;
         double targetVelocity = driveSign * (state.t < 1.0
-                ? Math.max(targets.getTangentialVel(), MIN_PROFILE_VELOCITY_IN_PER_SECOND) : 0.0);
+                ? targets.getTangentialVel() : 0.0);
         double targetAcceleration = driveSign * targets.getTangentialAccel();
         double targetAngularVelocity = targets.getAngularVel();
         double targetAngularAcceleration = targets.getAngularAccel();
@@ -139,43 +138,17 @@ final class TankPathFollower {
                 .calculate(correctedVelocity - actualForwardVelocity).get();
         double turnVelocityFeedback = headingVelocityController.p()
                 .calculate(correctedAngularVelocity - currentAngularVelocity).get();
-        double scaledAcceleration = MotionFeedforward.scaleBrakingAcceleration(
-                targetVelocity, targetAcceleration, actualForwardVelocity);
-        double motionSign = MotionFeedforward.motionSign(correctedVelocity, scaledAcceleration);
+        // Preserve the generated acceleration in both travel directions. Ramsete pose
+        // correction remains in correctedVelocity; velocity feedback uses the same power gain.
+        double motionSign = MotionFeedforward.profiledStaticSign(
+                correctedVelocity, targetAcceleration, forwardVelocityFeedback, translationalKV);
         double forwardFeedforward = translationFeedforwardController.vel(correctedVelocity)
-                .accel(scaledAcceleration)
+                .accel(targetAcceleration)
                 .f(motionSign * constants.translationalFeedforwardKS)
                 .calculate(0.0).get();
-        if (state.t < 1.0
-                && distanceRemaining > Follower.PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES) {
-            double progressSpeed = driveSign * actualForwardVelocity;
-            double progressAcceleration = driveSign * targetAcceleration;
-            double overspeed = progressSpeed - Math.abs(targetVelocity);
-            double curvature = segment.getSignedCurvature(state.t);
-            double tolerance = progressAcceleration < -5.0 && Math.abs(curvature) > 0.005
-                    ? constants.tankBrakingCornerToleranceIn
-                    : constants.brakingOverspeedToleranceIn;
-            if (state.brakingPulseCooldown > 0) { state.brakingPulseCooldown--; }
-            if (overspeed > tolerance && state.brakingPulseCooldown == 0) {
-                forwardFeedforward = -driveSign * constants.tankBrakingPulsePower;
-                forwardVelocityFeedback = 0.0;
-                state.brakingPulseCooldown =
-                        Math.max(0, constants.brakingPulseCooldownCycles) + 1;
-            } else if (progressAcceleration < 0.0) {
-                double speedTarget = Math.abs(targetVelocity);
-                double drive = constants.translationalFeedforwardKS
-                        + translationalKV * speedTarget
-                        + constants.brakingVelocityFeedbackGain
-                        * (speedTarget - progressSpeed);
-                if (progressAcceleration < -5.0) {
-                    double neutral = constants.translationalFeedforwardKS
-                            + translationalKV * Math.max(0.0, progressSpeed);
-                    drive = Math.min(drive, neutral - constants.brakingNeutralPowerMargin);
-                }
-                forwardFeedforward = driveSign * Math.max(0.001, drive);
-                forwardVelocityFeedback = 0.0;
-            }
-        }
+
+        forwardFeedforward = constants.characterizedPower(MotionCharacterization.Axis.FORWARD,
+                correctedVelocity, targetAcceleration, forwardFeedforward);
 
         // 2.6 Blend into endpoint capture
         double endError = driveSign * Follower.pathEndpointTangentError(
@@ -201,7 +174,7 @@ final class TankPathFollower {
                 + endpointPower * endpointBlend;
         forwardVelocityFeedback *= 1.0 - endpointBlend;
         forwardFeedforward += forwardVelocityFeedback;
-        // As with holonomic braking overrides, endpoint capture must not dilute an
+        // Endpoint capture must not dilute an
         // already stronger braking command while the robot is above its speed target.
         if (endpointBlend > 0.0 && profilePower * actualForwardVelocity < 0.0
                 && driveSign * actualForwardVelocity > driveSign * correctedVelocity) {
@@ -212,6 +185,9 @@ final class TankPathFollower {
         // 2.7 Angular feedforward for Ramsete's corrected chassis speed
         double turnFeedforward = headingFeedforwardController.vel(correctedAngularVelocity)
                 .accel(targetAngularAcceleration).calculate(0.0).get();
+
+        turnFeedforward = constants.characterizedPower(MotionCharacterization.Axis.ANGULAR,
+                correctedAngularVelocity, targetAngularAcceleration, turnFeedforward);
 
         // 2.8 Completion and stuck detection
         double endpointDistance = currentPosition.distanceTo(path.getEndPose().getVec()).getIn();

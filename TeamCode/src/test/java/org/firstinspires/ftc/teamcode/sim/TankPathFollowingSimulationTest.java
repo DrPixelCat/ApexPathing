@@ -99,6 +99,13 @@ public class TankPathFollowingSimulationTest {
             follower.update();
             org.junit.Assert.assertEquals("Tank diagnostics must report the 4-inch lateral offset",
                     4.0, Math.abs(follower.getCrossTrackErrorIn()), 0.01);
+            // Ramsete's pose gain is zero at the generated v=0 startup. Verify steering
+            // once the acceleration feedforward launches the robot, without a velocity floor.
+            for (int i = 0; i < 50 && follower.getTrackingAngularVelocityTarget() >= -0.05; i++) {
+                stepPhysics(hardware, 0.02);
+                Thread.sleep(20);
+                follower.update();
+            }
             assertTrue("Straight path must still command corrective rotation",
                     follower.getTrackingAngularVelocityTarget() < -0.05);
             follower.stop();
@@ -162,36 +169,25 @@ public class TankPathFollowingSimulationTest {
                 .put("headingP", 2.4).put("headingD", 0.45).put("headingS", 0.24)
                 .put("translationalP", 0.20).put("translationalD", 0.04)
                 .put("translationalS", 0.24)
-                .put("translationKV", 0.0133).put("translationKA", 0.0069)
-                .put("translationalFeedforwardS", 0.11)
-                .put("angularKV", 0.061).put("angularKA", 0.03)
-                .put("angularFeedforwardS", 0.24)
+                // Nominal gains for the updated shared plant, not the old wheel-only fixture.
+                .put("translationKV", .94/75).put("translationKA", .94/150)
+                .put("translationalFeedforwardS", .06)
+                .put("angularKV", 7*.94/75).put("angularKA", 7*.94/150)
+                .put("angularFeedforwardS", .06)
                 .put("velocityFeedbackGain", 0.02)
                 .put("profileCornerSpeedScale", 0.8)
                 .put("angularVelocityFeedbackGain", 0.15)
                 .put("forwardVelLimitIn", 20).put("forwardAccelLimitIn", 30)
                 .put("angularVelLimitRad", 2).put("angularAccelLimitRad", 4);
-        return FollowerConstants.fromJson(new JSONObject().put("schemaVersion", 2)
+        FollowerConstants constants = FollowerConstants.fromJson(new JSONObject().put("schemaVersion", 2)
                 .put("drivetrainType", "TANK")
                 .put("profiles", new JSONObject().put("DEFAULT", values)));
+        constants.deriveVelocityFeedbackGains();
+        return constants;
     }
 
     private static void stepPhysics(ApexSimulation.Hardware hardware, double dt) throws Exception {
-        double[] wheelVelocities = new double[hardware.drivetrain.motorNames.length];
-        for (int i = 0; i < hardware.drivetrain.motorNames.length; i++) {
-            SimMotor motor = (SimMotor) hardware.hardwareMap.get(
-                    DcMotorEx.class, hardware.drivetrain.motorNames[i]);
-            motor.update(dt);
-            wheelVelocities[i] = motor.getVelocity();
-        }
-        Method kinematics = hardware.drivetrain.getClass()
-                .getDeclaredMethod("forwardKinematics", double[].class);
-        kinematics.setAccessible(true);
-        MotionVector robotVelocity = (MotionVector) kinematics.invoke(
-                hardware.drivetrain, (Object) wheelVelocities);
-        hardware.drivetrain.velocity = robotVelocity.toFieldFrame(
-                hardware.drivetrain.position.theta);
-        hardware.drivetrain.position = hardware.drivetrain.position.step(
-                hardware.drivetrain.velocity, dt);
+        // Same chassis/motor equations, without walls on the unbounded regression courses.
+        StockSimTestSupport.step(hardware, dt);
     }
 }

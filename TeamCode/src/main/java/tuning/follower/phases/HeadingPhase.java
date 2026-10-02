@@ -45,6 +45,8 @@ public class HeadingPhase extends TuningPhase {
     @Override
     protected String getPhaseName() { return "Heading Controller"; }
 
+    @Override protected String getTuningConstants() { return "Heading kP, kD"; }
+
     @Override
     protected boolean manualTuneIsPossible() { return true; }
 
@@ -55,9 +57,6 @@ public class HeadingPhase extends TuningPhase {
     protected void showPreRunInstructions() {
         context.getTelemetry().addLine(
                 "Place the robot where it can rotate safely through a 60 degree out-and-back test.");
-        context.getTelemetry().addLine(
-                "Automatic tuning starts from the measured feedforward model, then " +
-                        "checks settling, overshoot, error, and consistency in both directions.");
     }
 
     @Override
@@ -196,7 +195,6 @@ public class HeadingPhase extends TuningPhase {
         context.getTelemetry().addLine("LB/RB: select Value to tune");
         context.getTelemetry().addLine("X: Run test turn");
         context.getTelemetry().addLine("A: Save");
-        context.getTelemetry().update();
 
         return false;
     }

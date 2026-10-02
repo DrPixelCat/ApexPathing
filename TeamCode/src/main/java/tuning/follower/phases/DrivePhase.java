@@ -62,6 +62,8 @@ public class DrivePhase extends TuningPhase {
     @Override
     protected String getPhaseName() { return "Drive Controller"; }
 
+    @Override protected String getTuningConstants() { return "Drive kP, kD"; }
+
     @Override
     protected boolean manualTuneIsPossible() { return true; }
 
@@ -72,9 +74,6 @@ public class DrivePhase extends TuningPhase {
     protected void showPreRunInstructions() {
         context.getTelemetry().addLine(
                 "Place the robot with at least 36 inches clear in front and behind it.");
-        context.getTelemetry().addLine(
-                "Automatic tuning starts from the measured feedforward model, then " +
-                        "checks settling, overshoot, error, and consistency in both directions.");
     }
 
     @Override
@@ -205,7 +204,6 @@ public class DrivePhase extends TuningPhase {
         context.getTelemetry().addLine("LB/RB: Select value to tune");
         context.getTelemetry().addLine("X: Run test path");
         context.getTelemetry().addLine("A: Save");
-        context.getTelemetry().update();
 
         return false;
     }

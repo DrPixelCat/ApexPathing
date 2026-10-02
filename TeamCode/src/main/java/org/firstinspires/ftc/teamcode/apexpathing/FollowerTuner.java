@@ -9,16 +9,15 @@ import java.util.function.Predicate;
 import core.Follower;
 import core.ApexConstants;
 import core.FollowerConstants;
-import geometry.Angle;
-import geometry.Dist;
 import geometry.Pose;
-import geometry.Vector;
 import tuning.follower.phases.CentripetalPhase;
 
 import tuning.follower.phases.DrivePhase;
 import tuning.follower.phases.FeedforwardTuner;
+import tuning.follower.phases.MotionCharacterizationPhase;
 import tuning.follower.phases.HeadingPhase;
 import tuning.follower.phases.LimitsPhase;
+import tuning.follower.phases.ProfiledTrackingPhase;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
@@ -43,6 +42,8 @@ public class FollowerTuner extends LinearOpMode {
                 validFeedforward(constants.translationalFeedforwardKS, constants.translationalKV, constants.translationalKA)),
         HEADING_FEEDFORWARD(context -> new FeedforwardTuner(context, FeedforwardTuner.Axis.HEADING), constants ->
                 validFeedforward(constants.angularFeedforwardKS, constants.angularKV, constants.angularKA)),
+        MOTION_CHARACTERIZATION(MotionCharacterizationPhase::new, constants ->
+                constants.motionCharacterization != null),
         HEADING(HeadingPhase::new, constants ->
                 constants.angularCoeffs.kP != 0.0),
         DRIVE(DrivePhase::new, constants ->
@@ -55,7 +56,9 @@ public class FollowerTuner extends LinearOpMode {
                         constants.angularVelLimitRad != 0.0 &&
                         constants.angularAccelLimitRad != 0.0),
         CENTRIPETAL(CentripetalPhase::new, constants ->
-                constants.kCentripetal != 0.0);
+                constants.kCentripetal != 0.0),
+        PROFILED_TRACKING(ProfiledTrackingPhase::new, constants ->
+                constants.profiledTrackingTuned);
 
         final Function<TunerContext, TuningPhase> phaseFactory;
         final Predicate<FollowerConstants> isTunedPredicate;
@@ -105,8 +108,7 @@ public class FollowerTuner extends LinearOpMode {
             telemetry.clearAll();
             context.addInterfaceHeader();
             telemetry.addLine("Press Start to run the tuner.");
-            telemetry.addLine("Make sure the robot has enough space.");
-            telemetry.update();
+            context.publishFrame(false);
             sleep(20);
         }
 
@@ -128,12 +130,11 @@ public class FollowerTuner extends LinearOpMode {
             return;
         }
 
-        // temp set pose for dev testing
-        context.getFollower().setPose(new Pose(new Vector(
-                Dist.fromIn(-60), Dist.fromIn(-60)), Angle.fromDeg(45))
-        );
         while (opModeIsActive()) {
-            if (phase.run(this)) { // Returns true if the phase is complete
+            if (phase.run(this) && opModeIsActive() && !isStopRequested()) {
+                if (selectedPhaseOrdinal != Phase.PROFILED_TRACKING) {
+                    context.constants.profiledTrackingTuned = false;
+                }
                 if (!saveCurrentProfile()) { break; }
                 selectedPhaseOrdinal.updateTunedStatus(context.constants);
 
@@ -161,12 +162,12 @@ public class FollowerTuner extends LinearOpMode {
 
     private boolean saveCurrentProfile() {
         while (opModeIsActive()) {
+            context.beginFrame();
             if (context.saveConstants()) { return true; }
             context.getFollower().stop();
-            telemetry.addLine("A: retry saving. B: finish without saving these changes.");
-            telemetry.update();
+            telemetry.addLine("Press A to retry saving. Stop to discard unsaved changes.");
+            context.publishFrame(false);
             while (opModeIsActive()) {
-                if (gamepad1.bWasPressed()) { return false; }
                 if (gamepad1.aWasPressed()) { break; }
                 sleep(20);
             }
@@ -233,8 +234,6 @@ public class FollowerTuner extends LinearOpMode {
         }
         telemetry.addLine("Select a tuning phase");
         telemetry.addLine("Use Dpad Up and Down to choose a phase, then press A to select it.");
-        telemetry.addLine("Completed phases can be selected again for retuning.");
-        telemetry.addLine();
 
         for (int i = 0; i < phaseAmount; i++) {
             String cursor = i == selectedPhaseOrdinal.ordinal() ? " <" : "";
@@ -242,7 +241,9 @@ public class FollowerTuner extends LinearOpMode {
                     phaseDisplayName(phases[i]) + cursor);
         }
 
-        telemetry.update();
+        context.publishFrame(opModeIsActive()
+                && (!(context.getFollower().getDrivetrain() instanceof drivetrains.DualActuated)
+                || !((drivetrains.DualActuated) context.getFollower().getDrivetrain()).isTransitioning()));
 
         if (gamepad1.dpadUpWasPressed()) {
             selectedPhaseOrdinal = phases[
@@ -261,13 +262,6 @@ public class FollowerTuner extends LinearOpMode {
     private void selectPhase() {
         phase = selectedPhaseOrdinal.create(context);
         isPhaseSelected = true;
-        // Do not let a rate-limited RESULTS frame from the previous phase obscure the next
-        // phase's selector in FTCodeSim's Driver Station.
-        telemetry.clearAll();
-        context.addInterfaceHeader();
-        telemetry.addLine("Next phase: " + phaseDisplayName(selectedPhaseOrdinal));
-        telemetry.addLine("Choose automatic/manual mode, then press A.");
-        telemetry.update();
     }
 
     static Phase nextPhase(Phase current) {

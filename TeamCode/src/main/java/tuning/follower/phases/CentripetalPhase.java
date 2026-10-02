@@ -56,6 +56,8 @@ public class CentripetalPhase extends TuningPhase {
     @Override
     protected String getPhaseName() { return "Centripetal"; }
 
+    @Override protected String getTuningConstants() { return "kCentripetal"; }
+
     @Override
     protected boolean manualTuneIsPossible() { return true; }
 
@@ -66,8 +68,6 @@ public class CentripetalPhase extends TuningPhase {
     protected void showPreRunInstructions() {
         context.getTelemetry().addLine(
                 "Place the robot at one corner of a clear 32 by 32 inch test area.");
-        context.getTelemetry().addLine(
-                "Manual arc tests remain stopped until X is pressed.");
     }
 
     @Override
@@ -224,36 +224,6 @@ public class CentripetalPhase extends TuningPhase {
 
     @Override
     protected boolean autoTuned() {
-        context.getTelemetry().addLine(outbound()
-                ? "Robot is following the outbound test arc."
-                : "Robot is following the return test arc.");
-        if (context.isDebugMode()) {
-            context.getTelemetry().addData("Current Pose", context.getFollower().getPose().toString());
-            context.getTelemetry().addData("Follower T", context.getFollower().getBestT());
-            context.getTelemetry().addData("Follower Cross Track Error", context.getFollower().getCrossTrackErrorIn());
-            context.getTelemetry().addData("Inward Centripetal Error",
-                    context.getFollower().getCentripetalErrorIn());
-            context.getTelemetry().addData("Closest Path Point",
-                    context.getFollower().getClosestPathPoint().toString());
-            context.getTelemetry().addData("Cross-Track Normal",
-                    context.getFollower().getCrossTrackNormal().toString());
-            context.getTelemetry().addData("Inward Curve Normal",
-                    context.getFollower().getPathNormal().toString());
-            context.getTelemetry().addData("Cross-Track Vector",
-                    context.getFollower().getCrossTrackCorrection().toString());
-            context.getTelemetry().addData("Centripetal Vector",
-                    context.getFollower().getCentripetalCorrection().toString());
-            context.getTelemetry().addData("Average Error", averageError);
-            context.getTelemetry().addData("Direction",
-                    outbound() ? "OUTBOUND" : "RETURN");
-            context.getTelemetry().addData("Leg elapsed",
-                    Math.round(legTimer.seconds() * 10.0) / 10.0 + " / " +
-                            LEG_TIMEOUT_SECONDS + " s");
-            context.getTelemetry().addData("Current Velocity",
-                    context.getFollower().getVelocity().toString());
-        }
-        context.getTelemetry().update();
-
         if (!updateTrial()) {
             return false;
         }
@@ -329,14 +299,13 @@ public class CentripetalPhase extends TuningPhase {
 
     @Override
     protected boolean manualTuned() {
-        double change = manualChange();
+        double change = trialRunning() ? 0.0 : manualChange();
         if (change != 0.0) {
             context.constants.kCentripetal = Math.max(0.0, context.constants.kCentripetal + change);
             context.getFollower().setCentripetal(context.constants.kCentripetal);
-            if (trialRunning()) { startTrial(); }
         }
 
-        if (opMode.gamepad1.xWasPressed()) {
+        if (opMode.gamepad1.xWasPressed() && !trialRunning()) {
             startTrial();
         } else if (trialRunning() && updateTrial()) {
             context.getFollower().stop();
@@ -351,14 +320,11 @@ public class CentripetalPhase extends TuningPhase {
             context.getTelemetry().addData("Usable samples", samples);
             context.getTelemetry().addData("Response CSV", manualCsvPath);
         }
-        context.getTelemetry().addLine("Dpad Up/Down: change centripetal gain");
-        context.getTelemetry().addLine("X: run/restart arc test");
+        context.getTelemetry().addLine("Dpad Up/Down: change centripetal gain while idle");
+        context.getTelemetry().addLine("X: run arc test");
         context.getTelemetry().addLine("A: save");
-        context.getTelemetry().update();
-
         if (opMode.gamepad1.aWasPressed()) {
             context.getFollower().stop();
-            if (manualCsv != null) { manualCsv.close(); }
             return true;
         }
         return false;
@@ -367,10 +333,16 @@ public class CentripetalPhase extends TuningPhase {
     @Override
     protected void reportResults() {
         context.getTelemetry().addData("Centripetal Gain", number(context.constants.kCentripetal));
-        context.getTelemetry().addData("Mean signed error",
-                number(trialRunning() && samples > 0 ? errorSum / samples : averageError));
+        if (manualMode) {
+            context.getTelemetry().addData("Mean signed error",
+                    number(trialRunning() && samples > 0 ? errorSum / samples : averageError));
+        }
     }
 
     @Override
     protected boolean routineMotionActive() { return trialRunning(); }
+
+    @Override protected void onExit() {
+        if (manualCsv != null) { manualCsv.close(); }
+    }
 }

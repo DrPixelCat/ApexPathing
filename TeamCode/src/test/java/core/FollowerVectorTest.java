@@ -241,4 +241,11 @@ public class FollowerVectorTest {
         assertEquals(0.0, Follower.ensureAngularEndpointBreakawayPower(
                 0.0, Math.toRadians(0.5), 0.0, 0.24375, Math.toRadians(1.0)), 1e-9);
     }
+
+    @Test
+    public void rawSpeedDropVetoesRepeatedBrakeWhileFilterLags() {
+        assertTrue(Follower.shouldPulseBrake(57.44, 57.42, 52.74, 3.0, 0, false));
+        assertFalse(Follower.shouldPulseBrake(51.09, 32.24, 46.86, 3.0, 0, true));
+        assertFalse(Follower.shouldPulseBrake(57.44, 57.42, 52.74, 3.0, 1, true));
+    }
 }

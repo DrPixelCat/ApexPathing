@@ -108,7 +108,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
                     remaining -= dt;
                 }
                 frame = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-                if (frame.contains("phase complete with results")
+                if (frame.contains("constants:")
                         || frame.contains("Automatic kA tuning stopped.")) { break; }
                 if (pressStart < 0L && frame.contains("Press A to run this phase")) {
                     pressStart = now;
@@ -119,7 +119,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
                 Thread.sleep(5);
             }
             assertTrue("Automatic kA phase did not finish:\n" + frame,
-                    frame.contains("phase complete with results")
+                    frame.contains("constants:")
                             && frame.contains("passed paired-direction confirmation"));
             System.out.println(frame);
             if (tank) {

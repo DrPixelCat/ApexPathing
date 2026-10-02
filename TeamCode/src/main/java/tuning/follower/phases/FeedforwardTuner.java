@@ -1,9 +1,10 @@
 package tuning.follower.phases;
 
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import core.Follower;
 import geometry.AngleUnit;
+import geometry.DistUnit;
+import geometry.GeometryFactory;
 import geometry.Pose;
 import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
@@ -23,60 +24,64 @@ public final class FeedforwardTuner extends TuningPhase {
     private Pose startPose;
     private double lastHeading, travel, previousPower, previousTime, previousVelocity;
     private double windowTime, windowVelocity, windowPower, windowStartVelocity;
-    private String status = "Not run", csvPath = "Not started", graphPath = "Not generated";
+    private final double[] breakawayPower = {Double.NaN, Double.NaN};
+    private String csvPath = "Not started";
     private TuningCsvWriter csv;
 
     public FeedforwardTuner(TunerContext context) { this(context, Axis.DRIVE); }
     public FeedforwardTuner(TunerContext context, Axis axis) { super(context); this.axis = axis; }
     @Override protected String getPhaseName() { return axis + " Feedforward SysId"; }
+    @Override protected String getTuningConstants() { return axis + " feedforward kS, kV, kA"; }
     @Override protected boolean manualTuneIsPossible() { return false; }
     @Override protected boolean autoTuneIsPossible() { return true; }
     @Override protected boolean manualTuned() { return false; }
     @Override protected boolean routineMotionActive() { return stage == Stage.RUNNING; }
     @Override protected void showPreRunInstructions() {
-        context.getTelemetry().addLine("Four tests: slow ramp and power step, each forward and reverse.");
-        context.getTelemetry().addLine("Each test starts from rest with A. X aborts the current test.");
         context.getTelemetry().addLine(axis == Axis.DRIVE
                 ? "Clear 96 inches in BOTH directions, plus braking room."
                 : "Clear room for two full turns in BOTH directions.");
-        context.getTelemetry().addLine("Fits kS, kV and kA together; saves CSV and desktop PNG results graphs.");
     }
     @Override protected void init() {
         context.getFollower().stop(); context.getFollower().enableControllers();
         regression = new SysIdRegression(); run = 0; stage = Stage.READY;
-        status = "Ready"; fit = null;
+        breakawayPower[0] = breakawayPower[1] = Double.NaN;
+        fit = null;
     }
-    @Override public boolean run(LinearOpMode opMode) {
-        try { return super.run(opMode); }
-        finally { context.getFollower().stop(); context.getFollower().enableControllers(); closeCsv(); }
+    @Override protected void onExit() {
+        context.getFollower().enableControllers();
+        closeCsv();
     }
     @Override protected boolean autoTuned() {
         if (stage == Stage.READY) {
-            context.getTelemetry().addData("Next test", RUNS[run]);
-            context.getTelemetry().addLine("Reposition with sticks. Release sticks. Press A from rest.");
+            showPreRunInstructions();
+            context.getTelemetry().addLine(axis == Axis.DRIVE
+                    ? (run % 2 == 0 ? "Allow 96 inches in front of the robot."
+                    : "Allow 96 inches behind the robot.") : "Allow two full turns in both directions.");
+            context.getTelemetry().addLine("Release sticks. Press A when stationary.");
             if (opMode.gamepad1.aWasPressed()) {
                 Pose v = context.getFollower().getVelocity();
                 if (!Double.isFinite(v.getVec().getMag().getIn()) || !Double.isFinite(v.getHeading(AngleUnit.RAD))
                         || v.getVec().getMag().getIn() > .5 || Math.abs(v.getHeading(AngleUnit.RAD)) > .05) {
-                    status = "Wait until stationary.";
+                    context.getTelemetry().addLine("Release sticks and wait until stationary.");
                 } else { beginTest(); }
             }
         } else if (stage == Stage.RUNNING) { sample(); }
         else {
-            reportResults();
-            context.getTelemetry().addLine("X: discard all four tests and retry.");
-            if (opMode.gamepad1.xWasPressed()) { init(); }
-            else if (fit.valid) {
-                context.getTelemetry().addLine("Press A to accept this axis's kS, kV and kA.");
-                if (opMode.gamepad1.aWasPressed()) { applyFit(); return true; }
-            } else { context.getTelemetry().addLine("Fit rejected: need all four tests, speed range, nonnegative gains and R² >= 0.90."); }
+            if (fit != null && fit.valid && breakawayValid()) { applyFit(); return true; }
+            context.getTelemetry().addLine("Feedforward validation failed. Stop and rerun this phase.");
         }
-        context.getTelemetry().addData("Status", status);
-        context.getTelemetry().update();
         return false;
     }
     private void beginTest() {
         Follower f = context.getFollower();
+        if (Boolean.getBoolean("apex.simulation.unlockTunerPhases")) {
+            GeometryFactory staging = new GeometryFactory().setDistUnit(DistUnit.IN);
+            // Every SysId run needs the full 96-inch travel. Reusing the previous
+            // simulator endpoint can hit a field boundary and corrupt kA.
+            positionRobotForSimulation(axis == Axis.DRIVE
+                    ? staging.pose(run % 2 == 0 ? -55.0 : 55.0, 0.0, 0.0)
+                    : staging.pose(0.0, 0.0, 0.0));
+        }
         f.stop(); f.disableControllers(); startPose = f.getPose();
         lastHeading = startPose.getHeading().getRad(); travel = previousPower = previousTime = 0;
         previousVelocity = measuredVelocity();
@@ -104,10 +109,20 @@ public final class FeedforwardTuner extends TuningPhase {
         lastHeading = heading;
         double distance = f.getPose().getVec().minus(startPose.getVec()).getMag().getIn();
         if (!Double.isFinite(v) || !Double.isFinite(distance) || !Double.isFinite(travel)
-                || !Double.isFinite(previousPower)) { abort("Invalid measurement; current test discarded."); return; }
+                || !Double.isFinite(previousPower)) {
+            stopMotion();
+            csv.writeRow("invalid", RUNS[run]);
+            csv.flush();
+            stage = Stage.REVIEW;
+            return;
+        }
         // Integrate the PRECEDING delivered command over its measurement interval. Windows
         // reduce differentiation noise without mixing stationary friction into the moving model.
         double threshold = axis == Axis.DRIVE ? .5 : .05;
+        if (run < 2 && Double.isNaN(breakawayPower[run])) {
+            breakawayPower[run] = breakawayCrossingPower(run, previousVelocity,
+                    v, previousPower, threshold);
+        }
         boolean moving = Math.abs(v) >= threshold && Math.abs(previousVelocity) >= threshold
                 && Math.signum(v) == Math.signum(previousVelocity) && dt > 0 && dt <= .1;
         csv.writeRow("raw", RUNS[run], time, v, "", previousPower, moving);
@@ -123,15 +138,13 @@ public final class FeedforwardTuner extends TuningPhase {
             }
         } else { previousVelocity = v; resetWindow(); }
         previousVelocity = v; previousTime = time;
-        if (opMode.gamepad1.xWasPressed()) { abort("Aborted; reposition and retry current test."); return; }
         boolean limit = axis == Axis.DRIVE ? distance >= 96 : travel >= 4 * Math.PI;
         if (limit || time >= (run < 2 ? 9 : 2)) {
             stopMotion(); csv.flush();
-            status = limit ? "Travel limit reached." : "Test complete.";
             if (++run == 4) {
                 closeCsv(); fit = regression.fit(axis == Axis.DRIVE ? 2 : .2);
                 writeFitCsv();
-                graphPath = renderDesktopGraphs();
+                renderDesktopGraphs();
                 stage = Stage.REVIEW;
             } else { stage = Stage.READY; }
             return;
@@ -142,18 +155,30 @@ public final class FeedforwardTuner extends TuningPhase {
         double delivered = Math.max(Math.max(Math.abs(f.getDrivetrain().getLastFlPower()), Math.abs(f.getDrivetrain().getLastFrPower())),
                 Math.max(Math.abs(f.getDrivetrain().getLastBlPower()), Math.abs(f.getDrivetrain().getLastBrPower())));
         previousPower = Math.copySign(delivered, command);
-        context.getTelemetry().addData("SysId test", RUNS[run]);
-        context.getTelemetry().addData("Power / velocity", number(previousPower) + " / " + number(v));
-        context.getTelemetry().addLine("X: abort test. Red STOP: end tuning.");
     }
-    private void abort(String message) {
-        stopMotion();
-        regression.samples.removeIf(s -> s.run == run);
-        csv.writeRow("aborted", RUNS[run]); csv.flush(); stage = Stage.READY; status = message;
+    static double breakawayCrossingPower(int run, double before, double after,
+                                         double power, double velocityThreshold) {
+        double direction = run % 2 == 0 ? 1.0 : -1.0;
+        if (run >= 2 || !Double.isFinite(before) || !Double.isFinite(after)
+                || !Double.isFinite(power) || !Double.isFinite(velocityThreshold)
+                || direction * before >= velocityThreshold
+                || direction * after < velocityThreshold
+                || direction * power < 0.03) {
+            return Double.NaN;
+        }
+        return Math.abs(power);
+    }
+    private boolean breakawayValid() {
+        return Double.isFinite(breakawayPower[0]) && Double.isFinite(breakawayPower[1]);
+    }
+    private double staticBreakawayPower() {
+        // One direction can be inflated by a delayed localization sample. The smaller
+        // measured launch is the conservative static term for the bidirectional PDS search.
+        return Math.min(breakawayPower[0], breakawayPower[1]);
     }
     private void stopMotion() { context.getFollower().stop(); context.getFollower().enableControllers(); }
     private void closeCsv() {
-        if (csv != null) { csv.close(); if (csv.getError() != null) { status = "CSV error: " + csv.getError(); } csv = null; }
+        if (csv != null) { csv.close(); csv = null; }
     }
     private void writeFitCsv() {
         TuningCsvWriter reviewed = TuningCsvWriter.open("sysid_fit_" + axis.name().toLowerCase(java.util.Locale.US),
@@ -166,24 +191,27 @@ public final class FeedforwardTuner extends TuningPhase {
         reviewed.close();
         csvPath = reviewed.getError() == null ? reviewed.getPath() : "CSV error: " + reviewed.getError();
     }
-    private String renderDesktopGraphs() {
+    private void renderDesktopGraphs() {
         // XChart/AWT remain on the desktop test classpath, never in the Android APK.
         try {
             Class<?> renderer = Class.forName("tuning.follower.phases.SysIdGraphs");
-            return (String) renderer.getMethod("render", String.class, String.class).invoke(null, csvPath, axis.name());
-        } catch (ClassNotFoundException e) {
-            return "Run desktop SysIdGraphs on the saved fit CSV.";
+            renderer.getMethod("render", String.class, String.class).invoke(null, csvPath, axis.name());
+        } catch (ClassNotFoundException ignored) {
+            // Android does not include the desktop renderer.
         } catch (ReflectiveOperationException e) {
-            return "Graph error: " + e.getMessage();
+            com.qualcomm.robotcore.util.RobotLog.ee("Apex SysId", e, "Could not render SysId graphs.");
         }
     }
     private void applyFit() {
+        context.constants.motionCharacterization = null;
         if (axis == Axis.DRIVE) {
             context.constants.translationalFeedforwardKS = fit.kS;
             context.constants.translationalKV = fit.kV; context.constants.translationalKA = fit.kA;
+            context.constants.translationalCoeffs.s(staticBreakawayPower());
         } else {
             context.constants.angularFeedforwardKS = fit.kS;
             context.constants.angularKV = fit.kV; context.constants.angularKA = fit.kA;
+            context.constants.angularCoeffs.s(staticBreakawayPower());
         }
         context.getFollower().setFeedforwardGains(context.constants.translationalKV, context.constants.translationalKA,
                 context.constants.angularKV, context.constants.angularKA);
@@ -197,9 +225,5 @@ public final class FeedforwardTuner extends TuningPhase {
     @Override protected void reportResults() {
         if (fit == null) { return; }
         context.getTelemetry().addData("kS / kV / kA", number(fit.kS) + " / " + number(fit.kV) + " / " + number(fit.kA));
-        context.getTelemetry().addData("R² / RMS power error", number(fit.rSquared) + " / " + number(fit.rms));
-        context.getTelemetry().addData("Units", axis == Axis.DRIVE ? "normalized power, inches, seconds" : "normalized power, radians, seconds");
-        context.getTelemetry().addData("CSV", csvPath);
-        context.getTelemetry().addData("Results graphs", graphPath);
     }
 }

@@ -31,8 +31,8 @@ import paths.movements.Path;
  */
 public abstract class BaseProfileGenerator {
     protected static final double EPSILON = 1e-6;
-    /** Allow generated feedforward profiles to use full motor authority. */
-    private static final double UTILIZATION_LIMIT = 1.00;
+    /** A measured plant reserves motor authority for tracking corrections. */
+    protected double utilizationLimit() { return constants.profilePowerLimit(); }
     /** Small allowance so floating point noise does not create endless pinning. */
     private static final double UTILIZATION_TOLERANCE = 1e-3;
     /** Binary-search depth for local velocity caps. */
@@ -133,7 +133,7 @@ public abstract class BaseProfileGenerator {
         int iterations = 0;
 
         // If any point still saturates, lower one nearby velocity and let both passes smooth it.
-        while (profileEval.maxUtilization > UTILIZATION_LIMIT + UTILIZATION_TOLERANCE
+        while (profileEval.maxUtilization > utilizationLimit() + UTILIZATION_TOLERANCE
                 && iterations < maxIterations) {
             int checkIndex = profileEval.worstIndex;
             int pinIndex = choosePinIndex(outputParams, checkIndex);
@@ -171,7 +171,7 @@ public abstract class BaseProfileGenerator {
         lastReport.iterationsRun = Math.max(1, iterations + 1);
         lastReport.finalMaxUtilization = profileEval.maxUtilization;
         lastReport.converged =
-                profileEval.maxUtilization <= UTILIZATION_LIMIT + UTILIZATION_TOLERANCE;
+                profileEval.maxUtilization <= utilizationLimit() + UTILIZATION_TOLERANCE;
 
         return outputParams;
     }
@@ -255,6 +255,7 @@ public abstract class BaseProfileGenerator {
      * @return quick feedforward lookup table
      */
     public FFLut generateQuick(FollowerConstants config) {
+        if (config.motionCharacterization != null) { return new FFLut(generate()); }
         Path path = (Path) this.path;
         PathPoint[] points = path.getGeneratedPoints();
         MotionParameters[] lut = new MotionParameters[points.length];
@@ -500,7 +501,7 @@ public abstract class BaseProfileGenerator {
             populateKinematicsAndPower(trialProfile, points, path);
 
             if (trialProfile[boundedCheckIndex].getMotorPower() <=
-                    UTILIZATION_LIMIT + UTILIZATION_TOLERANCE) {
+                    utilizationLimit() + UTILIZATION_TOLERANCE) {
                 bestVelocity = trialProfile[pinIndex].getTangentialVel();
                 low = candidate;
             } else { high = candidate; }
@@ -601,7 +602,7 @@ public abstract class BaseProfileGenerator {
                                     double prevVel, double nextVel, double accel) {
         EvaluationResult result = new EvaluationResult();
         evaluatePoint(path, prevPoint, currentPoint, prevVel, nextVel, accel, result);
-        return result.maxUtilization <= UTILIZATION_LIMIT + UTILIZATION_TOLERANCE;
+        return result.maxUtilization <= utilizationLimit() + UTILIZATION_TOLERANCE;
     }
 
     /** Calculates constant tangential acceleration from two velocities over distance. */

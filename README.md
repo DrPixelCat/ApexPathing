@@ -66,23 +66,35 @@ automatic or manual mode, A to select or advance, and X to run tests. Pressing S
 the menu open until a phase is explicitly selected. After Start, the sticks drive the robot
 field-centrically on menus, prompts, results, and idle manual-tuning screens; tuner-controlled
 motion takes exclusive control until its test finishes. All phases remain selectable for retuning.
+Use Stop to cancel tuning or discard unsaved changes. The last accepted phase remains saved.
+Automatic telemetry shows the constants being tuned and positioning instructions. The bottom
+line says `Robot can be driven with sticks` only while stick driving is available.
 After a phase's results are accepted, Follower Tuner saves them and advances through every
-remaining phase in order: drive feedforward SysId, heading feedforward SysId, heading feedback,
-drive feedback, movement limits, then centripetal tuning (holonomic only).
+remaining phase in order: drive feedforward SysId, heading feedforward SysId,
+[motion characterization](doc/MotionCharacterization.md), heading feedback,
+drive feedback, movement limits, centripetal tuning (holonomic only), then profiled tracking.
+  Motion characterization measures holding power and acceleration authority versus speed,
+  then validates a separate power sequence. Accepted maps constrain profile power and
+  speed; the follower uses the same maps for powered acceleration and cruise.
+  The final phase tests braking and tracking on a repeated corner course.
+  Reposition the robot and press A to start each trial; it saves only
+  measured improvements that pass repeat validation for the active drivetrain profile.
+See [profiled tracking tuning](doc/ProfiledTrackingTuning.md) for the controls and metric definitions.
 
 Each independent SysId phase identifies kS, kV and kA together with the model
 `power = kS * sign(velocity) + kV * velocity + kA * acceleration`. It runs four open-loop
 tests: quasistatic forward/reverse (0.1 power/s, at most 0.9 for 9 seconds) and dynamic
 forward/reverse (0.5 power for at most 2 seconds). Press A from rest for each test; reposition
-with the sticks between tests. X aborts and discards the current test. Clear 96 inches in both
+with the sticks between tests. Use Stop to cancel. Clear 96 inches in both
 directions for drive, or room for two full turns for heading, with additional braking room.
 Travel cutoffs stop collection automatically; the operator must stop before obstacles.
 
 The fit uses signed 100 ms moving windows, integrating the preceding delivered motor power
 and measured velocity, with acceleration calculated from the window's velocity change.
 Acceptance requires at least five windows from each test, adequate speed range, identifiable
-coefficients, nonnegative kS/kA, positive kV and R-squared >= 0.90. A accepts only the current
-axis; X on the review screen discards all four tests. No individual outliers are pruned.
+coefficients, nonnegative kS/kA, positive kV and R-squared >= 0.90. A saves the current
+axis from the results screen. Rejected measurements require Stop and a fresh run of the phase.
+No individual outliers are pruned.
 Each axis saves independently. The separate acceleration-search phase is no longer in the workflow.
 Position-controller breakaway settings remain separate. Velocity feedback is derived from the
 identified plant after acceptance. Units remain normalized motor power, inches (drive), radians
@@ -90,8 +102,8 @@ identified plant after acceptance. Units remain normalized motor power, inches (
 
 Raw and fitted CSVs are saved beside `constants.json` (`FIRST/ApexPathing` on the Robot Controller,
 `build/ftcodesim-data` in simulation). Fit CSVs include all retained windows, predicted power,
-residuals, coefficients, R-squared and acceptance eligibility. Aborted tests remain marked in
-raw evidence but are omitted from the fit.
+residuals, coefficients, R-squared and acceptance eligibility. Stop closes the current log
+without accepting the unfinished measurements.
 
 Desktop simulation generates XChart PNGs automatically, using the same 1000x460 rendering,
 legend, grid and line styling as `PathProfileConvergenceTest`. Each test gets a measured-versus-fitted
@@ -100,14 +112,18 @@ fit CSV. Hardware CSVs can be copied to the desktop and rendered by running the 
 `tuning.follower.phases.SysIdGraphs` main class with arguments `<fit.csv> <DRIVE|HEADING>`.
 XChart stays off the Android runtime classpath. The `SysIdRegressionTest` graph test also writes
 example PNGs under `TeamCode/build/sysid-graphs`; those examples use synthetic plant data.
-The default mecanum simulator includes duty-dependent drag beyond the three-term model; a high
-R-squared alone does not prove those gains describe its physical friction. The identification
-simulation tests use explicit linear plant fixtures; real-robot validation remains necessary.
+The desktop simulator uses FTCodeSim's stock motor and chassis implementations. Mecanum physics
+parameters match the upstream DECODE example. [Stock simulator validation](doc/StockFTCodeSimValidation.md)
+records the source and fresh tuning. Earlier custom-plant braking graphs are historical and do
+not validate stock FTCodeSim or a physical robot.
+Profiled paths now use [continuous displacement-based braking](doc/ProfiledBrakingImplementation.md)
+while retaining Apex's constrained profile generator and LUT interpolation.
 
 Automatic PDS tuning derives a critically damped starting point from the accepted kV/kA plant
 model, then uses bounded Twiddle point-to-point tests to refine kP and kD. Every candidate is
 tested in both directions, must beat the incumbent by a noise margin, and the best measured gains
-are restored before operator validation. The model result is only a seed, not an assumed final
+are restored before operator validation. X runs a verification step after Twiddle; A accepts
+the gains. The model result is only a seed, not an assumed final
 answer. A response that has not settled after 2.5 seconds is scored as a poor candidate; successful
 responses need only remain inside the position and velocity tolerances for 0.15 seconds. Between
 responses, low-level velocity-estimator noise is tolerated after a short re-arm delay. PDS CSVs

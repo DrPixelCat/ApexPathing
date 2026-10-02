@@ -87,24 +87,21 @@ public final class ApexSimulation {
         config.backLeftMotorName = BACK_LEFT_MOTOR;
         config.backRightMotorName = BACK_RIGHT_MOTOR;
 
-        // Geometry/speed parameters from the DECODE example.
-        config.wheelbase = 14;
-        config.trackWidth = 14;
+        // Stock FTCodeSim DECODE example, pinned in doc/StockFTCodeSimValidation.md.
+        // Change names/origin for Apex hardware only; never replace the registered motor model.
+        config.wheelbase = 9.37008;
+        config.trackWidth = 9.13386;
         config.wheelRadius = 1.889765;
         config.maxAcceleration = 150;
-        config.maxVelocity = 75;
-        // Preserve the configured natural-deceleration input. In alpha.1 it contributes
-        // to the motor scale and regenerative-braking fit, not a 6% Coulomb friction term.
-        // The release motor has duty-dependent drag and no static breakaway gate.
-        config.naturalDeceleration = config.maxAcceleration * 0.06 / (1.0 - 0.06);
-        // alpha.1 moved directional friction to the chassis. Zero translation radii
-        // make its directional interpolation divide by zero (even during a pure turn).
-        config.forwardNaturalDeceleration = config.naturalDeceleration;
-        config.strafeNaturalDeceleration = config.naturalDeceleration;
-        config.turnNaturalDeceleration = config.naturalDeceleration
-                / ((config.wheelbase + config.trackWidth) / 2.0);
-        config.staticVelocityRegion = 0.05;
-        config.staticFriction = (config.maxAcceleration + config.naturalDeceleration) * 0.08;
+        config.maxVelocity = 65;
+        config.naturalDeceleration = 33;
+        config.forwardNaturalDeceleration = 49;
+        config.strafeNaturalDeceleration = 85;
+        config.turnNaturalDeceleration = 1;
+        config.staticVelocityRegion = 1e-3;
+        config.staticFriction = 55;
+        config.quadraticBraking = 0.0014846306;
+        config.linearBraking = 0.09533276;
         // v0.1.0-alpha.1 removed strafeEfficiency; use the release's mecanum kinematics.
         config.robotGeometry = new RobotGeometry(12, 18, 2, 0);
         config.robotModel = SourceType.ROBOT_CODE_BLOODED_DECODE;
@@ -137,32 +134,16 @@ public final class ApexSimulation {
         config.trackWidth = 14.0;
         config.wheelRadius = 2.0;
         config.staticVelocityRegion = 0.05;
-        config.staticFriction = 0.1;
         config.maxAcceleration = 150;
         config.maxVelocity = 75;
         config.naturalDeceleration = 40;
+        config.staticFriction = 0.1;
         config.robotGeometry = new RobotGeometry(12, 18, 2, 0);
         config.robotModel = SourceType.ROBOT_TANK;
 
         SimulatedDrivetrain drivetrain = new SimulatedTank(config);
         SimHardwareMap hardwareMap = new StableSimHardwareMap();
         hardwareMap.register(drivetrain);
-        // Use duty-independent back EMF: power = kS*sign(v) + kV*v + kA*a.
-        // The library default multiplies back EMF by duty, so its steady-state response
-        // is nonlinear and cannot be represented by Apex's constant kS/kV coefficients.
-        double kS = 0.06;
-        double kV = (1.0 - kS) / config.maxVelocity;
-        double kA = (1.0 - kS) / config.maxAcceleration;
-        for (String name : drivetrain.motorNames) {
-            org.codeblooded.ftcodesim.hardware.devices.SimMotor motor =
-                    (org.codeblooded.ftcodesim.hardware.devices.SimMotor) hardwareMap.get(
-                            com.qualcomm.robotcore.hardware.DcMotorEx.class, name);
-            // alpha.1 evaluates five model terms; the final term is unused in this linear fit.
-            double[] coefficients = {1.0 / (kA * config.wheelRadius * config.nominalVoltage),
-                    0.0, kV / kA, kS / (kA * config.wheelRadius), 0.0};
-            motor.config.modelCoefficients = coefficients;
-            motor.config.zeroPowerBrakeCoefficients = coefficients.clone();
-        }
         drivetrain.setPosition(new MotionVector(FIELD_CENTER_INCHES, FIELD_CENTER_INCHES, 0.0));
         hardwareMap.register(PINPOINT, new SimApexPinpoint(drivetrain, FIELD_CENTER_INCHES));
         return new Hardware(hardwareMap, drivetrain);

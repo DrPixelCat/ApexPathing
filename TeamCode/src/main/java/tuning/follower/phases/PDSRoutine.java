@@ -92,8 +92,7 @@ public final class PDSRoutine {
     private double origin = Double.NaN, position, target, error, direction, nextDirection = 1.0;
     private double validTime, settledTime, errorIntegral, overshoot, saturatedTime, lastTime;
     private double candidateCost, bestCost = Double.POSITIVE_INFINITY;
-    private int candidateTrials, coordinate, coordinateSteps, totalTrials;
-    private String status = "Not started";
+    private int candidateTrials, coordinate, coordinateSteps;
 
     /** Creates a Twiddle tuner from generic axis-specific PD guesses. */
     public PDSRoutine(Config config, double initialP, double initialD, double staticPower) {
@@ -162,13 +161,12 @@ public final class PDSRoutine {
         started = true;
         origin = Double.NaN;
         evaluation = Evaluation.BASELINE;
-        candidateTrials = coordinateSteps = totalTrials = coordinate = 0;
+        candidateTrials = coordinateSteps = coordinate = 0;
         candidateCost = 0.0;
         bestCost = Double.POSITIVE_INFINITY;
         System.arraycopy(gains, 0, bestGains, 0, gains.length);
         nextDirection = 1.0;
         state = PDSState.SETTLING;
-        status = "Measuring baseline";
         clock.reset();
     }
 
@@ -192,7 +190,6 @@ public final class PDSRoutine {
         if (state != PDSState.TEST_READY) { return; }
         candidateTrials = -1;
         state = PDSState.SETTLING;
-        status = "Preparing user test";
         clock.reset();
     }
 
@@ -234,7 +231,6 @@ public final class PDSRoutine {
                 Math.abs(velocity) <= config.velocityTolerance *
                         RELAXED_REARM_VELOCITY_MULTIPLIER;
         if (waitingTime < BETWEEN_TRIALS || (!normalRest && !relaxedRest)) {
-            status = "Waiting for robot to stop";
             return 0.0;
         }
         direction = nextDirection;
@@ -246,7 +242,6 @@ public final class PDSRoutine {
         validTime = settledTime = errorIntegral = overshoot = saturatedTime = lastTime = 0.0;
         controller.reset();
         state = candidateTrials < 0 ? PDSState.TEST_RUNNING : PDSState.TUNING;
-        status = state == PDSState.TEST_RUNNING ? "Running user test" : "Evaluating gains";
         clock.reset();
         return 0.0;
     }
@@ -261,7 +256,6 @@ public final class PDSRoutine {
             // ignoring only dt would still leave its jumped position embedded in the response.
             nextDirection = direction;
             state = PDSState.SETTLING;
-            status = "Lag spike discarded; retrying response";
             clock.reset();
             controller.reset();
             return 0.0;
@@ -299,11 +293,10 @@ public final class PDSRoutine {
                 14.0 * overshootFraction * overshootFraction +
                 10.0 * finalFraction * finalFraction + 0.5 * saturation +
                 (settled ? 0.0 : 30.0);
-        totalTrials++;
+
         if (state == PDSState.TEST_RUNNING) {
             candidateTrials = 0;
             state = PDSState.TEST_READY;
-            status = "Test complete; X repeats, A accepts";
             return;
         }
         // Each candidate is tested once in each direction. Selecting on the worse response avoids
@@ -353,7 +346,6 @@ public final class PDSRoutine {
             System.arraycopy(bestGains, 0, gains, 0, gains.length);
             applyGains();
             state = PDSState.TEST_READY;
-            status = "Twiddle complete; X tests, A accepts";
         } else {
             state = PDSState.SETTLING;
             clock.reset();
@@ -420,18 +412,14 @@ public final class PDSRoutine {
         return Double.isFinite(value) && value > 0.0;
     }
 
-    /** Reports optimization progress and verification controls. */
+    /** Reports the tuned constants and optional verification controls. */
     public void reportProgress(TunerContext context) {
-        context.getTelemetry().addLine("Twiddle " + config.name + " PD tuning");
-        context.getTelemetry().addData("Status", status);
-        context.getTelemetry().addData("P / D", gains[0] + " / " + gains[1]);
-        context.getTelemetry().addData("Best cost", bestCost);
-        context.getTelemetry().addData("Trials", totalTrials);
+        context.getTelemetry().addData("kP / kD",
+                context.formatNumber(gains[0]) + " / " + context.formatNumber(gains[1]));
         if (state == PDSState.TEST_READY) {
             context.getTelemetry().addLine("Press X to run a verification step.");
             context.getTelemetry().addLine("Press A to accept these gains.");
         }
-        context.getTelemetry().update();
     }
 
     // endregion

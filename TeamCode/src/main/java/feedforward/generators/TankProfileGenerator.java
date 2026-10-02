@@ -1,6 +1,7 @@
 package feedforward.generators;
 
 import core.FollowerConstants;
+import core.MotionCharacterization.Axis;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
@@ -50,9 +51,11 @@ public class TankProfileGenerator extends BaseProfileGenerator {
         double fDoublePrime = path.getInterpolator().getHeadingSecondDerivative(s, dKappa,
                 finalTangent);
 
-        double maxPhysicalVel = cornerVelocityLimit(constants.forwardVelLimitIn, kappa);
+        double maxPhysicalVel = cornerVelocityLimit(constants.calibratedVelocityLimit(Axis.FORWARD,
+                constants.forwardVelLimitIn), kappa);
 
-        double effectiveAngVelLimit = Math.min(constants.angularVelLimitRad, maxAngVel);
+        double effectiveAngVelLimit = Math.min(constants.calibratedVelocityLimit(Axis.ANGULAR,
+                constants.angularVelLimitRad), maxAngVel);
         double effectiveAngAccelLimit = Math.min(constants.angularAccelLimitRad,
                 maxAngAccel);
 
@@ -79,7 +82,7 @@ public class TankProfileGenerator extends BaseProfileGenerator {
         for (int i = 0; i < VELOCITY_SEARCH_ITERATIONS; i++) {
             double mid_v = (min_v + max_v) / 2.0;
 
-            if (evaluatePower(mid_v, fPrime, fDoublePrime) > 1.0) { max_v = mid_v; }
+            if (evaluatePower(mid_v, fPrime, fDoublePrime) > utilizationLimit()) { max_v = mid_v; }
             else { min_v = mid_v; }
         }
 
@@ -97,12 +100,14 @@ public class TankProfileGenerator extends BaseProfileGenerator {
     private double evaluatePower(double v, double fPrime, double fDoublePrime) {
         double transPower = Math.abs(v * profileKV() +
                         signedStatic(v, 0.0, constants.translationalFeedforwardKS));
+        transPower = constants.characterizedAxisDemand(Axis.FORWARD, v, 0, transPower);
 
         double omega = fPrime * v;
         double alpha = fDoublePrime * (v * v) + fPrime * 0.0;
         // Translation has already broken static friction on both tank sides. Adding the angular
         // kS again would double-count the same wheels during a moving spatial path.
         double rotPower = Math.abs(omega * constants.angularKV + alpha * constants.angularKA);
+        rotPower = Math.abs(constants.characterizedPower(Axis.ANGULAR, omega, alpha, rotPower));
 
         return transPower + rotPower;
     }
@@ -129,6 +134,8 @@ public class TankProfileGenerator extends BaseProfileGenerator {
                         + signedStatic(v, a_t, constants.translationalFeedforwardKS);
 
         double pHeading = omega * constants.angularKV + alpha * constants.angularKA;
+        pForward = constants.characterizedAxisDemand(Axis.FORWARD, v, a_t, pForward);
+        pHeading = constants.characterizedPower(Axis.ANGULAR, omega, alpha, pHeading);
 
         outResult.pForward = Math.abs(pForward);
         outResult.pLateral = 0.0;

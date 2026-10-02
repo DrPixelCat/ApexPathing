@@ -32,7 +32,7 @@ public final class DynamicMotionProfile {
         }
     }
 
-    /** Reachability rules derived from a linear velocity/acceleration feedforward model. */
+    /** Reachability rules using affine feedforward or an accepted measured power response. */
     public static final class PowerModel {
         private final double velocityLimit;
         private final double forwardAccelerationLimit;
@@ -41,6 +41,14 @@ public final class DynamicMotionProfile {
         private final double kA;
         private final double kS;
         private final double powerLimit;
+        private java.util.function.DoubleBinaryOperator measuredPower;
+
+        /** Uses an accepted measured power response without changing the velocity-envelope sweeps. */
+        public PowerModel(double velocityLimit, double accelerationLimit, double kV, double kA,
+                          double kS, double powerLimit, java.util.function.DoubleBinaryOperator measuredPower) {
+            this(velocityLimit, accelerationLimit, kV, kA, kS, powerLimit);
+            this.measuredPower = java.util.Objects.requireNonNull(measuredPower);
+        }
 
         public PowerModel(double velocityLimit, double accelerationLimit,
                           double kV, double kA, double kS) {
@@ -78,6 +86,15 @@ public final class DynamicMotionProfile {
 
         /** Maximum cruising speed allowed by both configuration and back-EMF power. */
         public double getVelocityLimit() {
+            if (measuredPower != null) {
+                double low = 0, high = velocityLimit;
+                for (int i = 0; i < 30; i++) {
+                    double mid = (low + high) / 2;
+                    if (measuredPower.applyAsDouble(mid, 0) <= powerLimit) { low = mid; }
+                    else { high = mid; }
+                }
+                return low;
+            }
             if (kV <= EPSILON) { return velocityLimit; }
             return Math.min(velocityLimit, Math.max(0.0, (powerLimit - kS) / kV));
         }
@@ -88,6 +105,19 @@ public final class DynamicMotionProfile {
                 @Override public double maxReachableVelocity(
                         double velocity, double ceiling, double distance,
                         double boundaryPosition, int intervalIndex) {
+                    if (measuredPower != null && distance > EPSILON) {
+                        double low = velocity, high = Math.min(ceiling,
+                                Math.sqrt(velocity * velocity + 2 * forwardAccelerationLimit * distance));
+                        if (high <= low) { return high; }
+                        for (int i = 0; i < 30; i++) {
+                            double mid = (low + high) / 2;
+                            double a = (mid * mid - velocity * velocity) / (2 * distance);
+                            if (Math.max(measuredPower.applyAsDouble(velocity, a),
+                                    measuredPower.applyAsDouble(mid, a)) <= powerLimit) { low = mid; }
+                            else { high = mid; }
+                        }
+                        return low;
+                    }
                     double acceleration = forwardAccelerationLimit;
                     if (kA > EPSILON) {
                         acceleration = Math.min(acceleration,

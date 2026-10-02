@@ -15,8 +15,6 @@ import paths.movements.Path;
 
 /** Executes quick and profiled paths for holonomic drivetrains. */
 final class HolonomicPathFollower {
-    private static final double MIN_PROFILE_VELOCITY_IN_PER_SECOND = 6.0;
-
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;
     private final FeedbackController headingController;
@@ -136,6 +134,8 @@ final class HolonomicPathFollower {
             headingFeedforward = headingFeedforwardController.vel(targetAngularVelocity)
                     .accel(targetAngularAcceleration).f(movingFriction)
                     .calculate(0.0).get();
+            headingFeedforward = constants.characterizedPower(MotionCharacterization.Axis.ANGULAR,
+                    targetAngularVelocity, targetAngularAcceleration, headingFeedforward);
         }
 
         double currentAngularVelocity = localizer.getVel().getHeading().getRad();
@@ -189,55 +189,29 @@ final class HolonomicPathFollower {
         double tangentFeedforward;
         double tangentFeedback = 0.0;
         double tangentVelocityFeedback = 0.0;
+        Vector normalFeedforward = unitTangent.times(0);
         if (state.t < 1.0) {
             if (profiled) {
-                double velocityTarget = Math.max(
-                        targets.getTangentialVel(), MIN_PROFILE_VELOCITY_IN_PER_SECOND);
-                double accelerationTarget = MotionFeedforward.scaleBrakingAcceleration(
-                        velocityTarget, targets.getTangentialAccel(), robotTangentialVelocity);
-                double motionSign = MotionFeedforward.motionSign(
-                        velocityTarget, accelerationTarget);
+                // Follow the constrained LUT as generated, including low-speed sections and
+                // signed deceleration. Feedback corrects tracking without replacing the profile.
+                double velocityTarget = targets.getTangentialVel();
+                double accelerationTarget = targets.getTangentialAccel();
+                tangentVelocityFeedback = translationVelocityController.p()
+                        .calculate(velocityTarget - robotTangentialVelocity).get();
+                double motionSign = MotionFeedforward.profiledStaticSign(
+                        velocityTarget, accelerationTarget, tangentVelocityFeedback, translationalKV);
                 double feedforward = translationFeedforwardController.vel(velocityTarget)
                         .accel(accelerationTarget)
                         .f(motionSign * constants.translationalFeedforwardKS)
                         .calculate(0.0).get();
-                tangentVelocityFeedback = translationVelocityController.p()
-                        .calculate(velocityTarget - robotTangentialVelocity).get();
-                double cruisePower = motionSign * constants.translationalFeedforwardKS
-                        + constants.translationalKV * velocityTarget;
-                double overspeed = robotTangentialVelocity - velocityTarget;
-                double pulseTolerance = targets.getTangentialAccel() < -5.0
-                        && Math.abs(curvature) > 0.005
-                        ? constants.brakingCornerToleranceIn
-                        : constants.brakingOverspeedToleranceIn;
-                if (state.brakingPulseCooldown > 0) {
-                    state.brakingPulseCooldown--;
-                }
-                if (overspeed > pulseTolerance
-                        && state.brakingPulseCooldown == 0) {
-                    // One opposing feedforward cycle. Keep position and
-                    // heading corrections ahead of this brake request.
-                    feedforward = -constants.brakingPulsePower;
-                    tangentVelocityFeedback = 0.0;
-                    state.brakingPulseCooldown =
-                            Math.max(0, constants.brakingPulseCooldownCycles) + 1;
-                } else if (targets.getTangentialAccel() < 0.0) {
-                    double netDrive = cruisePower + constants.brakingVelocityFeedbackGain
-                            * (velocityTarget - robotTangentialVelocity);
-                    if (targets.getTangentialAccel() < -5.0) {
-                        // During sustained braking, feedback may relax the
-                        // brake but must not command recovery acceleration.
-                        double neutralPower = constants.translationalFeedforwardKS
-                                + constants.translationalKV
-                                * Math.max(0.0, robotTangentialVelocity);
-                        netDrive = Math.min(netDrive,
-                                neutralPower - constants.brakingNeutralPowerMargin);
-                    }
-                    // The near-flat velocity floor needs enough drive to
-                    // keep rolling through a corner after deceleration.
-                    feedforward = Math.max(0.001, netDrive);
-                    tangentVelocityFeedback = 0.0;
-                }
+                // Feedforward describes the reference motion, as it does in the planner.
+                // Pose error belongs to feedback, not to an extra strafe holding-power demand.
+                Vector bodyDirection = unitTangent.rotate(headingTarget.times(-1));
+                Vector power = constants.characterizedTranslation(bodyDirection, velocityTarget,
+                        accelerationTarget, bodyDirection.times(feedforward)).rotate(headingTarget);
+                feedforward = power.getX().getIn() * unitTangent.getX().getIn()
+                        + power.getY().getIn() * unitTangent.getY().getIn();
+                normalFeedforward = power.minus(unitTangent.times(feedforward));
                 state.trackingVelocityTarget = velocityTarget;
                 state.trackingFeedforward = feedforward;
                 state.trackingVelocityFeedback = tangentVelocityFeedback;
@@ -251,6 +225,7 @@ final class HolonomicPathFollower {
                         tangentFeedback = decelPower;
                         tangentVelocityFeedback = 0.0;
                         tangentFeedforward = 0.0;
+                        normalFeedforward = unitTangent.times(0);
                     }
                 }
             } else {
@@ -301,6 +276,7 @@ final class HolonomicPathFollower {
                     + endpointPower * endpointBlend;
             tangentVelocityFeedback *= 1.0 - endpointBlend;
             tangentFeedforward *= 1.0 - endpointBlend;
+            normalFeedforward = normalFeedforward.times(1.0 - endpointBlend);
         }
 
         // 2.5 Reconcile propulsion and braking
@@ -323,7 +299,8 @@ final class HolonomicPathFollower {
         HolonomicCommandAllocator.Result command = allocator.allocate(
                 state.crossTrackCorrection, state.centripetalCorrection, unitTangent,
                 currentHeading, tangentFeedback, headingFeedback, tangentFeedforward,
-                tangentVelocityFeedback, headingVelocityFeedback, headingFeedforward);
+                tangentVelocityFeedback, headingVelocityFeedback, headingFeedforward, normalFeedforward);
+        // Characterized forward/strafe feedforward can differ in direction from the path tangent.
         state.lastCommandDemand = command.demand;
 
         // 2.7 Completion and stuck detection

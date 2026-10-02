@@ -14,6 +14,9 @@ import paths.movements.Turn;
 /** Executes point turns, including profiled turns and optional translation hold. */
 final class TurnExecutor {
     private static final double SETTLED_ANGULAR_VELOCITY = 0.10;
+    private static final double STALLED_ANGULAR_VELOCITY = 0.05;
+    private static final double BREAKAWAY_RAMP_POWER_PER_SECOND = 0.25;
+    private static final double MAX_BREAKAWAY_SUPPLEMENT = 0.25;
 
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;
@@ -28,6 +31,7 @@ final class TurnExecutor {
     private double direction;
     private double totalDisplacement;
     private double elapsedSeconds;
+    private double stalledSeconds;
     private long lastUpdateNanos;
 
     TurnExecutor(BaseDrivetrain<?> drivetrain, DriveController driveController,
@@ -50,6 +54,7 @@ final class TurnExecutor {
         direction = Math.signum(signedTurn);
         totalDisplacement = Math.abs(signedTurn);
         elapsedSeconds = 0.0;
+        stalledSeconds = 0.0;
         lastUpdateNanos = nowNanos;
     }
 
@@ -59,9 +64,9 @@ final class TurnExecutor {
         Angle currentHeading = current.getHeading();
         double headingError = currentHeading.getShortestAngleTo(targetHeading).getRad();
         long now = System.nanoTime();
-        if (lastUpdateNanos != 0L) {
-            elapsedSeconds += Math.max(0.0, (now - lastUpdateNanos) * 1e-9);
-        }
+        double deltaSeconds = lastUpdateNanos == 0L ? 0.0
+                : Math.max(0.0, (now - lastUpdateNanos) * 1e-9);
+        elapsedSeconds += deltaSeconds;
         lastUpdateNanos = now;
         callbacks.process(turn, -1.0, currentHeading);
 
@@ -85,12 +90,26 @@ final class TurnExecutor {
                     Angle.fromRad(direction * targets.getDistAlongCurve()));
             double profileHeadingError = currentHeading.getShortestAngleTo(profileHeading).getRad();
             turnPower = turnController.calculateProfiled(
-                    profileHeadingError, direction, targets, currentAngularVelocity);
+                    profileHeadingError, direction, targets, currentAngularVelocity, constants);
         }
 
         turnPower = Follower.ensureAngularEndpointBreakawayPower(
                 turnPower, headingError, currentAngularVelocity,
                 constants.angularCoeffs.kS, effectiveHeadingTolerance);
+        if (turn.getFeedforwardLut() == null) {
+            if (Math.abs(headingError) > effectiveHeadingTolerance
+                    && Math.abs(currentAngularVelocity) < STALLED_ANGULAR_VELOCITY) {
+                stalledSeconds += Math.min(deltaSeconds, 0.15);
+                // A characterized static term normally starts the turn. If saved gains are too
+                // weak, increase only while motion is absent, then drop the supplement on motion.
+                double supplement = Math.min(MAX_BREAKAWAY_SUPPLEMENT,
+                        stalledSeconds * BREAKAWAY_RAMP_POWER_PER_SECOND);
+                turnPower = Math.max(-1.0, Math.min(1.0,
+                        turnPower + Math.copySign(supplement, headingError)));
+            } else {
+                stalledSeconds = 0.0;
+            }
+        }
 
         Vector positionError = targetPosition.minus(current.getVec());
         if (driveControllerEnabled && drivetrain.isHolonomic()
@@ -109,6 +128,7 @@ final class TurnExecutor {
 
     void pause() {
         lastUpdateNanos = 0L;
+        stalledSeconds = 0.0;
     }
 
     void resume(long nowNanos) {
@@ -125,6 +145,7 @@ final class TurnExecutor {
         direction = 0.0;
         totalDisplacement = 0.0;
         elapsedSeconds = 0.0;
+        stalledSeconds = 0.0;
         lastUpdateNanos = 0L;
     }
 }

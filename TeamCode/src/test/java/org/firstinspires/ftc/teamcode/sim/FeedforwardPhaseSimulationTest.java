@@ -93,17 +93,6 @@ public class FeedforwardPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = tank ? ApexSimulation.createTankHardware()
                     : ApexSimulation.createHardware();
-            if (!tank) {
-                // This identification fixture follows the model under test. The default mecanum
-                // simulation deliberately retains duty-dependent drag and is unchanged.
-                double kv = .94 / 75, ka = .94 / 150, radius = 1.889765;
-                for (String name : hardware.drivetrain.motorNames) {
-                    SimMotor motor = (SimMotor) hardware.hardwareMap.get(DcMotorEx.class, name);
-                    double[] coefficients = {1 / (ka * radius * 12), 0, kv / ka, expectedKS / (ka * radius)};
-                    motor.config.modelCoefficients = coefficients;
-                    motor.config.zeroPowerBrakeCoefficients = coefficients.clone();
-                }
-            }
             List<String> frames = Collections.synchronizedList(new ArrayList<>());
             ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
             telemetry.setMsTransmissionInterval(0);
@@ -164,7 +153,7 @@ public class FeedforwardPhaseSimulationTest {
                     remaining -= dt;
                 }
                 frame = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-                if (frame.contains("did not pass validation") || frame.contains("HEADING Feedforward SysId phase complete with results")
+                if (frame.contains("validation failed") || frame.contains("HEADING Feedforward SysId constants:")
                         || frame.contains("Fit rejected")) {
                     break;
                 }
@@ -178,7 +167,7 @@ public class FeedforwardPhaseSimulationTest {
             System.out.println(frame);
             TunerContext context = tunedContext.get();
             assertTrue("Tuner failed to converge: " + frame,
-                    frame.contains("HEADING Feedforward SysId phase complete with results"));
+                    frame.contains("HEADING Feedforward SysId constants:"));
             if (tank) {
                 org.junit.Assert.assertEquals(0.06,
                         context.constants.translationalFeedforwardKS, 0.005);
@@ -217,18 +206,6 @@ public class FeedforwardPhaseSimulationTest {
     }
 
     private static void step(ApexSimulation.Hardware hardware, double dt) throws Exception {
-        double[] wheels = new double[hardware.drivetrain.motorNames.length];
-        for (int i = 0; i < wheels.length; i++) {
-            SimMotor motor = (SimMotor) hardware.hardwareMap.get(DcMotorEx.class,
-                    hardware.drivetrain.motorNames[i]);
-            motor.update(dt);
-            wheels[i] = motor.getVelocity();
-        }
-        java.lang.reflect.Method method = hardware.drivetrain.getClass()
-                .getDeclaredMethod("forwardKinematics", double[].class);
-        method.setAccessible(true);
-        MotionVector velocity = (MotionVector) method.invoke(hardware.drivetrain, (Object) wheels);
-        hardware.drivetrain.velocity = velocity.toFieldFrame(hardware.drivetrain.position.theta);
-        hardware.drivetrain.position = hardware.drivetrain.position.step(hardware.drivetrain.velocity, dt);
+        StockSimTestSupport.step(hardware, dt);
     }
 }

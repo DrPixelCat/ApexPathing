@@ -74,6 +74,12 @@ public class TurnController {
      */
     public double calculateProfiled(double headingError, double intendedDirection,
                                     MotionParameters targets, double measuredAngularVelocity) {
+        return calculateProfiled(headingError, intendedDirection, targets, measuredAngularVelocity, null);
+    }
+
+    public double calculateProfiled(double headingError, double intendedDirection,
+                                    MotionParameters targets, double measuredAngularVelocity,
+                                    core.FollowerConstants constants) {
         double targetVelocity = targets.getAngularVel();
         double targetAcceleration = targets.getAngularAccel();
 
@@ -86,6 +92,10 @@ public class TurnController {
 
         double feedforward = motionController.vel(targetVelocity).accel(targetAcceleration)
                 .f(angularFeedforwardKS * motionSign).calculate(headingError).get();
+        if (constants != null) {
+            feedforward = constants.characterizedPower(core.MotionCharacterization.Axis.ANGULAR,
+                    targetVelocity, targetAcceleration, feedforward);
+        }
         double errorRate = targetVelocity - measuredAngularVelocity;
         boolean stoppedReference = Math.abs(targetVelocity) <= EPSILON &&
                 Math.abs(measuredAngularVelocity) < LOW_SPEED_ANGULAR_VELOCITY;

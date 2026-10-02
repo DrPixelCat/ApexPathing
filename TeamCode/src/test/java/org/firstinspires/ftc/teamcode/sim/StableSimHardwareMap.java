@@ -20,12 +20,12 @@ import java.util.function.LongSupplier;
  * <p>The upstream hardware map passes the entire wall-clock interval to an explicit-Euler motor
  * and drivetrain update. A telemetry, logger, or desktop scheduling pause can therefore turn one
  * delayed frame into an unrealistic velocity/pose jump. Substepping preserves elapsed simulation
- * time while preventing that numerical instability. A long debugger pause is capped so resuming
- * does not make the robot attempt to catch up several seconds in one update.</p>
+ * time while preventing that numerical instability. A delayed frame is limited to two normal
+ * loop periods so resuming after a desktop scheduling pause cannot jump the robot far forward.</p>
  */
 final class StableSimHardwareMap extends SimHardwareMap {
     static final double MAX_PHYSICS_STEP_SECONDS = 0.010;
-    static final double MAX_CATCH_UP_SECONDS = 0.250;
+    static final double MAX_CATCH_UP_SECONDS = 0.040;
 
     private final Set<SimHardwareDevice> devices = Collections.newSetFromMap(
             new IdentityHashMap<SimHardwareDevice, Boolean>());
