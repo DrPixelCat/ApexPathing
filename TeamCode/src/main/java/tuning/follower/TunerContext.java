@@ -2,9 +2,9 @@ package tuning.follower;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
-import core.ApexStorage;
-import core.Follower;
-import core.FollowerConstants;
+import storage.ApexStorage;
+import follower.Follower;
+import follower.FollowerConstants;
 import geometry.Pose;
 
 /**

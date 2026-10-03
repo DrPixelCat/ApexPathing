@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.apexpathing;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
-import core.Follower;
+import follower.Follower;
 import geometry.AngleUnit;
 import geometry.DistUnit;
 import geometry.GeometryFactory;

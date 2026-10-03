@@ -1,7 +1,7 @@
 package trajectory;
 
-import core.FollowerConstants;
-import feedforward.generators.BaseProfileGenerator;
+import follower.FollowerConstants;
+import trajectory.generators.BaseProfileGenerator;
 import geometry.PathSegment;
 import geometry.Vector;
 import paths.movements.Path;

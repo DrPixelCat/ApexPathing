@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.ApexConstants;
+import config.ApexConstants;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.Motor;
 import drivetrains.Tank;

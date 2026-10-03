@@ -5,21 +5,18 @@ import static org.junit.Assert.assertTrue;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
-import core.ApexStorage;
-import core.Follower;
-import core.LocalizationConstants;
+import storage.ApexStorage;
+import follower.Follower;
+import localizers.LocalizationConstants;
 import controllers.FeedbackController.Coefficients;
-import tuning.follower.phases.FeedforwardTuner;
+import tuning.follower.sysid.FeedforwardTuner;
 import tuning.follower.TunerContext;
 
 /** Exercises four-test SysId identification and acceptance through the real tuner UI. */
@@ -28,7 +25,7 @@ public class FeedforwardPhaseSimulationTest {
     private Object previousConstants;
 
     @org.junit.Before public void isolateConstants() throws Exception {
-        singleton = core.FollowerConstants.class.getDeclaredField("instance");
+        singleton = follower.FollowerConstants.class.getDeclaredField("instance");
         singleton.setAccessible(true);
         previousConstants = singleton.get(null);
         singleton.set(null, null);
@@ -99,7 +96,7 @@ public class FeedforwardPhaseSimulationTest {
             java.util.concurrent.atomic.AtomicReference<TunerContext> tunedContext = new java.util.concurrent.atomic.AtomicReference<>();
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() throws InterruptedException {
-                    core.ApexConstants robot = tank ? new TankSimulationConstants() : new Constants();
+                    config.ApexConstants robot = tank ? new TankSimulationConstants() : new Constants();
                     Follower seed = new Follower(robot, hardwareMap, true);
                     LocalizationConstants localization = LocalizationConstants.empty();
                     localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),

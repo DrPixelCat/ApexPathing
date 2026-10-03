@@ -7,7 +7,7 @@ The continuous braking proposal works well on a motor plant that obeys its feedf
 From the repository root:
 
 ```powershell
-.\gradlew.bat :TeamCode:testDebugUnitTest --tests org.firstinspires.ftc.teamcode.sim.StraightDecelerationComparisonTest --tests feedforward.DynamicMotionProfileTest
+.\gradlew.bat :TeamCode:testDebugUnitTest --tests org.firstinspires.ftc.teamcode.sim.StraightDecelerationComparisonTest --tests trajectory.profile.DynamicMotionProfileTest
 ```
 
 The new test is `TeamCode/src/test/java/org/firstinspires/ftc/teamcode/sim/StraightDecelerationComparisonTest.java`. It writes tables, profile knots, gain snapshots, acceleration traces, signed motor-response probes, complete controller traces, and speed/power plots to `TeamCode/build/straight-braking-comparison/`. The baseline tuning is frozen in `TeamCode/src/test/resources/straight-deceleration-baseline.json`, copied from the saved simulator tuning on October 1, 2026. Runtime tuning files and production control code are unchanged.

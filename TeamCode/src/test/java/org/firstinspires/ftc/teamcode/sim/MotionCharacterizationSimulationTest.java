@@ -3,7 +3,12 @@ package org.firstinspires.ftc.teamcode.sim;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import core.*;
+import feedforward.MotionCharacterization;
+import feedforward.MotorPowerModel;
+import follower.Follower;
+import follower.FollowerConstants;
+import localizers.LocalizationConstants;
+import storage.ApexStorage;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import java.io.File;
@@ -11,7 +16,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import tuning.follower.TunerContext;
-import tuning.follower.phases.MotionCharacterizationPhase;
+import tuning.follower.characterization.MotionCharacterizationPhase;
 import static org.junit.Assert.*;
 
 /** Exercises the real acquisition phase with upstream stock motor/chassis physics. */

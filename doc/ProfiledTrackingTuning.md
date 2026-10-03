@@ -23,9 +23,12 @@ exceeded what the follower could track on the corner course.
 
 The phase uses one 36 by 36 inch course with a 7 inch radius corner. Holonomic
 paths use `TANGENT_OPTIMAL` heading, as Apex Auto Test does. Tank paths use
-`TANGENT_FORWARD`. Allow stopping room beyond the course. Reposition the real
-robot at the same starting point and heading before every trial; FTCodeSim stages
-it automatically. Use the OpMode Stop button to cancel a trial or discard unsaved
+`TANGENT_FORWARD`. Allow stopping room beyond the course. The first trial anchors
+the course; each subsequent trial retraces that same path in the opposite direction,
+preserving the headings so the robot returns backward without turning around.
+Leave the robot at the previous endpoint. If a trial misses its endpoint, reposition
+there before starting the return run. FTCodeSim stages only the first trial.
+Use the OpMode Stop button to cancel a trial or discard unsaved
 changes. X starts a trial only while idle.
 
 Automatic mode measures the original settings twice, tries bounded changes to
@@ -51,7 +54,7 @@ candidate restores the twice-measured baseline. The saved completion marker
 belongs to the active follower profile.
 
 The candidate score integrates speed error against the first trial's fixed
-profile, charging overspeed more heavily, then adds peak cross-track and heading
+profile for the current direction, charging overspeed more heavily, then adds peak cross-track and heading
 error. The fixed reference prevents a slower requested speed from winning just
 by moving the target. The phase writes `profiled_tracking_*.csv` beside
 `constants.json` with target and measured speed, acceleration, curvature,

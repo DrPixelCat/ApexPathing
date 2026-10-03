@@ -5,7 +5,7 @@ import geometry.DistUnit;
 import geometry.PathPoint;
 import geometry.PathSegment;
 import geometry.Vector;
-import feedforward.MotionParameters;
+import trajectory.profile.MotionParameters;
 import paths.movements.Path;
 
 /** Immutable physical target shared by online and stored trajectories. Units: inches, radians, seconds. */

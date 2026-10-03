@@ -1,8 +1,8 @@
 package paths.movements;
 
-import core.FollowerConstants;
-import feedforward.FFLut;
-import feedforward.generators.TurnProfileGenerator;
+import follower.FollowerConstants;
+import trajectory.profile.FFLut;
+import trajectory.generators.TurnProfileGenerator;
 import geometry.Angle;
 import geometry.Pose;
 import paths.Callback;

@@ -103,5 +103,5 @@ gallery in `build/braking-slope-sweep` remains historical evidence of the old co
 Reproduce the focused controller experiments:
 
 ```powershell
-.\gradlew.bat :TeamCode:testDebugUnitTest --tests core.ProfiledMotionFeedforwardTest --tests org.firstinspires.ftc.teamcode.sim.BrakingSlopeSweepTest
+.\gradlew.bat :TeamCode:testDebugUnitTest --tests follower.ProfiledMotionFeedforwardTest --tests org.firstinspires.ftc.teamcode.sim.BrakingSlopeSweepTest
 ```

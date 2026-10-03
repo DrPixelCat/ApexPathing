@@ -15,10 +15,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import core.ApexStorage;
-import core.Follower;
+import storage.ApexStorage;
+import follower.Follower;
 import tuning.follower.TunerContext;
-import tuning.follower.phases.AccelerationFeedforwardPhase;
+import tuning.follower.acceleration.AccelerationFeedforwardPhase;
 
 import static org.junit.Assert.assertTrue;
 
@@ -28,7 +28,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
     private Object previousConstants;
 
     @org.junit.Before public void isolateConstants() throws Exception {
-        singleton = core.FollowerConstants.class.getDeclaredField("instance");
+        singleton = follower.FollowerConstants.class.getDeclaredField("instance");
         singleton.setAccessible(true);
         previousConstants = singleton.get(null);
         singleton.set(null, null);

@@ -1,6 +1,6 @@
 package trajectory;
 
-import core.FollowerConstants;
+import follower.FollowerConstants;
 import drivetrains.BaseDrivetrain;
 import geometry.*;
 import org.json.JSONObject;
@@ -34,14 +34,14 @@ public class OnlinePlanningBenchmarkTest {
             for (String name : new String[]{"line_100", "line_1000", "facing_1000", "constraints_256", "curved", "calibrated_1000", "overspeed"}) {
                 c.motionCharacterization = null;
                 if (name.equals("calibrated_1000")) {
-                    core.MotorPowerModel[][] models = new core.MotorPowerModel[3][2];
-                    for (core.MotionCharacterization.Axis axis : core.MotionCharacterization.Axis.values()) {
+                    feedforward.MotorPowerModel[][] models = new feedforward.MotorPowerModel[3][2];
+                    for (feedforward.MotionCharacterization.Axis axis : feedforward.MotionCharacterization.Axis.values()) {
                         for (int direction = 0; direction < 2; direction++) {
-                            models[axis.ordinal()][direction] = new core.MotorPowerModel(200 + direction * 30, -1, 20, .1,
-                                    axis == core.MotionCharacterization.Axis.ANGULAR ? 10 : 60, 0);
+                            models[axis.ordinal()][direction] = new feedforward.MotorPowerModel(200 + direction * 30, -1, 20, .1,
+                                    axis == feedforward.MotionCharacterization.Axis.ANGULAR ? 10 : 60, 0);
                         }
                     }
-                    c.motionCharacterization = new core.MotionCharacterization(models, true);
+                    c.motionCharacterization = new feedforward.MotionCharacterization(models, true);
                 }
                 boolean shortLine = name.equals("line_100");
                 double length = shortLine ? 100 : 1000;

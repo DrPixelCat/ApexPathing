@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.sim;
 
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import core.ApexConstants;
+import config.ApexConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.LocalizationTuner;
 
 /** Localization tuner bound to the tank-physics Code Sim configuration. */

@@ -3,10 +3,10 @@ package org.firstinspires.ftc.teamcode.sim;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import core.ApexStorage;
-import core.Follower;
-import core.FollowerConstants;
-import core.LocalizationConstants;
+import storage.ApexStorage;
+import follower.Follower;
+import follower.FollowerConstants;
+import localizers.LocalizationConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.junit.Test;
@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import tuning.follower.TunerContext;
-import tuning.follower.phases.ProfiledTrackingPhase;
+import tuning.follower.tracking.ProfiledTrackingPhase;
 
 import static org.junit.Assert.assertTrue;
 
@@ -49,10 +49,12 @@ public class ProfiledTrackingPhaseSimulationTest {
             ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
             telemetry.setMsTransmissionInterval(0);
             AtomicBoolean complete = new AtomicBoolean();
+            Follower[] follower = new Follower[1];
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() {
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(new Constants(), hardwareMap, true));
+                    follower[0] = new Follower(new Constants(), hardwareMap, true);
+                    context.setFollower(follower[0]);
                     waitForStart();
                     complete.set(new ProfiledTrackingPhase(context).run(this));
                 }
@@ -81,8 +83,25 @@ public class ProfiledTrackingPhaseSimulationTest {
             pressA(session, opMode, telemetry, hardware);
             assertTrue("A must not accept before new measurements", !complete.get());
 
+            // The unlocked simulator stages the first trial at this field pose.
+            geometry.Pose courseStart = new geometry.GeometryFactory()
+                    .setDistUnit(geometry.DistUnit.IN).pose(-20.0, 20.0, 0.0);
             runManualCourse(session, opMode, telemetry, hardware, frames,
                     "Single-corner path measured");
+            assertTrue("First run should leave the starting point",
+                    follower[0].getPose().getVec().minus(courseStart.getVec()).getMag().getIn() > 30.0);
+            // A new measurement must retrace the original course even after settings change.
+            opMode.gamepad1.dpad_up = true;
+            pump(session, opMode, telemetry, hardware, 40);
+            opMode.gamepad1.dpad_up = false;
+            pump(session, opMode, telemetry, hardware, 40);
+            runManualCourse(session, opMode, telemetry, hardware, frames,
+                    "Single-corner path measured");
+            assertTrue("Return run should end at the original starting point",
+                    follower[0].getPose().getVec().minus(courseStart.getVec()).getMag().getIn() < 3.0);
+            assertTrue("Return run should preserve the original heading",
+                    Math.abs(follower[0].getPose().getHeading()
+                            .getShortestAngleTo(courseStart.getHeading()).getDeg()) < 5.0);
             pressA(session, opMode, telemetry, hardware);
             assertTrue(values.profiledTrackingTuned);
             waitForFrame(session, opMode, telemetry, hardware, frames,

@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
 import controllers.FeedbackController;
-import core.ApexStorage;
+import storage.ApexStorage;
 import drivetrains.BaseDrivetrain;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
@@ -24,7 +24,7 @@ public class HeadingFeedforwardSimulationTest {
     private static final double MAX_STOP_RATE = 0.25; // rad/s, 200 ms after target stops
 
     @Test public void headingFeedforwardTracksBothDirectionsAndBrakes() throws Exception {
-        core.FollowerConstants tuning = SimulatorTuning.snapshot();
+        follower.FollowerConstants tuning = SimulatorTuning.snapshot();
         double kS = gain("APEX_HEADING_FF_KS", tuning.angularFeedforwardKS);
         double kV = gain("APEX_HEADING_FF_KV", tuning.angularKV);
         double kA = gain("APEX_HEADING_FF_KA", tuning.angularKA);

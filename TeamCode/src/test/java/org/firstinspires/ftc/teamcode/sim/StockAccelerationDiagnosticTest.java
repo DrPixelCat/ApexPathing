@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.FollowerConstants;
+import follower.FollowerConstants;
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
 import org.junit.Test;

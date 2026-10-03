@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import feedforward.MotionParameters;
+import trajectory.profile.MotionParameters;
 
 public class TurnControllerTest {
     @Test

@@ -4,16 +4,15 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.json.JSONObject;
 
-import core.ApexConstants;
-import core.FollowerConstants;
-import core.LocalizationConstants;
-import core.LocalizerSet;
+import config.ApexConstants;
+import follower.FollowerConstants;
+import localizers.LocalizationConstants;
+import localizers.LocalizerSet;
 import drivetrains.BaseDrivetrain;
 import drivetrains.DualActuated;
-import geometry.Pose;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
-import tuning.localizer.phases.CalibrationCandidate;
+import tuning.localizer.calibration.CalibrationCandidate;
 
 /** Shared hardware, persistence, and drive control used by localization-tuner phases. */
 public final class LocalizationTunerContext extends tuning.TunerContext {

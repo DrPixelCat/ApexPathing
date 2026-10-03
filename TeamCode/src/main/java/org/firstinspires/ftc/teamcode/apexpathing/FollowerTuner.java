@@ -6,18 +6,18 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import core.Follower;
-import core.ApexConstants;
-import core.FollowerConstants;
+import follower.Follower;
+import config.ApexConstants;
+import follower.FollowerConstants;
 import geometry.Pose;
-import tuning.follower.phases.CentripetalPhase;
+import tuning.follower.centripetal.CentripetalPhase;
 
-import tuning.follower.phases.DrivePhase;
-import tuning.follower.phases.FeedforwardTuner;
-import tuning.follower.phases.MotionCharacterizationPhase;
-import tuning.follower.phases.HeadingPhase;
-import tuning.follower.phases.LimitsPhase;
-import tuning.follower.phases.ProfiledTrackingPhase;
+import tuning.follower.feedback.DrivePhase;
+import tuning.follower.sysid.FeedforwardTuner;
+import tuning.follower.characterization.MotionCharacterizationPhase;
+import tuning.follower.feedback.HeadingPhase;
+import tuning.follower.limits.LimitsPhase;
+import tuning.follower.tracking.ProfiledTrackingPhase;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 

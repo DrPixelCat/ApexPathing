@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.apexpathing;
 
-import core.ApexConstants;
+import config.ApexConstants;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.Mecanum;
 import localizers.BaseLocalizerConstants;

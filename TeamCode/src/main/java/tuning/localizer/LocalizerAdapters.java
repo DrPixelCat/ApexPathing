@@ -1,6 +1,10 @@
 package tuning.localizer;
 
-import tuning.localizer.phases.*;
+import tuning.localizer.calibration.CalibrationAxis;
+import tuning.localizer.calibration.CalibrationCandidate;
+import tuning.localizer.calibration.CalibrationSnapshot;
+import tuning.localizer.calibration.DirectionTrial;
+import tuning.localizer.calibration.SpinTrial;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

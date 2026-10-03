@@ -8,7 +8,7 @@ import org.psilynx.psikit.core.Logger;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import core.Follower;
+import follower.Follower;
 
 /** Runs FTCodeSim with the FTC SDK's real LinearOpMode lifecycle. */
 public final class FTCodeSimLinearOpModeRunner {

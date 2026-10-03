@@ -1,6 +1,7 @@
 package controllers;
 
-import feedforward.MotionParameters;
+import trajectory.profile.MotionParameters;
+import feedforward.MotionCharacterization;
 
 /**
  * Heading feedback for quick turns and feedback/feedforward for stored point turns.
@@ -79,7 +80,7 @@ public class TurnController {
 
     public double calculateProfiled(double headingError, double intendedDirection,
                                     MotionParameters targets, double measuredAngularVelocity,
-                                    core.FollowerConstants constants) {
+                                    follower.FollowerConstants constants) {
         double targetVelocity = targets.getAngularVel();
         double targetAcceleration = targets.getAngularAccel();
 
@@ -93,7 +94,7 @@ public class TurnController {
         double feedforward = motionController.vel(targetVelocity).accel(targetAcceleration)
                 .f(angularFeedforwardKS * motionSign).calculate(headingError).get();
         if (constants != null) {
-            feedforward = constants.characterizedPower(core.MotionCharacterization.Axis.ANGULAR,
+            feedforward = constants.characterizedPower(MotionCharacterization.Axis.ANGULAR,
                     targetVelocity, targetAcceleration, feedforward);
         }
         double errorRate = targetVelocity - measuredAngularVelocity;

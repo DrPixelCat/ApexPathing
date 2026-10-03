@@ -107,7 +107,7 @@ Run `:TeamCode:testDebugUnitTest` with the following Gradle `--tests` filters:
 geometry.*
 feedforward.*
 paths.*
-core.*
+follower.*
 controllers.*
 trajectory.*
 tuning.*

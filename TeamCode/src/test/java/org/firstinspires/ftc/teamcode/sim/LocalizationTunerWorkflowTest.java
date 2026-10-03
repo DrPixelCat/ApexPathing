@@ -28,9 +28,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import core.ApexConstants;
-import core.ApexStorage;
-import core.LocalizationConstants;
+import config.ApexConstants;
+import storage.ApexStorage;
+import localizers.LocalizationConstants;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.DualActuated;
 import drivetrains.Mecanum;
@@ -41,7 +41,7 @@ import geometry.Pose;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import localizers.Pinpoint;
-import tuning.localizer.phases.CalibrationCandidate;
+import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.LocalizationTunerContext;
 
 /** End-to-end simulator coverage for every phase of the localization-tuning workflow. */
@@ -838,8 +838,8 @@ public class LocalizationTunerWorkflowTest {
                 @Override public boolean usesSharedLocalizer() { return false; }
 
                 @Override public BaseLocalizerConstants<?> localizerConstants(
-                        core.FollowerConstants.Profile profile) {
-                    return profile == core.FollowerConstants.Profile.TANK
+                        follower.FollowerConstants.Profile profile) {
+                    return profile == follower.FollowerConstants.Profile.TANK
                             ? new MonitorConfig() : pinpointConfig();
                 }
             };

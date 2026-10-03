@@ -71,4 +71,4 @@ Across the four exit/recovery windows (1.45–1.95, 2.9–3.45, 4.9–5.5, 6.9�
 
 Keep correction priority. Investigate why planned angular braking under-delivers, including the angular feedforward model and its near-zero friction term, and quantify the authority discarded when feedforward opposes correction. Reducing gains shifts the symptom but worsens heading accuracy. The shared translation/heading feedforward change fixes the unintended priority but does not eliminate this underlying braking/recovery transient.
 
-Code references: `core/HolonomicPathFollower.java` (angular targets/feedforward and cross-track correction), `core/Follower.java` (`calculatePathHeadingFeedback`), `core/HolonomicCommandAllocator.java` (stage budgets), and `AutoTest.java` (`buildHolonomicPath`).
+Code references: `follower/HolonomicPathFollower.java` (angular targets/feedforward and cross-track correction), `follower/Follower.java` (`calculatePathHeadingFeedback`), `follower/HolonomicCommandAllocator.java` (stage budgets), and `AutoTest.java` (`buildHolonomicPath`).

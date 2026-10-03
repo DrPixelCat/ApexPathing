@@ -1,5 +1,9 @@
 package tuning.localizer.phases;
 
+import tuning.localizer.calibration.CalibrationCandidate;
+import tuning.localizer.calibration.CalibrationSnapshot;
+import tuning.localizer.calibration.SpinTrial;
+
 import tuning.localizer.LocalizationTunerContext;
 import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.TuningPhase;

@@ -1,7 +1,7 @@
 package trajectory;
 
-import feedforward.FFLut;
-import feedforward.MotionParameters;
+import trajectory.profile.FFLut;
+import trajectory.profile.MotionParameters;
 import geometry.PathSegment;
 import geometry.Vector;
 import paths.movements.Path;

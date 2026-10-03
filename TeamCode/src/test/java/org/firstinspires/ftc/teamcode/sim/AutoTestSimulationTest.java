@@ -5,11 +5,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
 
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
-import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.AutoTest;
 import org.junit.Test;
 import org.knowm.xchart.BitmapEncoder;
@@ -18,16 +15,14 @@ import org.knowm.xchart.XYChart;
 import org.knowm.xchart.XYChartBuilder;
 import org.knowm.xchart.style.Styler;
 
-import java.lang.reflect.Method;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import core.FollowerConstants;
-import core.ApexStorage;
-import controllers.FeedbackController.Coefficients;
+import follower.FollowerConstants;
+import storage.ApexStorage;
 import paths.movements.Path;
 
 public class AutoTestSimulationTest {

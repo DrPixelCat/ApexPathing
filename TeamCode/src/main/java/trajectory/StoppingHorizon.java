@@ -1,10 +1,10 @@
 package trajectory;
 
-import core.FollowerConstants;
-import core.MotionCharacterization;
+import follower.FollowerConstants;
+import feedforward.MotionCharacterization;
 import drivetrains.BaseDrivetrain;
 import drivetrains.Mecanum;
-import feedforward.DynamicMotionProfile;
+import trajectory.profile.DynamicMotionProfile;
 import paths.movements.Path;
 
 /** Fixed lookahead selected once from power-limited braking, with distance and reaction headroom. */

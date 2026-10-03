@@ -6,7 +6,7 @@ import org.psilynx.psikit.core.wpi.math.Rotation2d;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-import core.FollowerDiagnostics;
+import follower.FollowerDiagnostics;
 import geometry.Angle;
 import geometry.AngleUnit;
 import geometry.DistUnit;

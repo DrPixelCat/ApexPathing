@@ -40,7 +40,7 @@ public class FollowerTunerSequenceTest {
 
     @Test
     public void feedforwardCompletionDoesNotRequireAccelerationOrNonzeroFriction() throws Exception {
-        core.FollowerConstants constants = core.FollowerConstants.fromJson(
+        follower.FollowerConstants constants = follower.FollowerConstants.fromJson(
                 new org.json.JSONObject().put("drivetrainType", "MECANUM"));
         constants.angularKV = .1;
         constants.translationalKV = .01;

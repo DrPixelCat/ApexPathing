@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.FollowerConstants;
+import follower.FollowerConstants;
 import org.json.JSONObject;
 import java.io.*;
 import java.nio.charset.StandardCharsets;

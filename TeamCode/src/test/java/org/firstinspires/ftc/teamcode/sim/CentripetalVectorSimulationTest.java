@@ -1,20 +1,20 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.Follower;
-import core.FollowerConstants;
+import follower.Follower;
+import follower.FollowerConstants;
 import geometry.Vector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.json.JSONObject;
 import org.junit.Test;
 import tuning.follower.TunerContext;
-import tuning.follower.phases.CentripetalPhase;
+import tuning.follower.centripetal.CentripetalPhase;
 import trajectory.TrajectorySample;
 import paths.movements.Path;
 import java.lang.reflect.Field;
 import java.io.File;
 import java.io.PrintWriter;
-import core.HolonomicFeedforward;
+import feedforward.HolonomicFeedforward;
 import static org.junit.Assert.*;
 
 /** Traces the real tuner's centripetal vector through both traversal directions. */

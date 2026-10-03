@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.sim;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
-import core.ApexConstants;
+import config.ApexConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.AutoTest;
 
 /** Selects tank hardware; the route, execution, checks, and logging all run through AutoTest. */

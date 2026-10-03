@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.function.Consumer;
 
-import core.FollowerConstants;
+import follower.FollowerConstants;
 import geometry.Angle;
 import geometry.Pose;
 import paths.movements.Turn;

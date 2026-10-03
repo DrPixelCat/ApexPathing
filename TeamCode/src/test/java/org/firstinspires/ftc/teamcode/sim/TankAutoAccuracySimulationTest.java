@@ -19,8 +19,8 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import core.FollowerConstants;
-import core.ApexStorage;
+import follower.FollowerConstants;
+import storage.ApexStorage;
 import paths.movements.Path;
 
 /** Actual tank AutoTest route using a fixed snapshot of the September 12 simulator tuning. */

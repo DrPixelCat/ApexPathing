@@ -32,10 +32,10 @@ import java.util.Set;
 import java.io.File;
 import java.io.FileWriter;
 
-import core.Follower;
-import core.FollowerConstants;
-import core.FollowerDiagnostics;
-import feedforward.MotionParameters;
+import follower.Follower;
+import follower.FollowerConstants;
+import follower.FollowerDiagnostics;
+import trajectory.profile.MotionParameters;
 import controllers.FeedbackController.Coefficients;
 import drivetrains.BaseDrivetrain;
 import geometry.Pose;
@@ -286,7 +286,7 @@ public class ApexSimulationTest {
         // The example now contains several large arcs and is intentionally much longer than the
         // original three-point path. Give the complete profiled route time to finish.
         double outboundCrossTrack = runMovement(hardware, follower, 22.0);
-        feedforward.MotionParameters first = auto.testPath.getFeedforwardLut() == null ? null :
+        trajectory.profile.MotionParameters first = auto.testPath.getFeedforwardLut() == null ? null :
                 auto.testPath.getFeedforwardLut().getFFParams(0.0);
         assertTrue("Example auto path did not finish: pose=" + follower.getPose() +
                 ", t=" + follower.getBestT() +

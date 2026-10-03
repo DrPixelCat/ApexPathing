@@ -5,10 +5,10 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import java.util.function.Function;
 
-import core.ApexConstants;
-import core.LocalizationConstants;
+import config.ApexConstants;
+import localizers.LocalizationConstants;
 import drivetrains.DualActuated;
-import tuning.localizer.phases.CalibrationAxis;
+import tuning.localizer.calibration.CalibrationAxis;
 import tuning.localizer.phases.DistancePhase;
 import tuning.localizer.phases.DirectionsPhase;
 import tuning.localizer.phases.FilterPhase;

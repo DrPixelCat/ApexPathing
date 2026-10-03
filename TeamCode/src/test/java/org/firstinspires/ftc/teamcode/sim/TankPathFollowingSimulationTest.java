@@ -7,22 +7,19 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.IMU;
 
-import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
 import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedTank;
-import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.codeblooded.ftcodesim.simulator.OpModeRegister;
 import org.codeblooded.ftcodesim.simulator.SimConfig;
 import org.json.JSONObject;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
 
-import core.Follower;
-import core.FollowerConstants;
-import core.ApexConstants;
+import follower.Follower;
+import follower.FollowerConstants;
+import config.ApexConstants;
 import drivetrains.BaseDrivetrain;
 import drivetrains.Tank;
 import geometry.AngleUnit;

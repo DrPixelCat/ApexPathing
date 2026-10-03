@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.ApexStorage;
-import core.FollowerConstants;
+import storage.ApexStorage;
+import follower.FollowerConstants;
 import org.junit.Test;
 
 import java.io.File;
@@ -30,7 +30,7 @@ public class CornerTrackingSimulationTest {
             }
             System.setProperty(ApexStorage.DIRECTORY_PROPERTY, directory.getAbsolutePath());
             paths.movements.Path route = new AutoTestSimulationTest().runAutoTest(true);
-            feedforward.FFLut nominal = new feedforward.FFLut(route.createGenerator(
+            trajectory.profile.FFLut nominal = new trajectory.profile.FFLut(route.createGenerator(
                     FollowerConstants.getInstance()).generateRestToRest());
 
             File[] traces = directory.listFiles((dir, name) ->
@@ -44,7 +44,7 @@ public class CornerTrackingSimulationTest {
         }
     }
 
-    private static void assertTracking(File trace, feedforward.FFLut nominal) throws Exception {
+    private static void assertTracking(File trace, trajectory.profile.FFLut nominal) throws Exception {
         List<String> lines = Files.readAllLines(trace.toPath());
         Map<String, Integer> columns = new HashMap<>();
         String[] header = lines.get(0).split(",");

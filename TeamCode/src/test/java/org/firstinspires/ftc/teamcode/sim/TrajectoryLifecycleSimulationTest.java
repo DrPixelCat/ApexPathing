@@ -1,9 +1,9 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import core.Follower;
-import core.FollowerConstants;
-import core.FollowerDiagnostics;
-import feedforward.CoupledMotionProfile;
+import follower.Follower;
+import follower.FollowerConstants;
+import follower.FollowerDiagnostics;
+import trajectory.profile.CoupledMotionProfile;
 import geometry.AngleUnit;
 import geometry.Dist;
 import geometry.DistUnit;

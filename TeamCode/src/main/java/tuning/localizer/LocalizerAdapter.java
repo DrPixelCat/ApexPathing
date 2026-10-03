@@ -4,11 +4,11 @@ import java.util.List;
 
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
-import tuning.localizer.phases.CalibrationAxis;
-import tuning.localizer.phases.CalibrationCandidate;
-import tuning.localizer.phases.CalibrationSnapshot;
-import tuning.localizer.phases.DirectionTrial;
-import tuning.localizer.phases.SpinTrial;
+import tuning.localizer.calibration.CalibrationAxis;
+import tuning.localizer.calibration.CalibrationCandidate;
+import tuning.localizer.calibration.CalibrationSnapshot;
+import tuning.localizer.calibration.DirectionTrial;
+import tuning.localizer.calibration.SpinTrial;
 
 /**
  * Supplies the small amount of localizer-specific observation and fitting needed by the tuner.

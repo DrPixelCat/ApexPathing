@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.apexpathing;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import core.Follower;
+import follower.Follower;
 import geometry.Pose;
 
 /**

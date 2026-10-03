@@ -8,7 +8,7 @@ import geometry.Dist;
 import geometry.DistUnit;
 import geometry.Pose;
 import geometry.Vector;
-import tuning.localizer.phases.CalibrationAxis;
+import tuning.localizer.calibration.CalibrationAxis;
 import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.LocalizerAdapters;
 

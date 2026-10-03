@@ -1,10 +1,9 @@
 package trajectory;
 
-import core.FollowerConstants;
+import follower.FollowerConstants;
 import drivetrains.BaseDrivetrain;
-import feedforward.CoupledMotionProfile;
-import feedforward.MotionParameters;
-import geometry.Angle;
+import trajectory.profile.CoupledMotionProfile;
+import trajectory.profile.MotionParameters;
 import geometry.AngleUnit;
 import geometry.Dist;
 import geometry.DistUnit;
@@ -237,17 +236,17 @@ public class TrajectoryTest {
         }
     }
     @Test public void quickTurnsHaveNoProfileAndStoredTurnsUseAngularDisplacement() {
-        long solves = feedforward.CoupledMotionProfile.getSolveCount();
+        long solves = trajectory.profile.CoupledMotionProfile.getSolveCount();
         Turn turn = geometry.turn(geometry.pose(0, 0, 170)).turnTo(geometry.angle(-170)).quickBuild();
         assertNull(turn.getFeedforwardLut());
         assertNull(turn.reversed().getFeedforwardLut());
-        assertEquals(solves, feedforward.CoupledMotionProfile.getSolveCount());
+        assertEquals(solves, trajectory.profile.CoupledMotionProfile.getSolveCount());
         Turn stored = geometry.turn(geometry.pose(0, 0, 170)).turnTo(geometry.angle(-170)).buildToMemory();
         MotionParameters start = stored.getFeedforwardLut().getAngularKinematicParams(0);
         assertTrue(start.getAngularAccel() > 0);
         assertEquals(0, stored.getFeedforwardLut().getAngularKinematicParams(Math.toRadians(20)).getAngularVel(), 1e-9);
         assertEquals(Path.BuildMode.MEMORY, stored.reversed().getBuildMode());
-        feedforward.FFLut original = stored.getFeedforwardLut();
+        trajectory.profile.FFLut original = stored.getFeedforwardLut();
         constants.angularAccelLimitRad = 4; stored.precomputeTrajectory();
         assertSame(original, stored.getFeedforwardLut());
     }
@@ -312,10 +311,10 @@ public class TrajectoryTest {
                 assertTrue(Math.abs(target.angularAcceleration) <= constants.angularAccelLimitRad + 1e-5);
                 assertTrue(Math.abs(target.angularVelocity) <= constants.angularVelLimitRad + 1e-5);
                 Vector body = target.tangent.rotate(target.heading.times(-1));
-                Vector ff = core.HolonomicFeedforward.translation(constants, body, target.tangentialVelocity(), target.tangentialAcceleration(), constants.translationalKV)
+                Vector ff = feedforward.HolonomicFeedforward.translation(constants, body, target.tangentialVelocity(), target.tangentialAcceleration(), constants.translationalKV)
                         .plus(target.normalAcceleration().rotate(target.heading.times(-1)).times(constants.kCentripetal));
-                assertTrue(core.HolonomicFeedforward.mecanumDemand(ff,
-                        core.HolonomicFeedforward.heading(constants, target.angularVelocity, target.angularAcceleration)) <= 1 + 1e-5);
+                assertTrue(feedforward.HolonomicFeedforward.mecanumDemand(ff,
+                        feedforward.HolonomicFeedforward.heading(constants, target.angularVelocity, target.angularAcceleration)) <= 1 + 1e-5);
             }
         }
     }
@@ -371,7 +370,7 @@ public class TrajectoryTest {
         Path path = line(0, 0, 40).quickBuild();
         MotionParameters[] states = {new MotionParameters(0, 10, 0, 0, 0),
                 new MotionParameters(20, -10, 0, 0, 20), new MotionParameters(0, 0, 0, 0, 40)};
-        TrajectoryField2D field = new TrajectoryField2D(path, new feedforward.FFLut(states), 1, 12);
+        TrajectoryField2D field = new TrajectoryField2D(path, new trajectory.profile.FFLut(states), 1, 12);
         double speed = field.sample(vec(30, 0)).tangentialVelocity();
         states[1].setTangentialVel(100);
         assertEquals(speed, field.sample(vec(30, 0)).tangentialVelocity(), 1e-9);

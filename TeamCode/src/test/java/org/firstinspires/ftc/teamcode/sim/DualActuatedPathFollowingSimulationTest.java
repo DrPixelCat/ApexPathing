@@ -17,9 +17,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
-import core.ApexConstants;
-import core.Follower;
-import core.FollowerConstants;
+import config.ApexConstants;
+import follower.Follower;
+import follower.FollowerConstants;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.DualActuated;
 import drivetrains.Motor;

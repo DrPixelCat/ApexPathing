@@ -5,10 +5,10 @@ import org.junit.Test;
 import java.io.File;
 
 import controllers.FeedbackController.Coefficients;
-import core.FollowerConstants;
-import core.ApexStorage;
-import feedforward.MotionParameters;
-import feedforward.generators.MecanumProfileGenerator;
+import follower.FollowerConstants;
+import storage.ApexStorage;
+import trajectory.profile.MotionParameters;
+import trajectory.generators.MecanumProfileGenerator;
 import geometry.AngleUnit;
 import geometry.DistUnit;
 import geometry.GeometryFactory;

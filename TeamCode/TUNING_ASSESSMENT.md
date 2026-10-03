@@ -113,7 +113,7 @@ Run with PowerShell:
 
 ```powershell
 $env:APEX_USE_SAVED_TUNER_CONSTANTS='true'
-./gradlew.bat :TeamCode:testDebugUnitTest --tests core.FollowerVectorTest --tests 'feedforward.*' --tests tuning.FeedforwardTunerTest --tests org.firstinspires.ftc.teamcode.sim.AutoTestSimulationTest
+./gradlew.bat :TeamCode:testDebugUnitTest --tests follower.FollowerVectorTest --tests 'trajectory.*' --tests tuning.follower.acceleration.RampRegressionTest --tests org.firstinspires.ftc.teamcode.sim.AutoTestSimulationTest
 
 # Full tuner followed by AutoTest, with tracking-quality assertions:
 ./gradlew.bat :TeamCode:testDebugUnitTest --tests org.firstinspires.ftc.teamcode.sim.TunedAutoTestSimulationTest

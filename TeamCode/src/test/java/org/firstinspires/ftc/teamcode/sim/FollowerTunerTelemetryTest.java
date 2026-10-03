@@ -7,7 +7,6 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
-import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
@@ -18,10 +17,10 @@ import java.util.Collections;
 import java.util.List;
 
 import controllers.FeedbackController.Coefficients;
-import core.ApexStorage;
-import core.FollowerConstants;
-import core.Follower;
-import core.LocalizationConstants;
+import storage.ApexStorage;
+import follower.FollowerConstants;
+import follower.Follower;
+import localizers.LocalizationConstants;
 
 /** End-to-end coverage for the automatic follower-tuning workflow. */
 public class FollowerTunerTelemetryTest {

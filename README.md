@@ -1,6 +1,33 @@
 # Apex Pathing
 Check out our site at https://www.apexpathing.com/ for info about the project!
 
+## Java package organization
+
+The library sources are in `TeamCode/src/main/java`, with matching unit-test packages in
+`TeamCode/src/test/java`:
+
+| Package | Responsibility |
+| --- | --- |
+| `follower` | Movement lifecycle, path/turn execution, follower settings, and diagnostics |
+| `config` | Robot configuration contract (`ApexConstants`) |
+| `storage` | Persisted tuning-data storage |
+| `localizers` | Localization implementations, mode switching, and saved calibration |
+| `feedforward` | Measured motor-response models and reference-power calculations |
+| `trajectory` | Online planning, stored trajectory fields, and physical target samples |
+| `trajectory.profile` | Motion-profile solvers, samples, and lookup tables |
+| `trajectory.generators` | Drivetrain-specific profile generation and constraint scheduling |
+| `tuning.follower` | Shared tuner context, phase contract, and measurement helpers |
+| `tuning.follower.{sysid,characterization,feedback,limits,centripetal,tracking,acceleration}` | Each follower-tuning workflow and its supporting algorithms |
+| `tuning.localizer.calibration` | Calibration data shared by localization adapters and phases |
+
+Geometry, path construction, controllers, and drivetrain implementations retain their existing
+packages. Robot OpModes remain under `org.firstinspires.ftc.teamcode.apexpathing`; desktop
+simulation support remains on the test classpath.
+
+Imports using the former `core`, `feedforward.generators`, or `tuning.follower.phases` packages
+must be updated to the packages above. Motion-profile types formerly in `feedforward` now
+live in `trajectory.profile`. Persisted tuning JSON and OpMode registrations are unchanged.
+
 Use `GeometryFactory.tankPath(...)` or `GeometryFactory.holonomicPath(...)` to declare a path's
 drive mode explicitly. The factory no longer chooses a builder from the drivetrain's current
 state. On a dual-actuated drive, `Follower.follow(...)` switches hardware and tuning profiles to
@@ -109,7 +136,7 @@ Desktop simulation generates XChart PNGs automatically, using the same 1000x460 
 legend, grid and line styling as `PathProfileConvergenceTest`. Each test gets a measured-versus-fitted
 power graph, a velocity/acceleration graph and (when the fit is finite) a residual graph next to its
 fit CSV. Hardware CSVs can be copied to the desktop and rendered by running the test-classpath
-`tuning.follower.phases.SysIdGraphs` main class with arguments `<fit.csv> <DRIVE|HEADING>`.
+`tuning.follower.sysid.SysIdGraphs` main class with arguments `<fit.csv> <DRIVE|HEADING>`.
 XChart stays off the Android runtime classpath. The `SysIdRegressionTest` graph test also writes
 example PNGs under `TeamCode/build/sysid-graphs`; those examples use synthetic plant data.
 The desktop simulator uses FTCodeSim's stock motor and chassis implementations. Mecanum physics

@@ -1,6 +1,6 @@
 package geometry;
 
-import core.Follower;
+import follower.Follower;
 import paths.builders.HolonomicPathBuilder;
 import paths.builders.TankPathBuilder;
 import paths.builders.TurnBuilder;

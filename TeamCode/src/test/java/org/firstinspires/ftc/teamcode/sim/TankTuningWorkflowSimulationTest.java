@@ -3,13 +3,15 @@ package org.firstinspires.ftc.teamcode.sim;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import core.*;
+import follower.Follower;
+import follower.FollowerConstants;
+import storage.ApexStorage;
 import org.junit.Test;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import tuning.follower.TunerContext;
-import tuning.follower.phases.*;
+import tuning.follower.sysid.FeedforwardTuner;
 import static org.junit.Assert.*;
 
 /** Runs actual tuner state machines in sequence, then validates their output on the tank route. */

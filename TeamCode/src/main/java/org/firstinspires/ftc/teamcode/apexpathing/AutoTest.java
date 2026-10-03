@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.apexpathing;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.io.File;
@@ -13,11 +12,11 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.Arrays;
 
-import core.ApexStorage;
-import core.ApexConstants;
-import core.Follower;
-import core.FollowerConstants;
-import feedforward.MotionParameters;
+import storage.ApexStorage;
+import config.ApexConstants;
+import follower.Follower;
+import follower.FollowerConstants;
+import trajectory.profile.MotionParameters;
 import geometry.GeometryFactory;
 import geometry.AngleUnit;
 import geometry.DistUnit;
@@ -211,7 +210,7 @@ public class AutoTest extends LinearOpMode {
                         factory.arcPose(-30, -30, 7), factory.arcPose(-30, 30, 7),
                         factory.pose(30, 30, -90))
                 .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL)
-                .addDistanceCallback(.5, route::outboundCallback).quickBuild();
+                .addDistanceCallback(.5, route::outboundCallback).buildToMemory();
         route.testTurn = factory.turn(route.testPath.getEndPose())
                 .setDriveProfile(FollowerConstants.Profile.HOLONOMIC)
                 .turnTo(factory.angle(0))
@@ -220,12 +219,12 @@ public class AutoTest extends LinearOpMode {
                         factory.pose(0, 30), Pose.zero())
                 .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
                 .setDistanceToStartFinalTurn(factory.dist(30))
-                .addDistanceCallback(.5, route::returnCallback).quickBuild();
+                .addDistanceCallback(.5, route::returnCallback).buildToMemory();
         Pose strafeEnd = factory.pose(0, 24, 0);
         route.strafeOutPath = factory.holonomicPath(Pose.zero(), strafeEnd)
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
+                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).buildToMemory();
         route.strafeBackPath = factory.holonomicPath(strafeEnd, Pose.zero())
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
+                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).buildToMemory();
         return route;
     }
 

@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.apexpathing;
 
-import core.Follower;
+import follower.Follower;
 import geometry.Angle;
 import geometry.Pose;
 import paths.heading.InterpolationStyle;

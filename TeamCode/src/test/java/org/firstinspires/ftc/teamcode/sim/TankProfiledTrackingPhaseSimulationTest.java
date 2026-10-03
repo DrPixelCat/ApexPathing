@@ -3,13 +3,13 @@ package org.firstinspires.ftc.teamcode.sim;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import core.ApexStorage;
-import core.Follower;
-import core.FollowerConstants;
+import storage.ApexStorage;
+import follower.Follower;
+import follower.FollowerConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.junit.Test;
 import tuning.follower.TunerContext;
-import tuning.follower.phases.ProfiledTrackingPhase;
+import tuning.follower.tracking.ProfiledTrackingPhase;
 
 import java.io.InputStream;
 import java.nio.file.Files;
