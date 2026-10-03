@@ -37,9 +37,14 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
                 x = bx * tangent - by * normal * normalVelocity * normalVelocity;
                 y = by * tangent + bx * normal * normalVelocity * normalVelocity;
             } else {
-                Vector tangent = HolonomicFeedforward.translation(constants, body, v, a, profileKV());
-                x = tangent.getX().getIn() - by * normal * normalVelocity * normalVelocity;
-                y = tangent.getY().getIn() + bx * normal * normalVelocity * normalVelocity;
+                double tangent = v * profileKV() + a * constants.getTranslationalKA(v, a) + signedStatic(v, a, constants.translationalFeedforwardKS);
+                x = bx * tangent; y = by * tangent;
+                if (v * a >= -1e-6) {
+                    x = constants.characterizedPower(Axis.FORWARD, v * bx, a * bx, x);
+                    y = constants.characterizedPower(Axis.STRAFE, v * by, a * by, y);
+                }
+                x -= by * normal * normalVelocity * normalVelocity;
+                y += bx * normal * normalVelocity * normalVelocity;
             }
             double turn = HolonomicFeedforward.heading(constants, omega, alpha);
             return Math.hypot(x, y) + Math.abs(turn);

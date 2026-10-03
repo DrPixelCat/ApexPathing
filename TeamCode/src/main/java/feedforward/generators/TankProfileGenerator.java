@@ -25,11 +25,31 @@ public class TankProfileGenerator extends BaseProfileGenerator {
     }
     @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) { return constants.forwardAccelLimitIn; }
     @Override protected PowerEvaluator powerEvaluator(Path path, PathPoint point) {
-        return (v, a, omega, alpha, normalVelocity) -> {
+        return new PowerEvaluator() {
+            private final double[] coefficients = new double[6];
+            private final AccelerationInterval interval = new AccelerationInterval();
+            @Override public double utilization(double v, double a, double omega, double alpha, double normalVelocity) {
             double forward = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
             forward = constants.characterizedAxisDemand(Axis.FORWARD, v, a, forward);
             double turn = constants.characterizedPower(Axis.ANGULAR, omega, alpha, omega * constants.angularKV + alpha * constants.angularKA);
             return Math.abs(forward) + Math.abs(turn);
+            }
+            @Override public double maximumAcceleration(double v, double prime, double second, double min, double max, double limit) {
+                if (core.HolonomicFeedforward.motionSign(v, min) != core.HolonomicFeedforward.motionSign(v, max)) {
+                    return Double.NEGATIVE_INFINITY;
+                }
+                double forward = v * profileKV() + signedStatic(v, min, constants.translationalFeedforwardKS);
+                double omega = prime * v, baseAlpha = second * v * v;
+                double turn = omega * constants.angularKV + baseAlpha * constants.angularKA;
+                if (!linearAxisPower(Axis.FORWARD, v, 0, 1, forward, constants.translationalKA, min, max, true, coefficients, 0)
+                        || !linearAxisPower(Axis.FORWARD, -v, 0, -1, -forward, -constants.translationalKA, min, max, true, coefficients, 2)
+                        || !linearAxisPower(Axis.ANGULAR, omega, baseAlpha, prime, turn, prime * constants.angularKA,
+                        min, max, true, coefficients, 4)) { return Double.NEGATIVE_INFINITY; }
+                interval.reset(min, max);
+                interval.restrictL1(coefficients[0], coefficients[1], coefficients[4], coefficients[5], 0, 0, limit);
+                interval.restrictL1(coefficients[2], coefficients[3], coefficients[4], coefficients[5], 0, 0, limit);
+                return interval.maximum();
+            }
         };
     }
     @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,

@@ -20,6 +20,7 @@ public class HolonomicInterpolator implements HeadingInterpolator {
 
     private double pathLength = 1.0;
     private double blendWindow = DEFAULT_BLEND_WINDOW_IN;
+    private long configurationRevision;
 
     public HolonomicInterpolator(InterpolationStyle style, Angle startHeading,
                                  Angle endHeading, Angle customOffset, CubicSpline1D spline) {
@@ -31,10 +32,12 @@ public class HolonomicInterpolator implements HeadingInterpolator {
     }
 
     @Override
-    public void setPathLength(double length) { this.pathLength = Math.max(length, 1e-6); }
+    public void setPathLength(double length) { this.pathLength = Math.max(length, 1e-6); configurationRevision++; }
 
     @SuppressWarnings("PublicMethodNotExposedInInterface")
-    public void setBlendWindow(double windowLengthInches) { this.blendWindow = windowLengthInches; }
+    public void setBlendWindow(double windowLengthInches) { this.blendWindow = windowLengthInches; configurationRevision++; }
+
+    @Override public long getConfigurationRevision() { return getClass() == HolonomicInterpolator.class ? configurationRevision : -1; }
 
     @Override public HeadingInterpolator copyForTrajectory() {
         HolonomicInterpolator copy = new HolonomicInterpolator(style, startHeading, endHeading, customOffset, headingSpline);

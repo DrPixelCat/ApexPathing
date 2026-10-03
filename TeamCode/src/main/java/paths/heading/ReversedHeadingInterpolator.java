@@ -8,6 +8,7 @@ public final class ReversedHeadingInterpolator implements HeadingInterpolator {
     private final HeadingInterpolator source;
     private final Vector sourceFinalTangent;
     private double pathLength;
+    private long configurationRevision;
 
     public ReversedHeadingInterpolator(HeadingInterpolator source, double pathLength,
                                        Vector sourceFinalTangent) {
@@ -35,7 +36,12 @@ public final class ReversedHeadingInterpolator implements HeadingInterpolator {
     }
 
     @Override
-    public void setPathLength(double lengthInches) { this.pathLength = lengthInches; }
+    public void setPathLength(double lengthInches) { this.pathLength = lengthInches; configurationRevision++; }
+
+    @Override public long getConfigurationRevision() {
+        long revision = source.getConfigurationRevision();
+        return revision < 0 ? -1 : revision + configurationRevision;
+    }
 
     @Override public HeadingInterpolator copyForTrajectory() {
         return new ReversedHeadingInterpolator(source.copyForTrajectory(), pathLength, sourceFinalTangent);

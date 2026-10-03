@@ -26,4 +26,8 @@ public interface HeadingInterpolator {
     /** Detached configuration for stored trajectories. Immutable implementations may return
      * themselves; custom mutable interpolators must override this method. */
     default HeadingInterpolator copyForTrajectory() { return this; }
+
+    /** Nonnegative revisions permit online LUT-node caching. Mutable custom implementations
+     * can retain the default to request fresh evaluations every update. */
+    default long getConfigurationRevision() { return -1; }
 }

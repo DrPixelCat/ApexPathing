@@ -57,19 +57,50 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         Vector body = point.getFirstDerivative().normalize().rotate(targetHeading.times(-1));
         double bx = body.getX().getIn(), by = body.getY().getIn();
         double normal = point.getSignedCurvature() * constants.kCentripetal;
-        return (v, a, omega, alpha, normalVelocity) -> {
+        return new PowerEvaluator() {
+            private final double[] coefficients = new double[6];
+            private final AccelerationInterval interval = new AccelerationInterval();
+            @Override public double utilization(double v, double a, double omega, double alpha, double normalVelocity) {
             double x, y;
             if (constants.motionCharacterization == null) {
                 double tangent = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
                 x = bx * tangent - by * normal * normalVelocity * normalVelocity;
                 y = by * tangent + bx * normal * normalVelocity * normalVelocity;
             } else {
-                Vector tangent = HolonomicFeedforward.translation(constants, body, v, a, profileKV());
-                x = tangent.getX().getIn() - by * normal * normalVelocity * normalVelocity;
-                y = tangent.getY().getIn() + bx * normal * normalVelocity * normalVelocity;
+                double tangent = v * profileKV() + a * constants.getTranslationalKA(v, a) + signedStatic(v, a, constants.translationalFeedforwardKS);
+                x = bx * tangent; y = by * tangent;
+                if (v * a >= -1e-6) {
+                    x = constants.characterizedPower(Axis.FORWARD, v * bx, a * bx, x);
+                    y = constants.characterizedPower(Axis.STRAFE, v * by, a * by, y);
+                }
+                x -= by * normal * normalVelocity * normalVelocity;
+                y += bx * normal * normalVelocity * normalVelocity;
             }
             double turn = HolonomicFeedforward.heading(constants, omega, alpha);
             return Math.abs(x) + Math.abs(y) + Math.abs(turn);
+            }
+            @Override public double maximumAcceleration(double v, double prime, double second, double min, double max, double limit) {
+                double omega = prime * v, baseAlpha = second * v * v;
+                double firstAlpha = baseAlpha + prime * min, lastAlpha = baseAlpha + prime * max;
+                if (core.HolonomicFeedforward.motionSign(v, min) != core.HolonomicFeedforward.motionSign(v, max)
+                        || core.HolonomicFeedforward.motionSign(omega, firstAlpha) != core.HolonomicFeedforward.motionSign(omega, lastAlpha)
+                        || (constants.motionCharacterization != null
+                            && (v * min < -1e-6) != (v * max < -1e-6))) { return Double.NEGATIVE_INFINITY; }
+                double tangent = v * profileKV() + signedStatic(v, min, constants.translationalFeedforwardKS);
+                double turn = omega * constants.angularKV + baseAlpha * constants.angularKA
+                        + signedStatic(omega, firstAlpha, constants.angularFeedforwardKS);
+                boolean characterizedTranslation = v * min >= -1e-6;
+                if (!linearAxisPower(Axis.FORWARD, bx * v, 0, bx, bx * tangent, bx * constants.translationalKA,
+                        min, max, characterizedTranslation, coefficients, 0)
+                        || !linearAxisPower(Axis.STRAFE, by * v, 0, by, by * tangent, by * constants.translationalKA,
+                        min, max, characterizedTranslation, coefficients, 2)
+                        || !linearAxisPower(Axis.ANGULAR, omega, baseAlpha, prime, turn, prime * constants.angularKA,
+                        min, max, true, coefficients, 4)) { return Double.NEGATIVE_INFINITY; }
+                interval.reset(min, max);
+                interval.restrictL1(coefficients[0] - by * normal * v * v, coefficients[1],
+                        coefficients[2] + bx * normal * v * v, coefficients[3], coefficients[4], coefficients[5], limit);
+                return interval.maximum();
+            }
         };
     }
     @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,

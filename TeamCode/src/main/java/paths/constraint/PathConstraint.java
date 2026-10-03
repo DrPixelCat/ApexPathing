@@ -19,4 +19,8 @@ public interface PathConstraint {
 
     /** @return The type of path constraint: VELOCITY, or ACCELERATION */
     Type getType();
+
+    /** Registers mutation invalidation for compiled online schedules. Unknown implementations
+     * return false so planners keep reading their live values. */
+    default boolean addChangeListener(Runnable listener) { return false; }
 }

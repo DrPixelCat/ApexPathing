@@ -108,6 +108,66 @@ public class TrajectoryTest {
         assertTrue(longPath.getLastSampleCount() <= 12);
         assertTrue(Math.abs(longPath.getLastSampleCount() - shortPath.getLastSampleCount()) <= 2);
     }
+    @Test public void onlineWindowUsesCoarserReusableGeometryAndExactConstraintTransitions() {
+        class CountingSegment extends PathSegment {
+            int reconstructedPoints;
+            boolean reconstructedConstraint;
+            CountingSegment() {
+                super(new geometry.BSpline(new Vector[]{vec(0, 0), vec(100, 0)}));
+            }
+            @Override public geometry.PathPoint getPointAtDistance(double distance) {
+                reconstructedPoints++;
+                if (Math.abs(distance - .31 * getLengthIn()) < 1e-6) { reconstructedConstraint = true; }
+                return super.getPointAtDistance(distance);
+            }
+        }
+        Path path = line(0, 0, 100).setLookaheadDistance(Dist.fromIn(20))
+                .addConstraint(new TranslationalConstraint(.31, PathConstraint.Type.VELOCITY, Dist.fromIn(5))).quickBuild();
+        CountingSegment segment = new CountingSegment();
+        path.setParametricPath(segment);
+        OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
+        for (double progress : new double[]{20, 20.1, 28}) {
+            segment.reconstructedPoints = 0;
+            segment.reconstructedConstraint = false;
+            TrajectorySample target = planner.sample(vec(progress, 0), vec(20, 0), .02);
+            assertTrue("20-inch window should use about ten nodes, including the constraint", planner.getLastSampleCount() <= 12);
+            assertTrue("Only boundaries, midpoint, constraint and published target need reconstruction", segment.reconstructedPoints <= 5);
+            if (progress == 20) { assertTrue("The authored transition must be sampled at its exact distance", segment.reconstructedConstraint); }
+            else { assertFalse("The authored transition geometry should be reused", segment.reconstructedConstraint); }
+            if (progress == 28) { assertTrue(target.tangentialAcceleration() < 0); }
+        }
+    }
+    @Test public void onlineCachesRefreshAfterConstraintHeadingAndPhysicalLimitChanges() {
+        TranslationalConstraint limit = new TranslationalConstraint(.1, PathConstraint.Type.VELOCITY, Dist.fromIn(5));
+        Path path = line(0, 0, 100).setLookaheadDistance(Dist.fromIn(20)).addConstraint(limit).quickBuild();
+        OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
+        assertTrue(planner.sample(vec(30, 0), vec(20, 0), .02).overspeed);
+        limit.setS(.9);
+        assertFalse(planner.sample(vec(30, 0), vec(20, 0), .02).overspeed);
+        path.addConstraint(new TranslationalConstraint(.2, PathConstraint.Type.VELOCITY, Dist.fromIn(7)));
+        assertTrue(planner.sample(vec(30, 0), vec(20, 0), .02).overspeed);
+        Path curve = geometry.holonomicPath(geometry.pose(0, 0, 0), geometry.pose(100, 0, 90))
+                .interpolateWith(InterpolationStyle.SMOOTH_START_TO_END).setLookaheadDistance(Dist.fromIn(20)).quickBuild();
+        OnlineTrajectoryPlanner cached = new OnlineTrajectoryPlanner(curve, constants);
+        cached.sample(vec(30, 0), vec(20, 0), .02);
+        curve.getInterpolator().setPathLength(120);
+        constants.angularVelLimitRad = .3; constants.angularAccelLimitRad = 1;
+        TrajectorySample changed = cached.sample(vec(30, 0), vec(20, 0), .02);
+        TrajectorySample fresh = new OnlineTrajectoryPlanner(curve, constants).sample(vec(30, 0), vec(20, 0), .02);
+        assertEquals(fresh.angularVelocity, changed.angularVelocity, 1e-10);
+        assertEquals(fresh.tangentialAcceleration(), changed.tangentialAcceleration(), 1e-10);
+    }
+    @Test public void customMutableConstraintsRemainLiveWithoutCacheInvalidationHooks() {
+        double[] value = {5};
+        TranslationalConstraint live = new TranslationalConstraint(.1, PathConstraint.Type.VELOCITY, Dist.fromIn(5)) {
+            @Override public double getValueIn() { return value[0]; }
+        };
+        Path path = line(0, 0, 100).setLookaheadDistance(Dist.fromIn(20)).addConstraint(live).quickBuild();
+        OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
+        assertTrue(planner.sample(vec(30, 0), vec(20, 0), .02).overspeed);
+        value[0] = 40;
+        assertFalse(planner.sample(vec(30, 0), vec(20, 0), .02).overspeed);
+    }
     @Test public void storedFieldSupportsTranslatedCoordinatesAndBilinearToPath() {
         Path path = line(-220, 320, 40).buildToMemory();
         TrajectorySample sample = path.getTrajectoryField().sample(vec(-201.25, 323.4));

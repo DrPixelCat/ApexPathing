@@ -44,22 +44,81 @@ public final class CoupledMotionProfile {
         }
     }
 
+    /** Reusable controllability storage for an online traversal. */
+    public static final class Workspace {
+        private double[] controllable = new double[16];
+        private double[] storage(int count) {
+            if (controllable.length < count) { controllable = new double[Math.max(count, controllable.length * 2)]; }
+            return controllable;
+        }
+    }
+
+    /** Returns the first successor without allocating full speed arrays. Future transitions
+     * are still validated so coarse-window fallback retains the same failure detection. */
+    public static double solveNextSquared(double[] positions, double[] ceilings, int count, double startVelocity,
+                                          double endVelocity, Transitions transitions, Workspace workspace) {
+        if (!Double.isFinite(startVelocity) || startVelocity < 0 || workspace == null || positions == null
+                || ceilings == null || count < 2 || count > positions.length || count > ceilings.length) {
+            throw new IllegalArgumentException("A finite nonnegative initial speed and workspace are required.");
+        }
+        solveCount.incrementAndGet();
+        double[] controllable = workspace.storage(count);
+        backward(positions, ceilings, count, endVelocity, transitions, controllable);
+        double squared = startVelocity * startVelocity;
+        if (squared > controllable[0] + 1e-6) { throw new OverspeedException(Math.sqrt(controllable[0])); }
+        double first = squared;
+        for (int i = 0; i < count - 1; i++) {
+            squared = positions[i + 1] - positions[i] <= 1e-9
+                    ? squared : transitions.maximumNextSquared(i, squared, controllable[i + 1]);
+            if (!Double.isFinite(squared) || squared < -1e-7) {
+                throw new IllegalStateException("No reachable state at path interval " + i);
+            }
+            if (i == 0) { first = squared; }
+        }
+        return Math.max(0, first);
+    }
+
     private static double[] solveInternal(double[] positions, double[] ceilings, double startVelocity,
                                          double endVelocity, Transitions transitions) {
         solveCount.incrementAndGet();
-        if (positions == null || ceilings == null || positions.length != ceilings.length
-                || positions.length < 2 || transitions == null
+        if (positions == null || ceilings == null || positions.length != ceilings.length) {
+            throw new IllegalArgumentException("Matching position/ceiling arrays are required.");
+        }
+        int count = positions.length;
+        double[] controllable = new double[count];
+        backward(positions, ceilings, count, endVelocity, transitions, controllable);
+        int last = count - 1;
+        double[] squared = new double[count];
+        squared[0] = Double.isNaN(startVelocity) ? controllable[0] : startVelocity * startVelocity;
+        if (squared[0] > controllable[0] + 1e-6) {
+            throw new OverspeedException(Math.sqrt(controllable[0]));
+        }
+        for (int i = 0; i < last; i++) {
+            squared[i + 1] = positions[i + 1] - positions[i] <= 1e-9
+                    ? squared[i] : transitions.maximumNextSquared(i, squared[i], controllable[i + 1]);
+            if (!Double.isFinite(squared[i + 1]) || squared[i + 1] < -1e-7) {
+                throw new IllegalStateException("No reachable state at path interval " + i);
+            }
+        }
+        double[] velocities = new double[count];
+        for (int i = 0; i < count; i++) { velocities[i] = Math.sqrt(Math.max(0, squared[i])); }
+        return velocities;
+    }
+
+    private static void backward(double[] positions, double[] ceilings, int count,
+                                 double endVelocity, Transitions transitions, double[] controllable) {
+        if (positions == null || ceilings == null || count > positions.length || count > ceilings.length
+                || count < 2 || transitions == null
                 || !Double.isFinite(endVelocity) || endVelocity < 0) {
             throw new IllegalArgumentException("Matching position/ceiling arrays, transitions, and a nonnegative end speed are required.");
         }
-        for (int i = 0; i < positions.length; i++) {
+        for (int i = 0; i < count; i++) {
             if (!Double.isFinite(positions[i]) || (i > 0 && positions[i] < positions[i - 1])
                     || !Double.isFinite(ceilings[i]) || ceilings[i] < 0) {
                 throw new IllegalArgumentException("Finite nondecreasing positions and nonnegative speed ceilings are required.");
             }
         }
-        int last = positions.length - 1;
-        double[] controllable = new double[ceilings.length];
+        int last = count - 1;
         controllable[last] = Math.min(ceilings[last] * ceilings[last], endVelocity * endVelocity);
         for (int i = last - 1; i >= 0; i--) {
             double upper = ceilings[i] * ceilings[i];
@@ -73,6 +132,7 @@ public final class CoupledMotionProfile {
                     throw new IllegalStateException("No controllable state at path interval " + i);
                 }
                 for (int search = 0; search < SEARCH_ITERATIONS; search++) {
+                    if (high - low <= 1e-8) { break; }
                     double mid = (low + high) / 2;
                     if (Double.isFinite(transitions.maximumNextSquared(i, mid, controllable[i + 1]))) {
                         low = mid;
@@ -82,20 +142,5 @@ public final class CoupledMotionProfile {
             }
         }
 
-        double[] squared = new double[ceilings.length];
-        squared[0] = Double.isNaN(startVelocity) ? controllable[0] : startVelocity * startVelocity;
-        if (squared[0] > controllable[0] + 1e-6) {
-            throw new OverspeedException(Math.sqrt(controllable[0]));
-        }
-        for (int i = 0; i < last; i++) {
-            squared[i + 1] = positions[i + 1] - positions[i] <= 1e-9
-                    ? squared[i] : transitions.maximumNextSquared(i, squared[i], controllable[i + 1]);
-            if (!Double.isFinite(squared[i + 1]) || squared[i + 1] < -1e-7) {
-                throw new IllegalStateException("No reachable state at path interval " + i);
-            }
-        }
-        double[] velocities = new double[squared.length];
-        for (int i = 0; i < velocities.length; i++) { velocities[i] = Math.sqrt(Math.max(0, squared[i])); }
-        return velocities;
     }
 }

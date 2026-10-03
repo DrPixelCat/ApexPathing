@@ -23,6 +23,27 @@ Turn storedTurn = factory.turn(start).turnTo(Angle.fromDeg(90)).buildToMemory();
 
 Online traversal projects the measured pose onto the route. The coupled solver samples
 only its visible arc-length window, exact boundaries, and authored constraint transitions.
+Online windows retain every second geometry LUT node (about 0.375 nodes per inch
+overall), reusing those precomputed points across updates. Exact window boundaries,
+the midpoint, and constraint transitions are added as needed. Geometry projection
+and stored trajectories continue to use the full-resolution LUT. The measured-state
+trajectory solve is recalculated each update. Retained LUT nodes cache
+their limits, heading derivatives, and power evaluators; moving boundary nodes are
+evaluated afresh. Built-in constraint and heading mutations invalidate those caches.
+Physical planning limits are checked once per window. Custom mutable implementations
+use live evaluation unless they provide the appropriate revision or change hooks.
+Closest-point queries seed a bounding-box hierarchy with the previous LUT index,
+then certify the global nearest LUT point before applying the existing Newton refinement.
+Heading splines retain an interval cursor and use binary search after larger jumps.
+Constraint schedules retain stable authored order and prefix limits, selecting only
+transitions inside the current window. Window arrays and controllability storage
+are reused. Online solving publishes only the first squared-speed successor while
+still validating future transitions. Mecanum and tank affine power branches use
+analytic bounds verified against the signed power evaluator; unsupported branches
+and swerve power retain bounded numerical searches.
+If the coarse window has no controllable or reachable state, the planner retries
+the full-resolution LUT before reporting infeasibility. Overspeed still uses the
+measured-state braking recovery.
 Its initial speed is the measured tangential velocity; its window boundary has a zero-speed
 bound. That boundary advances with the robot, then shortens at the actual endpoint.
 A short horizon therefore still imposes a stopping-speed bound. The published near-term
@@ -86,3 +107,4 @@ latency and writes `TeamCode/build/trajectory-benchmark.csv`. It also checks sol
 stored queries perform zero solves; each online query solves only its bounded window.
 Desktop timings do not establish robot-controller performance.
 See [validation results and remaining fixture failures](TrajectoryValidation.md).
+See [online planning optimizations and comparison measurements](QuickBuildPerformance.md).

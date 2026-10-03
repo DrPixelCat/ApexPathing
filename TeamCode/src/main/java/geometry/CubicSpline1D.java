@@ -12,6 +12,7 @@ package geometry;
 public class CubicSpline1D {
     private final double[] x;
     private final double[] a, b, c, d;
+    private int cursor;
 
     public CubicSpline1D(double[] x, double[] y) {
         if (x.length != y.length || x.length < 2) {
@@ -71,10 +72,22 @@ public class CubicSpline1D {
     private int getSegment(double query) {
         if (query <= x[0]) { return 0; }
         if (query >= x[x.length - 1]) { return x.length - 2; }
-        for (int i = 0; i < x.length - 1; i++) {
-            if (query >= x[i] && query <= x[i + 1]) { return i; }
+        if (Double.isNaN(query)) { return 0; }
+        // Use the interval on the left at an exact knot, as the original scan did.
+        // The cursor is only a hint. Capture it locally so shared heading snapshots can query safely.
+        int current = cursor;
+        if (query > x[current] && query <= x[current + 1]) { return current; }
+        if (current + 2 < x.length && query > x[current + 1] && query <= x[current + 2]) {
+            cursor = current + 1;
+            return current + 1;
         }
-        return 0;
+        int low = 1, high = x.length - 1;
+        while (low < high) {
+            int mid = (low + high) >>> 1;
+            if (x[mid] < query) { low = mid + 1; }
+            else { high = mid; }
+        }
+        return cursor = low - 1;
     }
 
     public double evaluate(double query) {

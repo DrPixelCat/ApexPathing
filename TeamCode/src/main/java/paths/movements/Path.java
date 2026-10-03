@@ -117,7 +117,15 @@ public class Path extends FollowerMovement {
     }
 
     /** @param constraint The kinematic constraint to apply */
-    public void addConstraint(PathConstraint constraint) { constraints.add(constraint); }
+    private long constraintRevision;
+    private boolean liveCustomConstraints;
+    public void addConstraint(PathConstraint constraint) {
+        constraints.add(constraint); constraintRevision++;
+        if (!constraint.addChangeListener(() -> constraintRevision++)) { liveCustomConstraints = true; }
+    }
+
+    /** A negative revision requests live sampling for custom mutable constraints. */
+    public long getConstraintRevision() { return liveCustomConstraints ? -1 : constraintRevision; }
 
     /** @return the path's kinematic constraints */
     public PathConstraint[] getConstraints() { return constraints.toArray(new PathConstraint[0]); }

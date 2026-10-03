@@ -15,6 +15,7 @@ public class PathSegment {
     private final ParametricSegment segment;
     private final double length;
     private final PathPoint[] LUTpoints;
+    private final ProjectionNode projectionRoot;
 
     /**
      * Constructs a PathSegment and automatically generates its Look-Up Table (LUT).
@@ -55,31 +56,90 @@ public class PathSegment {
             LUTpoints[i] = new PathPoint(t, distancesToEnd[i], locations[i],
                     getFirstDerivative(t), getSignedCurvature(t), getCurvatureDerivative(t));
         }
+        projectionRoot = new ProjectionNode(0, numPoints);
+    }
+
+    /** Per-query state; a traversal can retain it to seed successive nearest-point searches. */
+    public static final class Projection {
+        private PathSegment owner;
+        private int index = -1;
+        private double x, y, distanceSquared;
+        private int candidates;
+        public int getLastCandidateCount() { return candidates; }
+    }
+
+    /** A hierarchy over contiguous LUT ranges; bounds certify the same global minimum as a scan. */
+    private final class ProjectionNode {
+        final int from, to;
+        final ProjectionNode left, right;
+        final double minX, minY, maxX, maxY;
+        ProjectionNode(int from, int to) {
+            this.from = from; this.to = to;
+            if (to - from > 8) {
+                int mid = (from + to) >>> 1;
+                left = new ProjectionNode(from, mid); right = new ProjectionNode(mid, to);
+                minX = Math.min(left.minX, right.minX); minY = Math.min(left.minY, right.minY);
+                maxX = Math.max(left.maxX, right.maxX); maxY = Math.max(left.maxY, right.maxY);
+            } else {
+                left = right = null;
+                double lx = Double.POSITIVE_INFINITY, ly = lx, hx = Double.NEGATIVE_INFINITY, hy = hx;
+                for (int i = from; i < to; i++) {
+                    Vector p = LUTpoints[i].getLocation();
+                    lx = Math.min(lx, p.getX().getIn()); ly = Math.min(ly, p.getY().getIn());
+                    hx = Math.max(hx, p.getX().getIn()); hy = Math.max(hy, p.getY().getIn());
+                }
+                minX = lx; minY = ly; maxX = hx; maxY = hy;
+            }
+        }
+        double lowerBound(Projection query) {
+            double dx = Math.max(0, Math.max(minX - query.x, query.x - maxX));
+            double dy = Math.max(0, Math.max(minY - query.y, query.y - maxY));
+            return dx * dx + dy * dy;
+        }
+        void search(Projection query) {
+            if (lowerBound(query) > query.distanceSquared) { return; }
+            if (left == null) {
+                for (int i = from; i < to; i++) { consider(query, i); }
+            } else if (left.lowerBound(query) <= right.lowerBound(query)) {
+                left.search(query); right.search(query);
+            } else {
+                right.search(query); left.search(query);
+            }
+        }
+    }
+
+    private void consider(Projection query, int index) {
+        Vector p = LUTpoints[index].getLocation();
+        double dx = p.getX().getIn() - query.x, dy = p.getY().getIn() - query.y;
+        double squared = dx * dx + dy * dy;
+        query.candidates++;
+        if (squared < query.distanceSquared || (squared == query.distanceSquared && index < query.index)) {
+            query.index = index; query.distanceSquared = squared;
+        }
     }
 
     /**
      * Finds the closest parametric 't' value on the curve to the robot's physical location.
-     * Uses a highly efficient two-step process: an O(N) coarse search through the LUT,
+     * Uses a two-step process: a bounded global nearest-point search through the LUT,
      * followed by a continuous Newton-Raphson root-finding refinement.
      *
      * @param location The current physical coordinate of the robot.
      * @return The parametric value 't' [0.0, 1.0] of the closest point on the curve.
      */
     public double getBestT(Vector location) {
-        double bestT = 0;
-        double minDistSq = Double.MAX_VALUE;
+        return getBestT(location, new Projection());
+    }
 
-        // Coarse search via LUT
-        for (PathPoint point : LUTpoints) {
-            double dx = point.getLocation().getX().getIn() - location.getX().getIn();
-            double dy = point.getLocation().getY().getIn() - location.getY().getIn();
-            double distSq = dx * dx + dy * dy;
-
-            if (distSq < minDistSq) {
-                minDistSq = distSq;
-                bestT = point.getT();
-            }
+    public double getBestT(Vector location, Projection query) {
+        int seed = query.owner == this ? query.index : -1;
+        query.owner = this; query.index = -1; query.candidates = 0;
+        query.x = location.getX().getIn(); query.y = location.getY().getIn();
+        query.distanceSquared = Double.MAX_VALUE;
+        if (seed >= 0) {
+            for (int i = Math.max(0, seed - 2); i <= Math.min(LUTpoints.length - 1, seed + 2); i++) { consider(query, i); }
         }
+        projectionRoot.search(query);
+        double bestT = query.index >= 0 ? LUTpoints[query.index].getT() : 0;
 
         // Newton-Raphson refinement
         for (int i = 0; i < 5; i++) {

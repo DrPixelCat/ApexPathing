@@ -26,6 +26,8 @@ public class TankInterpolator implements HeadingInterpolator {
         // Unused for tank kinematics
     }
 
+    @Override public long getConfigurationRevision() { return getClass() == TankInterpolator.class ? 0 : -1; }
+
     @Override
     public Angle getHeadingTarg(double s, Vector pathTangent, Vector finalTangent) {
         if (style == InterpolationStyle.TANGENT_BACKWARD) {

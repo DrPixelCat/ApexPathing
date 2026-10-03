@@ -4,6 +4,19 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CoupledMotionProfileTest {
+    @Test public void onlineWorkspaceMatchesFullSolveAndStillRejectsInvalidFutureTransitions() {
+        CoupledMotionProfile.Workspace workspace = new CoupledMotionProfile.Workspace();
+        double[] positions = new double[40], ceilings = new double[40];
+        for (int count : new int[]{40, 3, 20}) {
+            for (int i = 0; i < count; i++) { positions[i] = i; ceilings[i] = 20; }
+            CoupledMotionProfile.Transitions rule = (i, q, next) -> q - 6 > next + 1e-9 ? Double.NaN : Math.min(next, q + 6);
+            double[] full = CoupledMotionProfile.solve(java.util.Arrays.copyOf(positions, count), java.util.Arrays.copyOf(ceilings, count), 1.0, 0, rule);
+            assertEquals(full[1] * full[1], CoupledMotionProfile.solveNextSquared(positions, ceilings, count, 1, 0, rule, workspace), 1e-10);
+        }
+        CoupledMotionProfile.Transitions broken = (i, q, next) -> i == 2 && q > .1 && q < 3.5 ? Double.NaN : Math.min(next, q + 1);
+        assertThrows(IllegalStateException.class, () -> CoupledMotionProfile.solveNextSquared(new double[]{0,1,2,3},
+                new double[]{2,2,2,2}, 4, 1, 0, broken, workspace));
+    }
     @Test public void mandatorySignedDecelerationIsPreservedInBothPasses() {
         double[] profile = CoupledMotionProfile.solve(new double[]{0,1,2,3},new double[]{3,3,3,3},false,0,
                 (i,q,ceiling) -> {

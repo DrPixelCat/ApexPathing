@@ -13,6 +13,7 @@ public class AngularConstraint implements PathConstraint {
     private final Type type;
 
     private final double value_rad;
+    private final java.util.List<Runnable> changeListeners = new java.util.ArrayList<>();
 
     public AngularConstraint(double s, Type type, Angle value) {
         this.s = s;
@@ -24,7 +25,15 @@ public class AngularConstraint implements PathConstraint {
     public double getS() { return s; }
 
     @Override
-    public void setS(double s) { this.s = s; }
+    public void setS(double s) {
+        this.s = s;
+        for (Runnable listener : changeListeners) { listener.run(); }
+    }
+
+    @Override public boolean addChangeListener(Runnable listener) {
+        if (getClass() != AngularConstraint.class) { return false; }
+        changeListeners.add(listener); return true;
+    }
 
     @Override
     public Type getType() { return type; }
