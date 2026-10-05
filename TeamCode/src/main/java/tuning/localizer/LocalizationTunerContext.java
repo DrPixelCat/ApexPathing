@@ -42,6 +42,14 @@ public final class LocalizationTunerContext extends tuning.TunerContext {
     public boolean isSharedLocalizer() { return localizers.isShared(); }
     public String getLastSaveError() { return lastSaveError; }
 
+    public String getImuName() {
+        BaseLocalizerConstants<?> config = getConfig();
+        if (config instanceof localizers.TwoWheel.Constants) { return ((localizers.TwoWheel.Constants) config).imuName; }
+        if (config instanceof localizers.MecanumDriveEncoders.Constants) { return ((localizers.MecanumDriveEncoders.Constants) config).imuName; }
+        if (config instanceof localizers.TankDriveEncoders.Constants) { return ((localizers.TankDriveEncoders.Constants) config).imuName; }
+        return "imu";
+    }
+
     /** Applies robot-centric operator input, optionally suppressing translation. */
     public void manualDrive(boolean allowTranslation) {
         double forward = allowTranslation ? -opMode.gamepad1.left_stick_y : 0.0;
@@ -87,14 +95,18 @@ public final class LocalizationTunerContext extends tuning.TunerContext {
             return true;
         } catch (Exception failure) {
             localizers.getCalibration().restore(oldCalibration);
-            getConfig().applyCalibrationValues(oldValues);
-            localizers.rebuildActive();
+            try {
+                getConfig().applyCalibrationValues(oldValues);
+                localizers.rebuildActive();
+            } catch (Exception rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
             lastSaveError = failure.getMessage();
             return false;
         }
     }
 
-    /** Immediately persists the current velocity-filter settings. */
+    /** Immediately persists the current localization estimator settings. */
     public boolean acceptFilter() {
         JSONObject oldCalibration = copy(localizers.getCalibration().toJson());
         try {

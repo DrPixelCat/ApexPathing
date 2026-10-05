@@ -3,14 +3,18 @@ package tuning.follower.feedback;
 
 import tuning.TuningCsvWriter;
 
-import com.qualcomm.robotcore.util.ElapsedTime;
+import java.util.function.LongSupplier;
 
 
 /** Compact scalar-response recorder shared by the manual position-controller tests. */
 final class ManualResponseMetrics {
     private static final double SETTLE_HOLD_SECONDS = 0.25;
 
-    private final ElapsedTime timer = new ElapsedTime();
+    private final LongSupplier clock;
+    private long started;
+
+    ManualResponseMetrics() { this(System::nanoTime); }
+    ManualResponseMetrics(LongSupplier clock) { this.clock = java.util.Objects.requireNonNull(clock); }
     private TuningCsvWriter csv;
     private String csvPath = "Not started";
     private boolean active;
@@ -26,11 +30,21 @@ final class ManualResponseMetrics {
     private double finalError = Double.NaN;
     private double settledSince = -1.0;
     private double settlingTime = Double.NaN;
+    private double powerLimit = 1;
     private int samples;
     private int saturatedSamples;
 
     void begin(String prefix, double start, double target,
                double positionTolerance, double velocityTolerance) {
+        begin(prefix, start, target, positionTolerance, velocityTolerance, 1);
+    }
+
+    void begin(String prefix, double start, double target, double positionTolerance,
+               double velocityTolerance, double powerLimit) {
+        if (!Double.isFinite(powerLimit) || powerLimit <= 0 || powerLimit > 1) {
+            throw new IllegalArgumentException("Response power limit must be in (0, 1]");
+        }
+        this.powerLimit = powerLimit;
         close();
         csv = TuningCsvWriter.open(prefix,
                 "time_s", "target", "position", "error", "velocity", "max_motor_power");
@@ -50,12 +64,12 @@ final class ManualResponseMetrics {
         samples = 0;
         saturatedSamples = 0;
         active = true;
-        timer.reset();
+        started = clock.getAsLong();
     }
 
     void sample(double position, double velocity, double maxMotorPower) {
         if (!active || !Double.isFinite(position) || !Double.isFinite(velocity)) { return; }
-        double elapsed = timer.seconds();
+        double elapsed = Math.max(0, (clock.getAsLong() - started) * 1e-9);
         double dt = Math.max(0.0, elapsed - lastTime);
         double error = target - position;
         squaredErrorIntegral += error * error * dt;
@@ -65,7 +79,7 @@ final class ManualResponseMetrics {
         overshoot = Math.max(overshoot, Math.max(0.0, direction * (position - target)));
         finalError = error;
         samples++;
-        if (Double.isFinite(maxMotorPower) && maxMotorPower >= 0.99) { saturatedSamples++; }
+        if (Double.isFinite(maxMotorPower) && maxMotorPower >= 0.99 * powerLimit) { saturatedSamples++; }
 
         boolean withinTolerance = Math.abs(error) <= positionTolerance &&
                 Math.abs(velocity) <= velocityTolerance;
@@ -77,6 +91,7 @@ final class ManualResponseMetrics {
             }
         } else {
             settledSince = -1.0;
+            settlingTime = Double.NaN;
         }
         if (csv != null) {
             csv.writeRow(elapsed, target, position, error, velocity, maxMotorPower);

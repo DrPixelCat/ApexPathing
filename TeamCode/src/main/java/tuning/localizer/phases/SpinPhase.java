@@ -43,6 +43,7 @@ public final class SpinPhase extends TuningPhase {
     private boolean turnVelocityReached;
     private long controlLastUpdateNanos;
     private long stageStarted;
+    private long spinStarted;
     private Stage stage;
     private CalibrationCandidate candidate;
 
@@ -55,7 +56,7 @@ public final class SpinPhase extends TuningPhase {
         manualAngleDegrees = 360.0;
         manualIncrementDegrees = 15.0;
         imuAngle.clearAxis();
-        try { imu = opMode == null ? null : opMode.hardwareMap.get(IMU.class, "imu"); }
+        try { imu = opMode == null ? null : opMode.hardwareMap.get(IMU.class, context.getImuName()); }
         catch (RuntimeException ignored) { imu = null; }
         useImu = imu != null;
     }
@@ -85,6 +86,7 @@ public final class SpinPhase extends TuningPhase {
         stage = Stage.SPIN;
         if (useImu) { imuAngle.resetMeasurement(readQuaternion()); }
         stageStarted = System.nanoTime();
+        spinStarted = stageStarted;
         controlLastUpdateNanos = stageStarted;
         angularVelocityFilter.reset();
     }
@@ -94,6 +96,13 @@ public final class SpinPhase extends TuningPhase {
         if (useImu && stage != Stage.ENTER_ANGLE) { imuAngle.update(readQuaternion()); }
 
         if (stage == Stage.SPIN) {
+            long elapsed = System.nanoTime() - spinStarted;
+            if (elapsed > 120_000_000_000L) {
+                throw new IllegalStateException("Spin calibration timed out");
+            }
+            if (!context.getLocalizer().isLastMeasurementValid()) {
+                throw new IllegalStateException("Spin calibration lost localization");
+            }
             double measuredAngle = useImu ? imuAngle.getAngleRad() : reportedAngle;
             context.getTelemetry().addData("Rotations",
                     context.formatNumber(Math.min(TARGET_ROTATIONS,
@@ -196,7 +205,7 @@ public final class SpinPhase extends TuningPhase {
     }
 
     private void updateReportedAngle() {
-        double heading = context.getLocalizer().getPose().getHeading().getRad();
+        double heading = context.getLocalizer().getRawPose().getHeading().getRad();
         reportedAngle += Angle.wrap(heading - previousHeading);
         previousHeading = heading;
     }

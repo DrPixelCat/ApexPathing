@@ -21,31 +21,36 @@ public class TeleOpTest extends LinearOpMode {
     public void runOpMode() {
         Follower follower = new Follower(constants, hardwareMap);
 
-        telemetry.addLine("Press Start to begin");
-        telemetry.update();
-        waitForStart();
-
-        while (opModeIsActive()) {
-            follower.update();
-            Pose currentPose = follower.getPose();
-
-            follower.manual(gamepad1);
-
-            loops++;
-
-            if (loops > 15) {
-                double now = System.currentTimeMillis();
-                loopTime = (now - lastLoop) / loops;
-                lastLoop = now;
-                loops = 0;
-            }
-
-            telemetry.addData("Loop time (ms)", loopTime);
-            telemetry.addData("X", currentPose.getX());
-            telemetry.addData("Y ", currentPose.getY());
-            telemetry.addData("Heading", currentPose.getHeading());
+        try {
+            telemetry.addLine("Press Start to begin");
             telemetry.update();
+            waitForStart();
+            loops = loopTime = 0;
+            lastLoop = System.nanoTime();
+
+            while (opModeIsActive()) {
+                follower.update();
+                Pose currentPose = follower.getPose();
+
+                follower.manual(gamepad1);
+
+                loops++;
+
+                if (loops > 15) {
+                    double now = System.nanoTime();
+                    loopTime = (now - lastLoop) / (loops * 1e6);
+                    lastLoop = now;
+                    loops = 0;
+                }
+
+                telemetry.addData("Loop time (ms)", loopTime);
+                telemetry.addData("X", currentPose.getX());
+                telemetry.addData("Y ", currentPose.getY());
+                telemetry.addData("Heading", currentPose.getHeading());
+                telemetry.update();
+            }
+        } finally {
+            follower.stop();
         }
-        follower.stop();
     }
 }

@@ -75,13 +75,13 @@ public class FollowerVectorTest {
     }
 
     @Test
-    public void pathCompletionAcceptsInclusiveMinimumBackedBoundaries() {
+    public void pathCompletionHonorsConfiguredInclusiveBoundaries() {
         assertTrue(Follower.pathInsideCompletionTolerance(
-                1.5, Math.toRadians(2.0), 0.5, Math.toRadians(1.0)));
+                0.5, Math.toRadians(1.0), 0.5, Math.toRadians(1.0)));
         assertFalse(Follower.pathInsideCompletionTolerance(
-                1.500001, Math.toRadians(2.0), 0.5, Math.toRadians(1.0)));
+                0.500001, Math.toRadians(1.0), 0.5, Math.toRadians(1.0)));
         assertFalse(Follower.pathInsideCompletionTolerance(
-                1.5, Math.toRadians(2.000001), 0.5, Math.toRadians(1.0)));
+                0.5, Math.toRadians(1.000001), 0.5, Math.toRadians(1.0)));
 
         assertTrue(Follower.pathVelocitySettled(64.0, 0.25));
         assertFalse(Follower.pathVelocitySettled(64.000001, 0.25));

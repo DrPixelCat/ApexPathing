@@ -21,6 +21,24 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 
 public class LocalizerSetTest {
+    @Test public void failedReplacementPreservesActiveLocalizerAndPose() {
+        Config tank = new Config("tank"), holonomic = new Config("holonomic");
+        LocalizerSet set = new LocalizerSet(robot(false, holonomic, tank, holonomic), null,
+                BaseDrivetrain.DrivetrainType.DUAL_ACTUATED,
+                FollowerConstants.Profile.HOLONOMIC, LocalizationConstants.empty());
+        BaseLocalizer<?> initial = set.getLocalizer();
+        initial.setPose(pose(7, 8, .5));
+        tank.fail = true;
+        try {
+            set.select(FollowerConstants.Profile.TANK);
+            org.junit.Assert.fail("Expected construction failure");
+        } catch (IllegalStateException expected) {
+            assertSame(initial, set.getLocalizer());
+            assertEquals("HOLONOMIC", set.getSetupName());
+            assertEquals(pose(7, 8, .5), set.getLocalizer().getPose());
+        }
+    }
+
     @Test public void sharedDualModesReuseLocalizerAndPreservePose() {
         Config shared = new Config("shared");
         ApexConstants robot = robot(true, shared, null, null);
@@ -73,8 +91,12 @@ public class LocalizerSetTest {
 
     private static final class Config implements BaseLocalizerConstants<Config> {
         final String id;
+        boolean fail;
         Config(String id) { this.id = id; }
-        @Override public BaseLocalizer<?> build(HardwareMap hardwareMap) { return new Localizer(this); }
+        @Override public BaseLocalizer<?> build(HardwareMap hardwareMap) {
+            if (fail) { throw new IllegalStateException("Device unavailable"); }
+            return new Localizer(this);
+        }
     }
 
     private static final class Localizer extends BaseLocalizer<Config> {

@@ -114,6 +114,8 @@ public final class ProfiledTrackingPhase extends TuningPhase {
     private Path forwardReferencePath;
     private Path reverseReferencePath;
     private ProfiledTrackingOptimizer optimizer;
+    private ProfiledTrackingOptimizer.Settings originalSettings;
+    private boolean originallyTuned;
 
     public ProfiledTrackingPhase(TunerContext context) { super(context); }
 
@@ -157,6 +159,8 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         }
         courseMeasured = false;
         courseSummary = null;
+        originalSettings = ProfiledTrackingOptimizer.Settings.capture(context.constants, tank());
+        originallyTuned = context.constants.profiledTrackingTuned;
         trial = 0;
         status = "Ready";
         activePath = null;
@@ -234,6 +238,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         lastPowerOpposing = false;
         trialStartedNanos = System.nanoTime();
         status = "Running single-corner path " + (reverse ? "in reverse" : "forward");
+        context.getFollower().clearFailure();
         context.getFollower().follow(activePath);
     }
 
@@ -368,7 +373,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
             status = qualityIssue + "; verify earlier tuning phases";
             if (!manualMode && optimizer.canRejectCurrentCandidate()) {
                 optimizer.rejectCurrentCandidate();
-            } else if (!manualMode && optimizer.status().startsWith("Validating")) {
+            } else if (!manualMode && optimizer.isValidating()) {
                 optimizer.rejectValidation();
             }
             return;
@@ -493,6 +498,10 @@ public final class ProfiledTrackingPhase extends TuningPhase {
 
     @Override protected boolean routineMotionActive() { return activePath != null; }
     @Override protected void onExit() {
+        if (originalSettings != null && !context.constants.profiledTrackingTuned) {
+            originalSettings.apply(context.constants, tank());
+            context.constants.profiledTrackingTuned = originallyTuned;
+        }
         if (csv != null) { csv.close(); }
     }
     @Override protected void reportResults() {

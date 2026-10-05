@@ -15,6 +15,7 @@ import geometry.DistUnit;
 import geometry.Pose;
 import geometry.Vector;
 import localizers.Pinpoint;
+import localizers.util.LocalizationNoise;
 
 /**
  * FTCodeSim adapter for Apex Pathing's custom Pinpoint driver.
@@ -29,6 +30,7 @@ final class SimApexPinpoint extends Pinpoint.Driver implements SimHardwareDevice
 
     private Pose pose = Pose.zero();
     private Pose velocity = Pose.zero();
+    private LocalizationNoise measurementNoise;
     private MotionVector previousSimPose;
     private double xTicks;
     private double yTicks;
@@ -38,6 +40,11 @@ final class SimApexPinpoint extends Pinpoint.Driver implements SimHardwareDevice
     private double yawScalar = 1.0;
     private double xDirection = 1.0;
     private double yDirection = 1.0;
+    private java.util.function.LongSupplier clock = System::nanoTime;
+
+    void setClock(java.util.function.LongSupplier clock) {
+        this.clock = java.util.Objects.requireNonNull(clock);
+    }
 
     SimApexPinpoint(SimulatedDrivetrain drivetrain, double fieldCenterInches) {
         super(fakeI2c(), false);
@@ -71,12 +78,23 @@ final class SimApexPinpoint extends Pinpoint.Driver implements SimHardwareDevice
                 simPose.theta * yawScalar
         );
         velocity = apexPose(simVelocity.x, simVelocity.y, simVelocity.theta * yawScalar);
+        if (measurementNoise != null) {
+            LocalizationNoise.Sample sample = measurementNoise.sample(pose, velocity);
+            pose = sample.position;
+            velocity = sample.velocity;
+        }
     }
+
+    /** Optional test noise affects reported measurements, never the simulated plant or pod ticks. */
+    void setMeasurementNoise(LocalizationNoise noise) { measurementNoise = noise; }
 
     @Override
     public void update() {
         update(0.0);
     }
+
+    @Override public boolean isLastSampleValid() { return true; }
+    @Override public long getSampleTimeNanos() { return clock.getAsLong(); }
 
     @Override
     public Pose getPosition() {

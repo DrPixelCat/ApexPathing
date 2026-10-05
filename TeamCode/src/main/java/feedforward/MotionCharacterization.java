@@ -8,15 +8,30 @@ public final class MotionCharacterization {
     public static final double PROFILE_POWER_LIMIT = .88;
     private final MotorPowerModel[][] models;
     public final double availableMotorPower;
+    public final MecanumWheelModel mecanumWheelModel;
 
     public MotionCharacterization(MotorPowerModel[][] models, boolean holonomic) {
         this(models, holonomic, 1);
     }
     public MotionCharacterization(MotorPowerModel[][] models, boolean holonomic, double availableMotorPower) {
+        this(models,holonomic,availableMotorPower,null);
+    }
+    public MotionCharacterization(MotorPowerModel[][] models, boolean holonomic, double availableMotorPower,
+                                  MecanumWheelModel mecanumWheelModel) {
         if (!Double.isFinite(availableMotorPower) || availableMotorPower <= 0 || availableMotorPower > 1) {
             throw new IllegalArgumentException("Invalid calibrated motor-power limit");
         }
         this.availableMotorPower = availableMotorPower;
+        if(mecanumWheelModel!=null && !holonomic) throw new IllegalArgumentException("Wheel model requires a mecanum calibration");
+        this.mecanumWheelModel=mecanumWheelModel;
+        if (models == null || models.length != Axis.values().length) {
+            throw new IllegalArgumentException("Characterization requires three axis rows");
+        }
+        for (MotorPowerModel[] row : models) {
+            if (row == null || row.length != 2) {
+                throw new IllegalArgumentException("Each axis requires positive and negative direction models");
+            }
+        }
         this.models = new MotorPowerModel[3][2];
         for (Axis axis : Axis.values()) {
             for (int direction = 0; direction < 2; direction++) {
@@ -73,6 +88,7 @@ public final class MotionCharacterization {
     public JSONObject toJson() {
         try {
             JSONObject json = new JSONObject().put("version", 1).put("availableMotorPower", availableMotorPower);
+            if(mecanumWheelModel!=null) json.put("mecanumWheelModel",mecanumWheelModel.toJson());
             for (Axis axis : Axis.values()) {
                 if (model(axis, 1) != null) {
                     json.put(axis.name(), new JSONObject().put("positive", model(axis, 1).toJson())
@@ -93,7 +109,10 @@ public final class MotionCharacterization {
                     models[axis.ordinal()][1] = MotorPowerModel.fromJson(values.getJSONObject("negative"));
                 }
             }
-            return new MotionCharacterization(models, holonomic, json.optDouble("availableMotorPower", 1));
+            JSONObject wheel=json.optJSONObject("mecanumWheelModel");
+            if(json.has("mecanumWheelModel") && wheel==null) throw new IllegalArgumentException("Wheel calibration must be an object");
+            return new MotionCharacterization(models, holonomic, json.optDouble("availableMotorPower", 1),
+                    wheel==null?null:MecanumWheelModel.fromJson(wheel));
         } catch (Exception e) { throw new IllegalArgumentException("Invalid motion characterization", e); }
     }
 }

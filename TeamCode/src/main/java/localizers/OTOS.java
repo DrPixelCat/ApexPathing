@@ -99,7 +99,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
          * of +/- 12.7%.
          */
         public Constants setLinearScalar(double linearScalar) {
-            if (linearScalar < Driver.MIN_SCALAR || linearScalar > Driver.MAX_SCALAR) {
+            if (!Double.isFinite(linearScalar) || linearScalar < Driver.MIN_SCALAR || linearScalar > Driver.MAX_SCALAR) {
                 throw new IllegalArgumentException("Linear scalar must be between " +
                         Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
             }
@@ -114,7 +114,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
          * of +/- 12.7%.
          */
         public Constants setAngularScalar(double angularScalar) {
-            if (angularScalar < Driver.MIN_SCALAR || angularScalar > Driver.MAX_SCALAR) {
+            if (!Double.isFinite(angularScalar) || angularScalar < Driver.MIN_SCALAR || angularScalar > Driver.MAX_SCALAR) {
                 throw new IllegalArgumentException("Angular scalar must be between " +
                         Driver.MIN_SCALAR + " and " + Driver.MAX_SCALAR);
             }
@@ -242,7 +242,7 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
                 Thread.sleep(3);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return;
+                throw new IllegalStateException("OTOS calibration interrupted", e);
             }
 
             for (int numAttempts = 255; numAttempts > 0; numAttempts--) {
@@ -256,9 +256,10 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
                     Thread.sleep(3);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    return;
+                    throw new IllegalStateException("OTOS calibration interrupted", e);
                 }
             }
+            throw new IllegalStateException("OTOS calibration timed out");
         }
 
         /** Resets the position tracker to zero. */
@@ -272,19 +273,21 @@ public class OTOS extends BaseLocalizer<OTOS.Constants> {
 
         /** @param scalar linear scalar, must be between 0.872 and 1.127 */
         public void setLinearScalar(double scalar) {
-            if (scalar < MIN_SCALAR || scalar > MAX_SCALAR) { return; }
+            if (!Double.isFinite(scalar) || scalar < MIN_SCALAR || scalar > MAX_SCALAR) {
+                throw new IllegalArgumentException("OTOS scalar must be finite and within device limits");
+            }
 
-            // Convert to integer, multiples of 0.1% (+0.5 to round instead of truncate)
-            byte rawScalar = (byte) ((scalar - 1.0) * 1000 + 0.5);
+            // Convert to signed register steps of 0.1%
+            byte rawScalar = (byte) Math.round((scalar - 1.0) * 1000);
             deviceClient.write8(REG_SCALAR_LINEAR, rawScalar);
         }
 
         /** @param scalar angular scalar, must be between 0.872 and 1.127 */
         public void setAngularScalar(double scalar) {
-            if (scalar < MIN_SCALAR || scalar > MAX_SCALAR) { return; }
+            if (!Double.isFinite(scalar) || scalar < MIN_SCALAR || scalar > MAX_SCALAR) { return; }
 
-            // Convert to integer, multiples of 0.1% (+0.5 to round instead of truncate)
-            byte rawScalar = (byte) ((scalar - 1.0) * 1000 + 0.5);
+            // Convert to signed register steps of 0.1%
+            byte rawScalar = (byte) Math.round((scalar - 1.0) * 1000);
             deviceClient.write8(REG_SCALAR_ANGULAR, rawScalar);
         }
 

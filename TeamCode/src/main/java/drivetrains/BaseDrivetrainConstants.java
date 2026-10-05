@@ -30,7 +30,10 @@ public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<
     /** Set the maximum motor output limit for the drivetrain. The default is 1.0. */
     @SuppressWarnings("unchecked")
     public T setMaxPower(double maxPower) {
-        this.maxPower = Math.max(Math.min(0.0, maxPower), 1.0);
+        if (!Double.isFinite(maxPower)) {
+            throw new IllegalArgumentException("Maximum power must be finite");
+        }
+        this.maxPower = Math.max(0.0, Math.min(1.0, maxPower));
         return (T) this;
     }
 
@@ -50,6 +53,9 @@ public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<
      */
     @SuppressWarnings("unchecked")
     public T setHeadingTolerance(Angle headingTolerance) {
+        if (headingTolerance == null || headingTolerance.isNotFinite() || headingTolerance.getRad() < 0) {
+            throw new IllegalArgumentException("Heading tolerance must be finite and nonnegative");
+        }
         this.headingTolerance = headingTolerance;
         return (T) this;
     }
@@ -60,7 +66,19 @@ public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<
      */
     @SuppressWarnings("unchecked")
     public T setDistanceTolerance(Dist distanceTolerance) {
+        if (distanceTolerance == null || !Double.isFinite(distanceTolerance.getIn()) || distanceTolerance.getIn() < 0) {
+            throw new IllegalArgumentException("Distance tolerance must be finite and nonnegative");
+        }
         this.distanceTolerance = distanceTolerance;
         return (T) this;
+    }
+
+    /** Checks public configuration fields before hardware is bound. */
+    public void validate() {
+        if (!Double.isFinite(maxPower) || maxPower < 0 || maxPower > 1) {
+            throw new IllegalArgumentException("Maximum power must be in [0, 1]");
+        }
+        setHeadingTolerance(headingTolerance);
+        setDistanceTolerance(distanceTolerance);
     }
 }

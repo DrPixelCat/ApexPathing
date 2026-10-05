@@ -47,7 +47,14 @@ public final class CoupledMotionProfile {
     /** Reusable controllability storage for an online traversal. */
     public static final class Workspace {
         private double[] controllable = new double[16];
+        private int count;
+        /** Squared speed ceiling after the most recent backward stopping solve. */
+        public double controllableSquaredAt(int index) {
+            if (index < 0 || index >= count) throw new IndexOutOfBoundsException();
+            return controllable[index];
+        }
         private double[] storage(int count) {
+            this.count = count;
             if (controllable.length < count) { controllable = new double[Math.max(count, controllable.length * 2)]; }
             return controllable;
         }

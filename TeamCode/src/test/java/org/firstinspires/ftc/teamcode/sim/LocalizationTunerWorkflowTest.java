@@ -41,11 +41,122 @@ import geometry.Pose;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import localizers.Pinpoint;
+import localizers.util.LocalizationNoise;
+import localizers.util.PoseEstimator;
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.LocalizationTunerContext;
 
 /** End-to-end simulator coverage for every phase of the localization-tuning workflow. */
 public class LocalizationTunerWorkflowTest {
+    @Test(timeout = 15_000L)
+    public void interruptedFilterCollectionFreezesLearningAndClosesCsvWithoutSaving() throws Exception {
+        File storage = new File("build/localization-tuner-test/" + System.nanoTime());
+        String oldStorage = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
+        System.setProperty(ApexStorage.DIRECTORY_PROPERTY, storage.getAbsolutePath());
+        ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
+        List<String> frames = Collections.synchronizedList(new ArrayList<>());
+        ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
+        telemetry.setMsTransmissionInterval(0);
+        LocalizationTuner tuner = configuredTuner(new PinpointOffsetTuner(), hardware, telemetry);
+        SimLinearOpModeBridge.Session session = SimLinearOpModeBridge.initialize(tuner, () -> { });
+        boolean stopped = false;
+        try {
+            await(session, tuner, telemetry, hardware, frames, "Choose a test", 2_000L);
+            SimLinearOpModeBridge.start(session);
+            moveSelectionDown(session, tuner, telemetry, hardware, 4);
+            press(session, tuner, telemetry, hardware, Button.A);
+            await(session, tuner, telemetry, hardware, frames, "Selected Unified adaptive Kalman", 2_000L);
+            press(session, tuner, telemetry, hardware, Button.A);
+            await(session, tuner, telemetry, hardware, frames, "Move X", 5_000L);
+            java.lang.reflect.Field contextField = LocalizationTuner.class.getDeclaredField("context");
+            contextField.setAccessible(true);
+            BaseLocalizer<?> localizer = ((LocalizationTunerContext) contextField.get(tuner)).getLocalizer();
+            assertTrue(localizer.isPoseAutoTuning());
+            SimLinearOpModeBridge.stop(session); stopped = true;
+            assertFalse(localizer.isPoseAutoTuning());
+            assertFalse(localizer.isTuningVelocityFilter());
+            assertMotorsStopped(hardware);
+            assertFalse("An interrupted collection must not save accepted calibration",
+                    new File(storage, "localization.json").exists());
+            File[] csv = storage.listFiles((directory, name) -> name.startsWith("localization_filter")
+                    && name.endsWith(".csv"));
+            assertTrue(csv != null && csv.length == 1);
+            String text = new String(Files.readAllBytes(csv[0].toPath()), StandardCharsets.UTF_8);
+            assertTrue("Cleanup must flush buffered collection data", text.contains("STILL"));
+            PoseEstimator.Tuning frozen = localizer.getPoseKalmanTuning();
+            for (int i = 0; i < 30; i++) { localizer.update(); Thread.sleep(5); }
+            assertEquals(frozen.x.processVariance, localizer.getPoseKalmanTuning().x.processVariance, 0);
+        } finally {
+            if (!stopped) { SimLinearOpModeBridge.stop(session); }
+            restoreProperty(ApexStorage.DIRECTORY_PROPERTY, oldStorage);
+        }
+    }
+
+    @Test(timeout = 90_000L)
+    public void noisyKalmanCollectionCompletesFreezesSavesAndReloadsTheJointEstimator() throws Exception {
+        File storage = new File("build/localization-tuner-test/" + System.nanoTime());
+        String oldStorage = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
+        System.setProperty(ApexStorage.DIRECTORY_PROPERTY, storage.getAbsolutePath());
+        ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
+        SimApexPinpoint sensor = (SimApexPinpoint) hardware.hardwareMap.get(Pinpoint.Driver.class,
+                ApexSimulation.PINPOINT);
+        sensor.setMeasurementNoise(new LocalizationNoise(7842, 0.10, 0.02, 0.8, 0.16, 0.6));
+        List<String> frames = Collections.synchronizedList(new ArrayList<>());
+        ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
+        telemetry.setMsTransmissionInterval(0);
+        LocalizationTuner tuner = configuredTuner(new PinpointOffsetTuner(), hardware, telemetry);
+        SimLinearOpModeBridge.Session session = SimLinearOpModeBridge.initialize(tuner, () -> { });
+        boolean stopped = false;
+        try {
+            await(session, tuner, telemetry, hardware, frames, "Choose a test", 2_000L);
+            SimLinearOpModeBridge.start(session);
+            moveSelectionDown(session, tuner, telemetry, hardware, 4);
+            await(session, tuner, telemetry, hardware, frames, "FILTER <", 2_000L);
+            runKalmanCollection(session, tuner, telemetry, hardware, frames);
+            assertMotorsStopped(hardware);
+            JSONObject setup = readSavedSetup(storage);
+            assertEquals("ACCEPTED", setup.getString("filterStatus"));
+            JSONObject pose = setup.getJSONObject("filter").getJSONObject("pose");
+            assertEquals("CONSTANT_ACCELERATION", pose.getString("model"));
+            assertFalse(pose.getBoolean("autoTuning"));
+            assertFalse(pose.getBoolean("tuneX"));
+            assertFalse(pose.getBoolean("tuneY"));
+            assertFalse(pose.getBoolean("tuneHeading"));
+            double learnedR = pose.getJSONObject("x").getDouble("measurementVariance");
+            double learnedVelocityR = pose.getJSONObject("x").getDouble("velocityVariance");
+            assertTrue("Injected noise should change position tuning", Math.abs(learnedR - 0.0025) > 1e-5);
+            assertTrue("Injected noise should change native velocity tuning", Math.abs(learnedVelocityR - 0.25) > 1e-5);
+            File[] csv = storage.listFiles((directory, name) -> name.startsWith("localization_filter")
+                    && name.endsWith(".csv"));
+            assertTrue(csv != null && csv.length == 1 && csv[0].length() > 100);
+            String csvText = new String(Files.readAllBytes(csv[0].toPath()), StandardCharsets.UTF_8);
+            assertTrue(csvText.contains("STILL"));
+            assertTrue(csvText.contains("MOVE"));
+            assertTrue(csvText.contains("STOP"));
+
+            SimLinearOpModeBridge.stop(session); stopped = true;
+            Pinpoint.Constants config = pinpointConfig();
+            LocalizationConstants saved = LocalizationConstants.load();
+            assertTrue(saved.applyGeometry("DEFAULT", config));
+            BaseLocalizer<?> reloaded = config.build(hardware.hardwareMap);
+            assertTrue(saved.applyFilter("DEFAULT", config, reloaded));
+            assertFalse(reloaded.isPoseAutoTuning());
+            PoseEstimator.Tuning frozen = reloaded.getPoseKalmanTuning();
+            assertEquals(learnedR, frozen.x.measurementVariance, 0);
+            assertEquals(learnedVelocityR, frozen.xVelocityVariance, 0);
+            for (int i = 0; i < 100; i++) { reloaded.update(); Thread.sleep(5); }
+            assertEquals(frozen.x.measurementVariance, reloaded.getPoseKalmanTuning().x.measurementVariance, 0);
+            assertEquals(frozen.x.processVariance, reloaded.getPoseKalmanTuning().x.processVariance, 0);
+            assertEquals(frozen.xVelocityVariance, reloaded.getPoseKalmanTuning().xVelocityVariance, 0);
+            System.out.printf(java.util.Locale.US,
+                    "Noisy tuner saved and reloaded: position R=%.7f, native velocity R=%.7f, jerk Q=%.7f%n",
+                    frozen.x.measurementVariance, frozen.xVelocityVariance, frozen.x.processVariance);
+        } finally {
+            if (!stopped) { SimLinearOpModeBridge.stop(session); }
+            restoreProperty(ApexStorage.DIRECTORY_PROPERTY, oldStorage);
+        }
+    }
+
     @Test(timeout = 120_000L)
     public void completesEveryPhaseWithImuAndPersistsReviewableResults() throws Exception {
         File storage = new File("build/localization-tuner-test/" + System.nanoTime());
@@ -76,12 +187,13 @@ public class LocalizationTunerWorkflowTest {
             runDistance(session, tuner, telemetry, hardware, frames, "Strafe distance");
             runAutomaticSpin(session, tuner, telemetry, hardware, frames);
             runKalmanCollection(session, tuner, telemetry, hardware, frames);
-            runLocalizationTest(session, tuner, telemetry, hardware, frames);
-
             await(session, tuner, telemetry, hardware, frames,
                     "[READY] TEST <", 3_000L);
             String menu = latestFrame(frames);
             assertContains(menu, "[READY] TEST <");
+            // The live localization display intentionally runs until the OpMode stops.
+            runLocalizationTest(session, tuner, telemetry, hardware, frames);
+            assertContains(latestFrame(frames), "Localization test", "X ", "Y ", "Heading ");
 
             File saved = new File(storage, "localization.json");
             assertTrue("localization.json should be saved", saved.isFile());
@@ -147,8 +259,8 @@ public class LocalizationTunerWorkflowTest {
             await(session, tuner, telemetry, hardware, frames, "FILTER <", 2_000L);
             press(session, tuner, telemetry, hardware, Button.A);
             await(session, tuner, telemetry, hardware, frames,
-                    "Velocity and acceleration filter", 2_000L);
-            assertContains(latestFrame(frames), "Selected Adaptive Kalman");
+                    "Position, velocity and acceleration filter", 2_000L);
+            assertContains(latestFrame(frames), "Selected Unified adaptive Kalman");
             press(session, tuner, telemetry, hardware, Button.DPAD_RIGHT);
             assertContains(latestFrame(frames), "Selected Moving average", "Window");
             press(session, tuner, telemetry, hardware, Button.DPAD_UP);
@@ -299,7 +411,7 @@ public class LocalizationTunerWorkflowTest {
         }
     }
 
-    @Test(timeout = 30_000L)
+    @Test(timeout = 90_000L)
     public void movingAverageCollectionSavesAndReloadsModeAndWindow() throws Exception {
         File storage = new File("build/localization-tuner-test/" + System.nanoTime());
         String oldStorage = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
@@ -317,7 +429,7 @@ public class LocalizationTunerWorkflowTest {
             moveSelectionDown(session, tuner, telemetry, hardware, 4);
             press(session, tuner, telemetry, hardware, Button.A);
             await(session, tuner, telemetry, hardware, frames,
-                    "Selected Adaptive Kalman", 2_000L);
+                    "Selected Unified adaptive Kalman", 2_000L);
             press(session, tuner, telemetry, hardware, Button.DPAD_RIGHT);
             press(session, tuner, telemetry, hardware, Button.DPAD_UP);
             press(session, tuner, telemetry, hardware, Button.DPAD_UP);
@@ -327,9 +439,9 @@ public class LocalizationTunerWorkflowTest {
                     "Move X", 5_000L);
             tuner.gamepad1.left_stick_y = -0.45f;
             tuner.gamepad1.left_stick_x = -0.20f;
-            tuner.gamepad1.right_stick_x = -0.20f;
+            tuner.gamepad1.right_stick_x = -0.60f;
             await(session, tuner, telemetry, hardware, frames,
-                    "Release the sticks and keep still", 20_000L);
+                    "Release the sticks and keep still", 60_000L);
             tuner.gamepad1.left_stick_y = 0.0f;
             tuner.gamepad1.left_stick_x = 0.0f;
             tuner.gamepad1.right_stick_x = 0.0f;
@@ -414,7 +526,9 @@ public class LocalizationTunerWorkflowTest {
             LocalizationTuner tuner, ApexSimTelemetry telemetry,
             ApexSimulation.Hardware hardware, List<String> frames, String phase) throws Exception {
         selectAndBegin(session, tuner, telemetry, hardware, frames, phase);
-        await(session, tuner, telemetry, hardware, frames, "Measured distance", 4_000L);
+        // The trial uses wall time on a separate OpMode thread. Allow scheduler/GC pauses
+        // in the combined simulation suite without changing the trial or its assertions.
+        await(session, tuner, telemetry, hardware, frames, "Measured distance", 10_000L);
         assertTrue("localizer must report enough travel to fit " + phase + "; entered="
                         + parseMeasuredInches(latestFrame(frames)) + ", sim pose="
                         + hardware.drivetrain.position.x + ","
@@ -424,7 +538,7 @@ public class LocalizationTunerWorkflowTest {
         enterMinimumPhysicalDistance(session, tuner, telemetry, hardware, frames);
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "Trial direction negative", 2_000L);
-        await(session, tuner, telemetry, hardware, frames, "Measured distance", 4_000L);
+        await(session, tuner, telemetry, hardware, frames, "Measured distance", 10_000L);
         enterMinimumPhysicalDistance(session, tuner, telemetry, hardware, frames);
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "A: save", 2_000L);
@@ -440,7 +554,16 @@ public class LocalizationTunerWorkflowTest {
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "Rotation geometry", 2_000L);
         assertContains(latestFrame(frames), "Reference IMU",
-                "Robot spins left at 90 deg/s for 5 rotations.");
+                "Robot spins left at 45 deg/s for 5 rotations.");
+        // Previous translation trials leave simulated wheel momentum. Start the spin only after
+        // the plant actually rests, so translation is not mistaken for a pod-offset error.
+        long settleDeadline = System.nanoTime() + 5_000_000_000L;
+        while ((Math.hypot(hardware.drivetrain.velocity.x, hardware.drivetrain.velocity.y) > 0.01
+                || Math.abs(hardware.drivetrain.velocity.theta) > 0.01) && System.nanoTime() < settleDeadline) {
+            pump(session, tuner, telemetry, hardware, 50L);
+        }
+        assertTrue("Spin calibration must begin at rest",
+                Math.hypot(hardware.drivetrain.velocity.x, hardware.drivetrain.velocity.y) <= 0.01);
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "A: save", 60_000L);
         assertContains(latestFrame(frames), "IMU axis");
@@ -453,22 +576,22 @@ public class LocalizationTunerWorkflowTest {
             ApexSimulation.Hardware hardware, List<String> frames) throws Exception {
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames,
-                "Velocity and acceleration filter", 2_000L);
-        assertContains(latestFrame(frames), "Selected Adaptive Kalman");
+                "Position, velocity and acceleration filter", 2_000L);
+        assertContains(latestFrame(frames), "Selected Unified adaptive Kalman");
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "Move X",
                 5_000L);
         tuner.gamepad1.left_stick_y = -0.55f;
         tuner.gamepad1.left_stick_x = -0.25f;
-        tuner.gamepad1.right_stick_x = -0.30f;
+        tuner.gamepad1.right_stick_x = -0.60f;
         await(session, tuner, telemetry, hardware, frames,
-                "Release the sticks and keep still", 20_000L);
+                "Release the sticks and keep still", 60_000L);
         tuner.gamepad1.left_stick_y = 0.0f;
         tuner.gamepad1.left_stick_x = 0.0f;
         tuner.gamepad1.right_stick_x = 0.0f;
         await(session, tuner, telemetry, hardware, frames, "A: save", 5_000L);
-        assertContains(latestFrame(frames), "Estimator Adaptive Kalman", "X R / Q",
-                "Y R / Q", "Heading R / Q");
+        assertContains(latestFrame(frames), "Estimator Unified adaptive Kalman", "X velocity R / jerk Q",
+                "Y velocity R / jerk Q", "Heading velocity R / jerk Q");
         press(session, tuner, telemetry, hardware, Button.A);
         await(session, tuner, telemetry, hardware, frames, "TEST <", 2_000L);
     }
@@ -512,6 +635,14 @@ public class LocalizationTunerWorkflowTest {
             ApexSimTelemetry telemetry, ApexSimulation.Hardware hardware, Button button)
             throws Exception {
         button.set(tuner.gamepad1, true);
+        SimLinearOpModeBridge.eventLoopIteration(session, tuner.gamepad1, tuner.gamepad2);
+        long consumedDeadline = System.nanoTime() + 2_000_000_000L;
+        // The SDK stores one pending edge, not an event queue. Wait for the OpMode to consume
+        // this edge before sending another; two quick presses can otherwise collapse under GC.
+        while (button.pending(tuner.gamepad1) && System.nanoTime() < consumedDeadline) {
+            pump(session, tuner, telemetry, hardware, 20L);
+        }
+        assertFalse("OpMode did not consume " + button, button.pending(tuner.gamepad1));
         pump(session, tuner, telemetry, hardware, 40L);
         button.set(tuner.gamepad1, false);
         pump(session, tuner, telemetry, hardware, 40L);
@@ -769,6 +900,21 @@ public class LocalizationTunerWorkflowTest {
         };
 
         abstract void set(Gamepad gamepad, boolean pressed);
+
+        boolean pending(Gamepad gamepad) throws Exception {
+            java.lang.reflect.Field changesField = Gamepad.class.getDeclaredField("changes");
+            changesField.setAccessible(true);
+            Object changes = changesField.get(gamepad);
+            String field = name().startsWith("DPAD_")
+                    ? "dpad" + name().substring(5, 6) + name().substring(6).toLowerCase(java.util.Locale.US)
+                    : name().toLowerCase(java.util.Locale.US);
+            java.lang.reflect.Field buttonField = changes.getClass().getDeclaredField(field);
+            buttonField.setAccessible(true);
+            Object monitor = buttonField.get(changes);
+            java.lang.reflect.Field pendingField = monitor.getClass().getDeclaredField("pressNotify");
+            pendingField.setAccessible(true);
+            return pendingField.getBoolean(monitor);
+        }
     }
 
     private static final class MonitorOnlyTuner extends LocalizationTuner {

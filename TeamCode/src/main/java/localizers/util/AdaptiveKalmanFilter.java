@@ -1,7 +1,5 @@
 package localizers.util;
 
-import geometry.Matrix;
-
 import java.util.function.LongSupplier;
 
 /**
@@ -12,7 +10,7 @@ import java.util.function.LongSupplier;
  * incoming data to learn the actual sensor noise (R) and monitors its own prediction errors (NIS)
  * to dynamically scale the process trust (Q).
  *
- * All matrix operations run through the lightweight {@link Matrix} class.
+ * The two-state model, timing and noise adaptation wrap the shared {@link KalmanFilter} core.
  *
  * @author Joel H - 7842a
  */
@@ -22,13 +20,11 @@ public class AdaptiveKalmanFilter implements DataFilter {
 
     private static final double MINIMUM_VARIANCE = 1e-24;
     private static final int BOOTSTRAP_SAMPLES = 10;
-    private static final Matrix H = new Matrix(new double[][]{{1.0, 0.0}});
-    private static final Matrix I = Matrix.identity(2);
+    private static final double[] H = {1.0, 0.0};
 
     private boolean initialized;
     private final LongSupplier nanoTimeSource;
-    private Matrix x; // State Vector [value, rate]^T
-    private Matrix P; // Covariance Matrix
+    private final KalmanFilter filter = new KalmanFilter(2); // [value, rate]
     private long lastUpdateTimeNanos = -1;
     private double lastDt = 0.02; // Default starting assumption (50Hz)
     private boolean timeAnomalyDetected = false;
@@ -89,7 +85,15 @@ public class AdaptiveKalmanFilter implements DataFilter {
      */
     @Override
     public FilterState update(double measurement) {
-        long currentNanos = nanoTimeSource.getAsLong();
+        return update(measurement, nanoTimeSource.getAsLong());
+    }
+
+    @Override
+    public FilterState update(double measurement, long currentNanos) {
+        if (!Double.isFinite(measurement) || currentNanos < 0
+                || (lastUpdateTimeNanos != -1 && currentNanos <= lastUpdateTimeNanos)) {
+            return new FilterState(filter.getState(0), filter.getState(1));
+        }
         double dt;
 
         if (lastUpdateTimeNanos == -1) {
@@ -98,10 +102,6 @@ public class AdaptiveKalmanFilter implements DataFilter {
             dt = (currentNanos - lastUpdateTimeNanos) / 1.0e9;
         }
         lastUpdateTimeNanos = currentNanos;
-
-        if (!Double.isFinite(measurement)) {
-            return new FilterState(x != null ? x.get(0, 0) : 0, x != null ? x.get(1, 0) : 0);
-        }
 
         // Time Anomaly Protection
         if (dt > MAXIMUM_DT || dt < MINIMUM_DT) {
@@ -114,11 +114,6 @@ public class AdaptiveKalmanFilter implements DataFilter {
 
         if (!initialized) {
             initialized = true;
-
-            x = new Matrix(new double[][]{
-                    {measurement},
-                    {0.0}
-            });
 
             referenceDt = dt;
             previousMeasurement = measurement;
@@ -135,42 +130,23 @@ public class AdaptiveKalmanFilter implements DataFilter {
                 processVariance = measurementVariance / Math.max(MINIMUM_VARIANCE, dt * dt * dt) * 0.001;
             }
 
-            P = new Matrix(new double[][]{
+            filter.reset(new double[] {measurement, 0.0}, new double[][]{
                     {positive(measurementVariance * 4.0), 0.0},
                     {0.0, positive(measurementVariance / (dt * dt))}
             });
 
-            return new FilterState(x.get(0, 0), x.get(1, 0));
+            return new FilterState(filter.getState(0), filter.getState(1));
         }
 
         referenceDt += elapsedAlpha(dt, 2.0) * (dt - referenceDt);
 
-        // (x = Fx, P = FPF^T + Q)
-        Matrix F = new Matrix(new double[][]{
-                {1.0, dt},
-                {0.0, 1.0}
-        });
-
         double dt2 = dt * dt;
-        Matrix Q = new Matrix(new double[][]{
-                {dt2 * dt / 3.0, dt2 / 2.0},
-                {dt2 / 2.0, dt}
-        }).multiply(processVariance);
-
-        Matrix xPred = F.multiply(x);
-        Matrix PPred = F.multiply(P).multiply(F.transpose()).add(Q);
-
-        double predictedRate = xPred.get(1, 0);
-
-        // (y = z - Hx)
-        Matrix z = new Matrix(new double[][]{{measurement}});
-
-        Matrix y = z.subtract(H.multiply(xPred));
-        double innovation = y.get(0, 0);
-
-        Matrix R_base = new Matrix(new double[][]{{measurementVariance}});
-        Matrix S_base = H.multiply(PPred).multiply(H.transpose()).add(R_base);
-        double innovationVariance = positive(S_base.get(0, 0));
+        filter.predict(new double[][] {{1.0, dt}, {0.0, 1.0}}, new double[][] {
+                {dt2 * dt / 3.0 * processVariance, dt2 / 2.0 * processVariance},
+                {dt2 / 2.0 * processVariance, dt * processVariance}});
+        double predictedRate = filter.getState(1);
+        double innovation = filter.innovation(measurement, H);
+        double innovationVariance = filter.innovationVariance(H, measurementVariance);
 
         double normalizedInnovation = innovation / Math.sqrt(innovationVariance);
         double nis = normalizedInnovation * normalizedInnovation;
@@ -194,30 +170,17 @@ public class AdaptiveKalmanFilter implements DataFilter {
             robustScale = Math.max(1.0, robustScale);
         }
 
-        Matrix R_eff = new Matrix(new double[][]{{measurementVariance * robustScale}});
-        Matrix S = H.multiply(PPred).multiply(H.transpose()).add(R_eff);
-        S = new Matrix(new double[][]{{positive(S.get(0, 0))}}); // Guarantee positive definiteness
-
-        // Kalman Gain: K = P * H^T * S^-1
-        Matrix K = PPred.multiply(H.transpose()).multiply(S.inverse());
-
-        // Update State
-        x = xPred.add(K.multiply(y));
-
-        // Joseph Form Update: P = (I - KH) * P * (I - KH)^T + K * R_eff * K^T
-        Matrix temp = I.subtract(K.multiply(H));
-        P = temp.multiply(PPred).multiply(temp.transpose())
-                .add(K.multiply(R_eff).multiply(K.transpose()));
+        filter.correct(measurement, H, measurementVariance * robustScale);
 
         // Stabilize Covariance to prevent floating point drift
-        double p00 = positive(P.get(0, 0));
-        double p11 = positive(P.get(1, 1));
+        double p00 = positive(filter.getCovariance(0, 0));
+        double p11 = positive(filter.getCovariance(1, 1));
         double limit = 0.999999 * Math.sqrt(p00 * p11);
-        double p01 = clamp(P.get(0, 1), -limit, limit);
-        double p10 = clamp(P.get(1, 0), -limit, limit);
+        double p01 = clamp(filter.getCovariance(0, 1), -limit, limit);
+        double p10 = clamp(filter.getCovariance(1, 0), -limit, limit);
         double avgCov = (p01 + p10) / 2.0; // Force symmetry
 
-        P = new Matrix(new double[][]{
+        filter.setCovariance(new double[][]{
                 {p00, avgCov},
                 {avgCov, p11}
         });
@@ -227,7 +190,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
         previousInnovation = innovation;
         previousInnovationVariance = innovationVariance;
 
-        return new FilterState(x.get(0, 0), x.get(1, 0));
+        return new FilterState(filter.getState(0), filter.getState(1));
     }
 
     private void adaptNoiseEstimates(
@@ -252,7 +215,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
             if (bootstrapSamples == 0 && candidate > numericalVarianceFloor(measurement)) {
                 measurementVariance = candidate;
                 bootstrapSamples = 1;
-                rebaseCovarianceAfterBootstrap(dt);
+                initializeProcessNoiseAfterBootstrap(dt);
             } else if (bootstrapSamples > 0) {
                 double alpha = bootstrapSamples < BOOTSTRAP_SAMPLES
                         ? Math.max(measurementAlpha, 1.0 / (bootstrapSamples + 1.0))
@@ -316,18 +279,13 @@ public class AdaptiveKalmanFilter implements DataFilter {
         }
     }
 
-    private void rebaseCovarianceAfterBootstrap(double dt) {
+    private void initializeProcessNoiseAfterBootstrap(double dt) {
         processVariance = measurementVariance
                 / Math.max(MINIMUM_VARIANCE, dt * dt * dt)
                 * 0.001;
 
-        double currentP00 = Math.max(P.get(0, 0), measurementVariance * 2.0);
-        double currentP11 = Math.max(P.get(1, 1), measurementVariance / (dt * dt));
-
-        P = new Matrix(new double[][]{
-                {currentP00, P.get(0, 1)},
-                {P.get(1, 0), currentP11}
-        });
+        // Preserve the existing bootstrap policy: process noise changes on the next prediction.
+        // The old pre-prediction covariance rebase was overwritten by the correction in this step.
     }
 
     private void boundAutomaticProcessNoise() {
@@ -363,6 +321,11 @@ public class AdaptiveKalmanFilter implements DataFilter {
     }
 
     public void setTuning(KalmanTuning tuning) {
+        if (tuning == null || !Double.isFinite(tuning.measurementVariance)
+                || !Double.isFinite(tuning.processVariance)
+                || tuning.measurementVariance <= 0 || tuning.processVariance <= 0) {
+            throw new IllegalArgumentException("Kalman variances must be finite and positive");
+        }
         this.measurementVariance = Math.max(MINIMUM_VARIANCE, tuning.measurementVariance);
         this.processVariance = Math.max(MINIMUM_VARIANCE, tuning.processVariance);
     }
@@ -383,7 +346,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
             smoothedInnovationCorrelation = 0.0;
             bootstrapSamples = 0;
             if (initialized) {
-                measurementVariance = x != null ? numericalVarianceFloor(x.get(0, 0)) : MINIMUM_VARIANCE;
+                measurementVariance = numericalVarianceFloor(filter.getState(0));
                 processVariance = measurementVariance / Math.max(MINIMUM_VARIANCE, referenceDt * referenceDt * referenceDt) * 0.001;
             }
         }
@@ -428,8 +391,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
     public void reset() {
         initialized = false;
 
-        x = new Matrix(new double[][]{{0.0}, {0.0}});
-        P = new Matrix(new double[][]{{0.0, 0.0}, {0.0, 0.0}});
+        filter.clear();
 
         if (isAutoTuning) {
             measurementVariance = MINIMUM_VARIANCE;

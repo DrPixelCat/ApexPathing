@@ -23,15 +23,13 @@ import geometry.DistUnit;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
-import paths.movements.FollowerMovement;
 import paths.movements.Path;
-import paths.movements.Turn;
 import paths.heading.InterpolationStyle;
 
 /**
- * Test autonomous OpMode with separate explicit tank and holonomic routes. Make sure the
+ * Single-path autonomous test with explicit tank and holonomic geometry. Make sure the
  * robot has been tuned with the {@link FollowerTuner} before running this OpMode. This OpMode will
- * follows the selected curve, turn, and return, plus strafe checks for the holonomic route.
+ * follow the initial curve and stop. The holonomic path twists through custom heading nodes.
  *
  * @author Sohum Arora - 22985 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
@@ -54,7 +52,6 @@ public class AutoTest extends LinearOpMode {
     private final ElapsedTime telemetryTimer = new ElapsedTime();
     private String failureReason = "None";
     private int passedStages;
-    private boolean includeStrafeChecks;
     private double lastPositionError;
     private double lastHeadingError;
     private double maximumCrossTrackError;
@@ -76,15 +73,11 @@ public class AutoTest extends LinearOpMode {
     private final double[] stagePeakDemand = new double[3];
     private final double[] stageSquaredDemand = new double[3];
     private final long[] stageSaturatedSamples = new long[3];
-    private final double[] movementDurations = new double[5];
-    private final double[] firstToleranceTimes = new double[5];
+    private double movementDuration;
+    private double firstToleranceTime = Double.NaN;
 
     enum AutoState {
         OUTBOUND_CURVE,
-        POINT_TURN,
-        REVERSE_RETURN,
-        STRAFE_OUT,
-        STRAFE_BACK,
         COMPLETE,
         FAILED
     }
@@ -93,89 +86,95 @@ public class AutoTest extends LinearOpMode {
     public void runOpMode() {
         resetRunState();
         Follower follower = new Follower(createConstants(), hardwareMap);
-        includeStrafeChecks = !useTankPath();
-        if (!includeStrafeChecks) {
-            FollowerConstants constants = follower.getConstants().forProfile(FollowerConstants.Profile.TANK);
-            if (!positive(constants.forwardVelLimitIn) || !positive(constants.forwardAccelLimitIn)
-                    || !positive(constants.angularVelLimitRad) || !positive(constants.angularAccelLimitRad)) {
-                fail(follower, "Tank follower constants are incomplete. Run localization and follower tuning first.");
-                telemetry.addLine(failureReason);
-                telemetry.update();
-                return;
+        try {
+            configureFollower(follower);
+            if (useTankPath()) {
+                FollowerConstants constants = follower.getConstants().forProfile(FollowerConstants.Profile.TANK);
+                if (!positive(constants.forwardVelLimitIn) || !positive(constants.forwardAccelLimitIn)
+                        || !positive(constants.angularVelLimitRad) || !positive(constants.angularAccelLimitRad)) {
+                    fail(follower, "Tank follower constants are incomplete. Run localization and follower tuning first.");
+                    telemetry.addLine(failureReason);
+                    telemetry.update();
+                    return;
+                }
             }
+            path = useTankPath() ? buildTankPath() : buildHolonomicPath();
+
+            telemetry.addLine(useTankPath()
+                    ? "Apex tank test: one curve."
+                    : "Apex twist test: one curve, headings 0 -> 83 -> -71 -> 146 deg.");
+            telemetry.addLine("Press Start to begin");
+            telemetry.update();
+
+            waitForStart();
+            if (!opModeIsActive()) { return; }
+
+            follower.setPose(Pose.zero());
+            openOutboundVelocityCsv();
+            startPath(follower);
+
+            while (opModeIsActive()) {
+                long loopStartedNanos = System.nanoTime();
+                follower.update();
+                sampleCommandDemand(follower);
+                logOutboundVelocitySample(follower);
+                Pose pose = follower.getPose();
+                recordFirstToleranceEntry(pose);
+                maximumCrossTrackError = Math.max(maximumCrossTrackError,
+                        Math.abs(follower.getCrossTrackErrorIn()));
+
+                if (!isTerminal(currentState)) {
+                    if (stageTimer.seconds() > STAGE_TIMEOUT_SECONDS) {
+                        fail(follower, "Stage exceeded " + STAGE_TIMEOUT_SECONDS + " seconds");
+                    } else if (!follower.isBusy()) {
+                        finishStage(follower, pose);
+                    }
+                }
+
+                if (telemetryTimer.seconds() >= TELEMETRY_INTERVAL_SECONDS ||
+                        isTerminal(currentState)) {
+                    if (currentState == AutoState.COMPLETE) {
+                        telemetry.addLine("PASS: Apex path check completed.");
+                    } else if (currentState == AutoState.FAILED) {
+                        telemetry.addLine("FAIL: " + failureReason);
+                    }
+
+                    telemetry.addData("Current check", currentState);
+                    telemetry.addData("Passed checks", passedStages + " / 1");
+                    telemetry.addData("Stage time (s)", stageTimer.seconds());
+                    telemetry.addData("Follower busy", follower.isBusy());
+                    telemetry.addData("Callback state", path.callbackMessage);
+                    telemetry.addData("Last endpoint position error (in)", lastPositionError);
+                    telemetry.addData("Last endpoint heading error (deg)", lastHeadingError);
+                    telemetry.addData("Current maximum cross-track error (in)",
+                            maximumCrossTrackError);
+                    telemetry.addData("Last maximum cross-track error (in)",
+                            lastMaximumCrossTrackError);
+                    telemetry.addData("Outbound velocity CSV", outboundVelocityCsvPath);
+                    telemetry.addData("Command demand", getCommandDemandReport());
+                    if (outboundVelocityCsvError != null) {
+                        telemetry.addData("Velocity CSV warning", outboundVelocityCsvError);
+                    }
+                    telemetry.addData("X (in)", pose.getX().getIn());
+                    telemetry.addData("Y (in)", pose.getY().getIn());
+                    telemetry.addData("Heading (deg)", pose.getHeading().getDeg());
+                    telemetry.update();
+                    telemetryTimer.reset();
+                }
+                if (isTerminal(currentState)) { break; }
+                waitForNextControlLoop(loopStartedNanos);
+            }
+
+        } finally {
+            closeOutboundVelocityCsv();
+            follower.stop();
         }
-        path = useTankPath() ? buildTankPath() : buildHolonomicPath();
-
-        telemetry.addLine(includeStrafeChecks
-                ? "Apex follower self-test: curve, turn, reverse return, and strafe."
-                : "Apex tank self-test: curve, turn, and reverse return.");
-        telemetry.addLine("Press Start to begin");
-        telemetry.update();
-
-        waitForStart();
-        if (!opModeIsActive()) { return; }
-
-        follower.setPose(Pose.zero());
-        openOutboundVelocityCsv();
-        startStage(follower, currentState);
-
-        while (opModeIsActive()) {
-            long loopStartedNanos = System.nanoTime();
-            follower.update();
-            sampleCommandDemand(follower);
-            logOutboundVelocitySample(follower);
-            Pose pose = follower.getPose();
-            recordFirstToleranceEntry(pose);
-            maximumCrossTrackError = Math.max(maximumCrossTrackError,
-                    Math.abs(follower.getCrossTrackErrorIn()));
-
-            if (!isTerminal(currentState)) {
-                if (stageTimer.seconds() > STAGE_TIMEOUT_SECONDS) {
-                    fail(follower, "Stage exceeded " + STAGE_TIMEOUT_SECONDS + " seconds");
-                } else if (!follower.isBusy()) {
-                    finishStage(follower, pose);
-                }
-            }
-
-            if (telemetryTimer.seconds() >= TELEMETRY_INTERVAL_SECONDS ||
-                    isTerminal(currentState)) {
-                if (currentState == AutoState.COMPLETE) {
-                    telemetry.addLine("PASS: all Apex follower checks completed.");
-                } else if (currentState == AutoState.FAILED) {
-                    telemetry.addLine("FAIL: " + failureReason);
-                }
-
-                telemetry.addData("Current check", currentState);
-                telemetry.addData("Passed checks", passedStages + " / " + (includeStrafeChecks ? 5 : 3));
-                telemetry.addData("Stage time (s)", stageTimer.seconds());
-                telemetry.addData("Follower busy", follower.isBusy());
-                telemetry.addData("Callback state", path.callbackMessage);
-                telemetry.addData("Last endpoint position error (in)", lastPositionError);
-                telemetry.addData("Last endpoint heading error (deg)", lastHeadingError);
-                telemetry.addData("Current maximum cross-track error (in)",
-                        maximumCrossTrackError);
-                telemetry.addData("Last maximum cross-track error (in)",
-                        lastMaximumCrossTrackError);
-                telemetry.addData("Outbound velocity CSV", outboundVelocityCsvPath);
-                telemetry.addData("Command demand", getCommandDemandReport());
-                if (outboundVelocityCsvError != null) {
-                    telemetry.addData("Velocity CSV warning", outboundVelocityCsvError);
-                }
-                telemetry.addData("X (in)", pose.getX().getIn());
-                telemetry.addData("Y (in)", pose.getY().getIn());
-                telemetry.addData("Heading (deg)", pose.getHeading().getDeg());
-                telemetry.update();
-                telemetryTimer.reset();
-            }
-            waitForNextControlLoop(loopStartedNanos);
-        }
-
-        closeOutboundVelocityCsv();
-        follower.stop();
     }
 
     /** Selects hardware while keeping all autonomous execution in this class. */
     protected ApexConstants createConstants() { return new Constants(); }
+    /** Optional per-run follower configuration, also used by desktop diagnostics. */
+    protected void configureFollower(Follower follower) { }
 
     /** Explicit route selection; a dual-actuated drive's current mode does not choose the path. */
     protected boolean useTankPath() { return false; }
@@ -190,14 +189,6 @@ public class AutoTest extends LinearOpMode {
                         factory.pose(30, 30, 0))
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .addDistanceCallback(.5, route::outboundCallback).quickBuild();
-        // This route ends tangent to 0 degrees; the turn stage only settles that heading.
-        route.testTurn = factory.turn(route.testPath.getEndPose())
-                .setDriveProfile(FollowerConstants.Profile.TANK)
-                .turnTo(factory.angle(0)).quickBuild();
-        route.returnPath = factory.tankPath(route.testTurn.getEndPose(),
-                        factory.pose(0, 30), Pose.zero())
-                .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
-                .addDistanceCallback(.5, route::returnCallback).quickBuild();
         return route;
     }
 
@@ -208,43 +199,22 @@ public class AutoTest extends LinearOpMode {
         route.testPath = factory.holonomicPath(Pose.zero(),
                         factory.arcPose(30, 0, 7), factory.arcPose(30, -30, 7),
                         factory.arcPose(-30, -30, 7), factory.arcPose(-30, 30, 7),
-                        factory.pose(30, 30, -90))
-                .interpolateWith(InterpolationStyle.TANGENT_OPTIMAL)
+                        factory.pose(30, 30, 146))
+                // Fixed arbitrary headings make the twisting stress test repeatable.
+                .addHeadingNode(.30, factory.angle(83))
+                .addHeadingNode(.65, factory.angle(-71))
                 .addDistanceCallback(.5, route::outboundCallback).buildToMemory();
-        route.testTurn = factory.turn(route.testPath.getEndPose())
-                .setDriveProfile(FollowerConstants.Profile.HOLONOMIC)
-                .turnTo(factory.angle(0))
-                .addAngularCallback(factory.angle(-45), route::turnCallback).quickBuild();
-        route.returnPath = factory.holonomicPath(route.testTurn.getEndPose(),
-                        factory.pose(0, 30), Pose.zero())
-                .interpolateWith(InterpolationStyle.TANGENT_BACKWARD)
-                .setDistanceToStartFinalTurn(factory.dist(30))
-                .addDistanceCallback(.5, route::returnCallback).buildToMemory();
-        Pose strafeEnd = factory.pose(0, 24, 0);
-        route.strafeOutPath = factory.holonomicPath(Pose.zero(), strafeEnd)
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).buildToMemory();
-        route.strafeBackPath = factory.holonomicPath(strafeEnd, Pose.zero())
-                .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).buildToMemory();
         return route;
     }
 
     static final class AutoRoute {
-        Path testPath, returnPath, strafeOutPath, strafeBackPath;
-        Turn testTurn;
+        Path testPath;
         String callbackMessage = "Callback not triggered yet";
-        boolean outboundCallbackTriggered, turnCallbackTriggered, returnCallbackTriggered;
+        boolean outboundCallbackTriggered;
 
         void outboundCallback() {
             outboundCallbackTriggered = true;
             callbackMessage = "Outbound distance callback triggered!";
-        }
-        void turnCallback() {
-            turnCallbackTriggered = true;
-            callbackMessage = "Angular callback triggered!";
-        }
-        void returnCallback() {
-            returnCallbackTriggered = true;
-            callbackMessage = "Return distance callback triggered!";
         }
     }
 
@@ -261,10 +231,13 @@ public class AutoTest extends LinearOpMode {
     }
 
     private void finishStage(Follower follower, Pose actualPose) {
-        movementDurations[currentState.ordinal()] = stageTimer.seconds();
-        if (currentState == AutoState.OUTBOUND_CURVE) { closeOutboundVelocityCsv(); }
-        FollowerMovement completed = movementFor(currentState);
-        Pose expectedPose = completed.getEndPose();
+        if (follower.getMovementOutcome() == Follower.MovementOutcome.FAILED) {
+            fail(follower, follower.getTrajectoryFailure());
+            return;
+        }
+        movementDuration = stageTimer.seconds();
+        closeOutboundVelocityCsv();
+        Pose expectedPose = path.testPath.getEndPose();
         lastPositionError = actualPose.distanceTo(expectedPose).getIn();
         lastHeadingError = Math.abs(actualPose.getHeading()
                 .getShortestAngleTo(expectedPose.getHeading()).getDeg());
@@ -282,31 +255,25 @@ public class AutoTest extends LinearOpMode {
                     lastHeadingError + " deg");
             return;
         }
-        if (currentState != AutoState.POINT_TURN &&
-                maximumCrossTrackError > CROSS_TRACK_TOLERANCE_INCHES) {
+        if (maximumCrossTrackError > CROSS_TRACK_TOLERANCE_INCHES) {
             fail(follower, "Cross-track error exceeded " + CROSS_TRACK_TOLERANCE_INCHES +
                     " inches in " + currentState + ": " + maximumCrossTrackError + " in");
             return;
         }
-        if (!requiredCallbackTriggered(currentState)) {
+        if (!path.outboundCallbackTriggered) {
             fail(follower, "Expected callback did not run in " + currentState);
             return;
         }
 
         passedStages++;
-        currentState = !includeStrafeChecks && currentState == AutoState.REVERSE_RETURN
-                ? AutoState.COMPLETE : nextState(currentState);
-        if (currentState == AutoState.COMPLETE) {
-            follower.stop();
-        } else {
-            startStage(follower, currentState);
-        }
+        currentState = nextState(currentState);
+        follower.stop();
     }
 
-    private void startStage(Follower follower, AutoState state) {
+    private void startPath(Follower follower) {
         maximumCrossTrackError = 0.0;
         stageTimer.reset();
-        follower.follow(movementFor(state));
+        follower.follow(path.testPath);
     }
 
     private void fail(Follower follower, String reason) {
@@ -316,36 +283,9 @@ public class AutoTest extends LinearOpMode {
         currentState = AutoState.FAILED;
     }
 
-    private FollowerMovement movementFor(AutoState state) {
-        switch (state) {
-            case OUTBOUND_CURVE: return path.testPath;
-            case POINT_TURN: return path.testTurn;
-            case REVERSE_RETURN: return path.returnPath;
-            case STRAFE_OUT: return path.strafeOutPath;
-            case STRAFE_BACK: return path.strafeBackPath;
-            default: throw new IllegalArgumentException("No movement for terminal state " + state);
-        }
-    }
-
-    private boolean requiredCallbackTriggered(AutoState state) {
-        switch (state) {
-            case OUTBOUND_CURVE: return path.outboundCallbackTriggered;
-            case POINT_TURN:
-                return Math.abs(path.testTurn.getStartPose().getHeading()
-                        .getShortestAngleTo(path.testTurn.getEndPose().getHeading()).getRad()) < 1e-6
-                        || path.turnCallbackTriggered;
-            case REVERSE_RETURN: return path.returnCallbackTriggered;
-            default: return true;
-        }
-    }
-
     static AutoState nextState(AutoState state) {
         switch (state) {
-            case OUTBOUND_CURVE: return AutoState.POINT_TURN;
-            case POINT_TURN: return AutoState.REVERSE_RETURN;
-            case REVERSE_RETURN: return AutoState.STRAFE_OUT;
-            case STRAFE_OUT: return AutoState.STRAFE_BACK;
-            case STRAFE_BACK: return AutoState.COMPLETE;
+            case OUTBOUND_CURVE: return AutoState.COMPLETE;
             default: return state;
         }
     }
@@ -361,11 +301,9 @@ public class AutoTest extends LinearOpMode {
 
     public String getOutboundVelocityCsvError() { return outboundVelocityCsvError; }
 
-    /** Returns the elapsed motion time across all five completed checks. */
+    /** Returns the elapsed motion time for the single completed path. */
     public double getTotalMovementTimeSeconds() {
-        double total = 0.0;
-        for (double duration : movementDurations) { total += duration; }
-        return total;
+        return movementDuration;
     }
 
     /** Yields to hardware while maintaining a complete 20 ms control-loop period. */
@@ -384,36 +322,28 @@ public class AutoTest extends LinearOpMode {
     /** Returns a concise timing breakdown for performance regression tests. */
     public String getMovementTimingReport() {
         return String.format(Locale.US,
-                "outbound=%.3fs(+%.3fs settle), turn=%.3fs(+%.3fs settle), " +
-                        "return=%.3fs(+%.3fs settle), strafeOut=%.3fs(+%.3fs settle), " +
-                        "strafeBack=%.3fs(+%.3fs settle), total=%.3fs",
-                movementDurations[0], settlingDelay(0),
-                movementDurations[1], settlingDelay(1),
-                movementDurations[2], settlingDelay(2),
-                movementDurations[3], settlingDelay(3),
-                movementDurations[4], settlingDelay(4),
+                "outbound=%.3fs(+%.3fs settle), total=%.3fs",
+                movementDuration, settlingDelay(),
                 getTotalMovementTimeSeconds());
     }
 
-    private double settlingDelay(int stage) {
-        return Double.isFinite(firstToleranceTimes[stage])
-                ? Math.max(0.0, movementDurations[stage] - firstToleranceTimes[stage])
-                : movementDurations[stage];
+    private double settlingDelay() {
+        return Double.isFinite(firstToleranceTime)
+                ? Math.max(0.0, movementDuration - firstToleranceTime)
+                : movementDuration;
     }
 
     private void recordFirstToleranceEntry(Pose actualPose) {
-        int stage = currentState.ordinal();
-        if (stage >= movementDurations.length || Double.isFinite(firstToleranceTimes[stage])) {
+        if (isTerminal(currentState) || Double.isFinite(firstToleranceTime)) {
             return;
         }
-        Pose expected = movementFor(currentState).getEndPose();
+        Pose expected = path.testPath.getEndPose();
         double positionError = actualPose.distanceTo(expected).getIn();
         double headingError = Math.abs(actualPose.getHeading()
                 .getShortestAngleTo(expected.getHeading()).getDeg());
-        boolean inside = currentState == AutoState.POINT_TURN
-                ? headingError <= 2.0
-                : positionError <= 1.0 && headingError <= 2.0;
-        if (inside) { firstToleranceTimes[stage] = stageTimer.seconds(); }
+        if (positionError <= 1.0 && headingError <= 2.0) {
+            firstToleranceTime = stageTimer.seconds();
+        }
     }
 
     /** Summarizes raw controller demand before command normalization. */
@@ -488,8 +418,8 @@ public class AutoTest extends LinearOpMode {
         Arrays.fill(stagePeakDemand, 0.0);
         Arrays.fill(stageSquaredDemand, 0.0);
         Arrays.fill(stageSaturatedSamples, 0);
-        Arrays.fill(movementDurations, 0.0);
-        Arrays.fill(firstToleranceTimes, Double.NaN);
+        movementDuration = 0.0;
+        firstToleranceTime = Double.NaN;
     }
 
     private void openOutboundVelocityCsv() {
@@ -518,7 +448,8 @@ public class AutoTest extends LinearOpMode {
                             "actual_omega_rad_s,correction_scale,feedforward_scale,velocity_scale," +
                             "allocated_drive_ff_magnitude,allocated_heading_ff_magnitude," +
                             "remaining_after_correction,remaining_after_feedforward," +
-                            "remaining_after_velocity\n");
+                            "remaining_after_velocity,expected_motor_power,velocity_goal_distance_in,current_speed_ceiling_in_s," +
+                            "centered_braking_active,centered_braking_mean_power\n");
         } catch (IOException e) {
             outboundVelocityCsv = null;
             outboundVelocityCsvPath = "Unavailable";
@@ -564,7 +495,7 @@ public class AutoTest extends LinearOpMode {
                     "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
                             "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
                             "%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
-                            "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
+                            "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.6f%n",
                     elapsed, traveled, target.getTangentialVel(), rawVelocity,
                     kalmanVelocity, target.getTangentialAccel(), target.getAngularVel(),
                     target.getAngularAccel(), target.getMotorPower(), crossTrackError, curvature,
@@ -587,7 +518,9 @@ public class AutoTest extends LinearOpMode {
                             - demand.feedforwardTotal * demand.feedforwardScale),
                     Math.max(0, 1 - demand.correctiveTotal * demand.correctionScale
                             - demand.feedforwardTotal * demand.feedforwardScale
-                            - demand.velocityTotal * demand.velocityScale)));
+                            - demand.velocityTotal * demand.velocityScale), sample.expectedMotorPower,
+                    follower.getVelocityGoalDistanceIn(), follower.getCurrentSpeedCeiling(),
+                    follower.isCenteredBrakingActive(), follower.getCenteredBrakingMeanPower()));
             outboundVelocityRowsSinceFlush++;
             if (outboundVelocityRowsSinceFlush >= 25) {
                 outboundVelocityCsv.flush();

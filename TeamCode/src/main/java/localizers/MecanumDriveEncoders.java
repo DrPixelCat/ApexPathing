@@ -39,11 +39,15 @@ public class MecanumDriveEncoders extends BaseLocalizer<MecanumDriveEncoders.Con
         }
 
         imu = hardwareMap.get(IMU.class, constants.imuName);
-        imu.initialize(new IMU.Parameters(constants.hubOrientation));
+        if (!imu.initialize(new IMU.Parameters(constants.hubOrientation))) {
+            throw new IllegalStateException("IMU initialization failed: " + constants.imuName);
+        }
     }
 
     @Override
     public void update() {
+        double imuYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+        if (!Double.isFinite(imuYaw)) { markMeasurementInvalid(); return; }
         frontLeft.update();
         frontRight.update();
         if (backLeft != null) {
@@ -66,7 +70,7 @@ public class MecanumDriveEncoders extends BaseLocalizer<MecanumDriveEncoders.Con
 
         double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
-                imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction
+                imuYaw - correction
         );
         double deltaYaw = Angle.wrap(currentYaw - oldYaw);
         pose = integrateArc(pose, forward, strafe, deltaYaw, currentYaw);
@@ -131,6 +135,9 @@ public class MecanumDriveEncoders extends BaseLocalizer<MecanumDriveEncoders.Con
 
         @Override
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {
+            if (!Double.isFinite(ticksPerInch) || ticksPerInch <= 0) {
+                throw new IllegalArgumentException("Encoder ticks per inch must be finite and positive");
+            }
             if (frontLeftName == null || frontRightName == null) {
                 throw new IllegalArgumentException(
                         "You must call setFrontLeftName and setFrontRightName to set the names " +

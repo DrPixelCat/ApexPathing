@@ -11,6 +11,20 @@
         "forwardAccelLimitIn": 92.47748310509925,
         "profiledTrackingTuned": true,
         "motionCharacterization": {
+            "mecanumWheelModel": {
+                "version": 1,
+                "gain": 182.999999999994,
+                "speedLoss": 2.307692307692,
+                "regenerativeBraking": 3.920001,
+                "neutralBraking": 3.920001,
+                "forwardDrag": 49.000000000005,
+                "strafeDrag": 85.000000000003,
+                "angularDrag": 1.0,
+                "effectiveRadius": 9.25197,
+                "maximumWheelSpeed": 60.0,
+            "validationRms": 0.00000000002,
+            "commandPreviewSeconds": 0.0075
+            },
             "STRAFE": {
                 "negative": {
                     "dragSlope": -0.021083938814770865,

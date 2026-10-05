@@ -7,13 +7,7 @@ final class MotionFeedforward {
     private MotionFeedforward() { }
 
     static double motionSign(double targetVelocity, double targetAcceleration) {
-        if (Math.abs(targetVelocity) > 1e-6) {
-            return Math.signum(targetVelocity);
-        }
-        if (Math.abs(targetAcceleration) > 1e-6) {
-            return Math.signum(targetAcceleration);
-        }
-        return 0.0;
+        return feedforward.HolonomicFeedforward.motionSign(targetVelocity, targetAcceleration);
     }
 
     static double timeScale(double targetTangentialVelocity, double measuredTangentialVelocity) {

@@ -87,11 +87,26 @@ public class TrajectoryTest {
         assertTrue(target.overspeed); assertTrue(target.tangentialAcceleration() < 0);
         assertTrue(target.tangentialVelocity() > 20); assertTrue(target.tangentialVelocity() < 60);
     }
+    @Test public void currentTimeVelocityUsesThePublishedTangentOnCurves() {
+        Path path = geometry.holonomicPath(geometry.pose(0, 0), geometry.arcPose(30, 0, 7),
+                geometry.arcPose(30, -30, 7), geometry.pose(-30, -30)).quickBuild();
+        OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
+        for (double distance : new double[]{24.1, 27.7, 30.3, 52.8, 58.4}) {
+            geometry.PathPoint point = path.getParametricPath().getPointAtDistance(distance);
+            Vector tangent = point.getFirstDerivative().normalize();
+            Vector normal = PathSegment.calculateLeftNormal(tangent);
+            Vector measured = tangent.times(12).plus(normal.times(7));
+            TrajectorySample target = planner.sample(point.getLocation().plus(normal.times(3)), measured, .02);
+            assertEquals("Current-time target must use the same projection as feedback",
+                    measured.dot(target.tangent).getIn(), target.tangentialVelocity(), 1e-9);
+        }
+    }
     @Test public void futureConstraintIsSeenBeforeCrossingIt() {
         Path path = line(0, 0, 100).setLookaheadDistance(Dist.fromIn(12))
                 .addConstraint(new TranslationalConstraint(.3, PathConstraint.Type.VELOCITY, Dist.fromIn(5))).quickBuild();
         TrajectorySample target = new OnlineTrajectoryPlanner(path, constants).sample(vec(28, 0), vec(20, 0), .02);
-        assertTrue(target.tangentialAcceleration() < 0); assertTrue(target.tangentialVelocity() < 20);
+        assertTrue(target.tangentialAcceleration() < 0);
+        assertEquals("Current-time planning must not publish a future braking velocity",20,target.tangentialVelocity(),1e-8);
     }
     @Test public void horizonHasBrakingHeadroomAndRemainsFixed() {
         Path path = line(0, 0, 100).quickBuild();
@@ -199,17 +214,20 @@ public class TrajectoryTest {
         assertEquals(0, field.sample(vec(40, 0)).tangentialVelocity(), 0);
         assertTrue(line(0, 0, 2).buildToMemory().getTrajectoryField().sample(vec(0, 0)).tangentialAcceleration() > 0);
     }
-    @Test public void storedTrajectoryIsPermanentWhenSettingsChange() {
+    @Test public void storedTrajectoryUsesSnapshotAndRebuildsForPathChanges() {
         Path path = line(0, 0, 40).buildToMemory();
         TrajectoryField2D field = path.getTrajectoryField();
         TrajectorySample original = field.sample(vec(20, 0));
         long solves = CoupledMotionProfile.getSolveCount();
         constants.velocityFeedbackGain = .2; constants.angularCoeffs.kP = 3;
-        constants.forwardVelLimitIn = 30; path.setProfilePowerLimit(.5);
-        path.precomputeTrajectory();
+        constants.forwardVelLimitIn = 30;
         assertSame(field, path.getTrajectoryField());
-        assertEquals(original.tangentialVelocity(), field.sample(vec(20, 0)).tangentialVelocity(), 0);
-        assertEquals(solves, CoupledMotionProfile.getSolveCount());
+        assertEquals(original.tangentialVelocity(), path.getTrajectoryField().sample(vec(20, 0)).tangentialVelocity(), 0);
+        path.setProfilePowerLimit(.5);
+        path.precomputeTrajectory();
+        assertNotSame(field, path.getTrajectoryField());
+        assertTrue(path.getTrajectoryField().sample(vec(20, 0)).tangentialVelocity() < original.tangentialVelocity());
+        assertTrue(CoupledMotionProfile.getSolveCount() > solves);
     }
     @Test public void accelerationVectorIncludesSignedNormalAcceleration() {
         Path path = geometry.holonomicPath(geometry.pose(0, 0, 0), geometry.arcPose(30, 0, 7), geometry.pose(30, 40, 90))
@@ -262,7 +280,7 @@ public class TrajectoryTest {
         TrajectorySample target = planner.sample(vec(10, 0), vec(0, 0), 5, .02);
         assertTrue(target.overspeed);
         assertTrue(target.angularVelocity > constants.angularVelLimitRad);
-        assertTrue(target.angularVelocity < 5);
+        assertEquals("Recovery keeps the measured current rate and supplies braking acceleration",5,target.angularVelocity,1e-9);
         assertTrue(target.angularAcceleration < 0);
     }
 
@@ -326,7 +344,7 @@ public class TrajectoryTest {
         assertTrue(atEnd.overspeed); assertTrue(atEnd.tangentialVelocity() >= 25 - 1e-6);
         assertTrue(atEnd.tangentialAcceleration() < 0);
         TrajectorySample backwards = planner.sample(vec(10, 0), vec(-.1, 0), 0, .02);
-        assertTrue(backwards.overspeed); assertEquals(0, backwards.tangentialVelocity(), 1e-6);
+        assertTrue(backwards.overspeed); assertEquals("Recovery must not preview an invented stop",-.1, backwards.tangentialVelocity(), 1e-6);
         assertTrue(backwards.tangentialAcceleration() > 0);
     }
 

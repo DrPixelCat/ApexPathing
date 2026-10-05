@@ -64,7 +64,7 @@ public class TankDriveEncoders extends BaseLocalizer<TankDriveEncoders.Constants
     @Override
     public void update() {
         double currentYaw = yaw.getAsDouble();
-        if (!Double.isFinite(currentYaw)) { return; }
+        if (!Double.isFinite(currentYaw)) { markMeasurementInvalid(); return; }
         double left = 0.0;
         double right = 0.0;
         for (int i = 0; i < encoders.length; i++) {

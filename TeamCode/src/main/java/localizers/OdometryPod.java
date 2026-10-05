@@ -27,6 +27,9 @@ public class OdometryPod {
     /** Creates a pod with an optional software reversal relative to the SDK encoder reading. */
     public OdometryPod(HardwareMap hardwareMap, String name, double ticksPerInch,
                        boolean reversed) {
+        if (!Double.isFinite(ticksPerInch) || ticksPerInch <= 0) {
+            throw new IllegalArgumentException("Encoder ticks per inch must be finite and positive");
+        }
         this.name = name;
         this.odometry = hardwareMap.get(DcMotorEx.class, this.name);
         this.ticksPerInch = ticksPerInch;

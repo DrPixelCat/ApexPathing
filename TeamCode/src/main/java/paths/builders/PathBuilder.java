@@ -20,6 +20,18 @@ import paths.movements.Path;
  */
 public abstract class PathBuilder<T extends PathBuilder<T>> {
     protected Path path;
+    private boolean built;
+
+    protected void beginBuild() {
+        if (built) { throw new IllegalStateException("Path builders can only be built once"); }
+        built = true;
+    }
+
+    @SuppressWarnings("unchecked")
+    public T setPlanningConstants(follower.FollowerConstants constants) {
+        path.setPlanningConstants(constants);
+        return (T) this;
+    }
     protected InterpolationStyle style = InterpolationStyle.TANGENT_FORWARD;
 
     final Pose[] rawPoses;
@@ -33,10 +45,20 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
      *              Endpoints cannot be ArcPoses.
      */
     public PathBuilder(Path.PathType type, Pose... poses) {
-        this.rawPoses = poses;
+        this.rawPoses = java.util.Objects.requireNonNull(poses, "Poses").clone();
         this.path = new Path(type);
         if (poses.length < 2) {
             throw new IllegalArgumentException("A B-Spline must be created with > 1 points!");
+        }
+        for (Pose pose : rawPoses) {
+            if (pose == null || !pose.getVec().isFinite() || pose.getHeading().isNotFinite()) {
+                throw new IllegalArgumentException("Path poses must be finite");
+            }
+            if (pose instanceof ArcPose && (((ArcPose) pose).getRadius() == null
+                    || !Double.isFinite(((ArcPose) pose).getRadius().getIn())
+                    || ((ArcPose) pose).getRadius().getIn() <= 0)) {
+                throw new IllegalArgumentException("Arc radius must be positive and finite");
+            }
         }
         if (poses[0] instanceof ArcPose || poses[poses.length - 1] instanceof ArcPose) {
             throw new IllegalArgumentException("Endpoints can't be arcs!");
@@ -76,10 +98,8 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
      */
     @SuppressWarnings("unchecked")
     public T addConstraint(PathConstraint constraint) {
-        if (constraint.getS() >= 1.0 || constraint.getS() < 0.0) {
-            constraint.setS(Math.min(Math.max(constraint.getS(), 0.0), 0.9));
-            path.addWarning("s must be within [0, 1) bounds! Normalized to " + constraint.getS() +
-                    " for safety.");
+        if (!Double.isFinite(constraint.getS()) || constraint.getS() >= 1 || constraint.getS() < 0) {
+            throw new IllegalArgumentException("Constraint progress must be in [0, 1)");
         }
         path.addConstraint(constraint);
         return (T) this;

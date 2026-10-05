@@ -297,7 +297,7 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
                         style == InterpolationStyle.CONSTANT_END_HEADING && endH.isNotFinite() ||
                         style == InterpolationStyle.TANGENT_CUSTOM &&
                                 (customOffset == null || customOffset.isNotFinite()) ||
-                        style == InterpolationStyle.FACING_POINT && (!facingPoint.isFinite() ||
+                        style == InterpolationStyle.FACING_POINT && (facingPoint == null || !facingPoint.isFinite() ||
                                 customOffset != null && customOffset.isNotFinite()) ||
                         style == InterpolationStyle.SMOOTH_START_TO_END && (startH.isNotFinite() ||
                                 endH.isNotFinite());
@@ -366,6 +366,7 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
 
     @Override
     public Path quickBuild() {
+        beginBuild();
         compileGeometry();
         path.setBuildMode(Path.BuildMode.ONLINE);
         return path;
@@ -373,6 +374,7 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
 
     @Override
     public Path buildToMemory() {
+        beginBuild();
         compileGeometry();
         path.setBuildMode(Path.BuildMode.MEMORY);
         path.precomputeTrajectory();

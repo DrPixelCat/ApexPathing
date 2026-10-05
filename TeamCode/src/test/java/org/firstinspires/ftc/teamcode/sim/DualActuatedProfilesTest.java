@@ -49,13 +49,14 @@ public class DualActuatedProfilesTest {
             assertEquals(0.04, follower.getConstants().translationalKV, 0);
             Path tankPath = new TankPathBuilder(Pose.zero(),
                     new Pose(Vector.of(24, 0, DistUnit.IN), Angle.zero())).quickBuild();
-            assertEquals(FollowerConstants.Profile.HOLONOMIC, constants.getActiveProfile());
+            assertNull("Constructing a follower must not change shared settings", constants.getActiveProfile());
+            assertEquals(FollowerConstants.Profile.HOLONOMIC, follower.getConstants().getActiveProfile());
             assertNull(tankPath.getFeedforwardLut());
             assertEquals(Path.BuildMode.ONLINE, tankPath.getBuildMode());
             follower.follow(tankPath);
             assertFalse(drive.isHolonomic());
             assertEquals(0.02, follower.getConstants().translationalKV, 0);
-            assertEquals(25, constants.forwardVelLimitIn, 0);
+            assertEquals(25, follower.getConstants().forwardVelLimitIn, 0);
             follower.stop();
             follower.setPose(Pose.zero());
             Path reversePath = new TankPathBuilder(Pose.zero(),
@@ -68,7 +69,7 @@ public class DualActuatedProfilesTest {
             Turn turn = new TurnBuilder(Pose.zero())
                     .setDriveProfile(FollowerConstants.Profile.HOLONOMIC)
                     .turnTo(Angle.fromDeg(90)).buildToMemory();
-            assertEquals(FollowerConstants.Profile.TANK, constants.getActiveProfile());
+            assertEquals(FollowerConstants.Profile.TANK, follower.getConstants().getActiveProfile());
             follower.follow(turn.reversed());
             assertTrue(drive.isHolonomic());
             assertEquals(0.04, follower.getConstants().translationalKV, 0);
@@ -80,7 +81,7 @@ public class DualActuatedProfilesTest {
             assertTrue(drive.isTransitioning());
             assertEquals(0, drive.getLastFlPower(), 0);
             follower.update(false);
-            assertEquals(FollowerConstants.Profile.TANK, constants.getActiveProfile());
+            assertEquals(FollowerConstants.Profile.TANK, follower.getConstants().getActiveProfile());
             assertEquals(0.02, follower.getConstants().translationalKV, 0);
         } finally {
             singleton.set(null, prior);

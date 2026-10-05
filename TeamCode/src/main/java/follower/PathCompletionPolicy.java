@@ -5,18 +5,13 @@ final class PathCompletionPolicy {
     private static final double SETTLED_LINEAR_VELOCITY_SQ = 64.0;
     private static final double SETTLED_ANGULAR_VELOCITY = 0.25;
     private static final double COMPLETION_DWELL_SECONDS = 0.10;
-    private static final double MIN_COMPLETION_DISTANCE_INCHES = 1.5;
-    private static final double MIN_COMPLETION_HEADING_RADIANS = Math.toRadians(2.0);
 
     private long toleranceEnteredNanos;
 
     boolean isComplete(boolean insideTolerance, boolean velocitySettled, long nowNanos) {
-        if (!insideTolerance) {
+        if (!insideTolerance || !velocitySettled) {
             toleranceEnteredNanos = 0L;
             return false;
-        }
-        if (velocitySettled) {
-            return true;
         }
         if (toleranceEnteredNanos == 0L) {
             toleranceEnteredNanos = nowNanos;
@@ -44,10 +39,10 @@ final class PathCompletionPolicy {
     }
 
     static double distanceTolerance(double configuredTolerance) {
-        return Math.max(configuredTolerance, MIN_COMPLETION_DISTANCE_INCHES);
+        return configuredTolerance;
     }
 
     static double headingTolerance(double configuredTolerance) {
-        return Math.max(configuredTolerance, MIN_COMPLETION_HEADING_RADIANS);
+        return configuredTolerance;
     }
 }

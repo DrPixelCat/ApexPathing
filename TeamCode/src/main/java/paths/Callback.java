@@ -29,9 +29,12 @@ public class Callback {
      */
     public Callback(double s, Runnable action) {
         this.type = CallbackType.DISTANCE;
-        this.s = Range.clip(s, 0.0, 1.0);
+        if (!Double.isFinite(s) || s < 0 || s > 1) {
+            throw new IllegalArgumentException("Callback progress must be in [0, 1]");
+        }
+        this.s = s;
         this.theta = null;
-        this.action = action;
+        this.action = java.util.Objects.requireNonNull(action, "Callback action");
     }
 
     /**
@@ -43,8 +46,9 @@ public class Callback {
     public Callback(Angle theta, Runnable action) {
         this.type = CallbackType.ANGLE;
         this.s = -1.0;
+        if (theta == null || theta.isNotFinite()) { throw new IllegalArgumentException("Callback angle must be finite"); }
         this.theta = theta;
-        this.action = action;
+        this.action = java.util.Objects.requireNonNull(action, "Callback action");
     }
 
     public CallbackType getType() { return type; }

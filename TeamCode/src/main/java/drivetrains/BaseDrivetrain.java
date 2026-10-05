@@ -46,6 +46,7 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      * @param hardwareMap the hardware map to use for initializing motors
      */
     public BaseDrivetrain(T constants, HardwareMap hardwareMap, DrivetrainType drivetrainType) {
+        constants.validate();
         flMotor = constants.flMotorConfig.build(hardwareMap);
         frMotor = constants.frMotorConfig.build(hardwareMap);
         if (constants.blMotorConfig != null) {
@@ -117,6 +118,15 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      * drivetrain class does not use all 4 motors, just pass 0 for the motors you don't use.
      */
     public void setPowers(double flPower, double frPower, double blPower, double brPower) {
+        if (!Double.isFinite(flPower) || !Double.isFinite(frPower)
+                || !Double.isFinite(blPower) || !Double.isFinite(brPower)) {
+            stop();
+            throw new IllegalArgumentException("Motor powers must be finite");
+        }
+        if (!Double.isFinite(constants.maxPower) || constants.maxPower < 0 || constants.maxPower > 1) {
+            stop();
+            throw new IllegalStateException("Maximum power must be in [0, 1]");
+        }
         // Motor power limiting
         double max = Math.max(0, Math.abs(flPower));
         max = Math.max(max, Math.abs(frPower));
@@ -154,7 +164,13 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
     }
 
     /** Stop all drivetrain actuators */
-    public void stop() { setPowers(0, 0, 0, 0); }
+    public void stop() {
+        flMotor.setPower(0);
+        frMotor.setPower(0);
+        if (blMotor != null) { blMotor.setPower(0); }
+        if (brMotor != null) { brMotor.setPower(0); }
+        lastFlPower = lastFrPower = lastBlPower = lastBrPower = 0;
+    }
 
     public double getLastFlPower() { return lastFlPower; }
     public double getLastFrPower() { return lastFrPower; }

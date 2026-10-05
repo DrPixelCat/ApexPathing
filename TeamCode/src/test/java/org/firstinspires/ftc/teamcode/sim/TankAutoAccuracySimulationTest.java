@@ -118,7 +118,7 @@ public class TankAutoAccuracySimulationTest {
             if (tuningJson != null) { validateBraking(new File(auto.getOutboundVelocityCsvPath())); }
             System.out.println("AUTO TEST TIMING: " + auto.getMovementTimingReport());
             System.out.println("AUTO TEST EXTERNAL RUNTIME: " + routeRunSeconds + " s");
-            assertEquals("Outbound, turn and reverse must all pass", 3, auto.getPassedStages());
+            assertEquals("AutoTest must stop after its outbound curve", 1, auto.getPassedStages());
             System.out.println("TANK CSV: " + auto.getOutboundVelocityCsvPath());
             System.out.println("TANK RESULT: " + frame);
             assertTrue("Auto Test following regressed: external=" + routeRunSeconds +

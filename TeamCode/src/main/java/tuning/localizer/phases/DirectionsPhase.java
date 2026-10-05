@@ -63,7 +63,7 @@ public final class DirectionsPhase extends TuningPhase {
         invalidSamples = 0;
         imuError = "";
         imuRotation.clearAxis();
-        try { imu = opMode == null ? null : opMode.hardwareMap.get(IMU.class, "imu"); }
+        try { imu = opMode == null ? null : opMode.hardwareMap.get(IMU.class, context.getImuName()); }
         catch (RuntimeException ignored) { imu = null; }
     }
 
@@ -180,7 +180,7 @@ public final class DirectionsPhase extends TuningPhase {
                 .rotate(startPose.getHeading().times(-1.0));
         double heading = Angle.wrap(endPose.getHeading().getRad()
                 - startPose.getHeading().getRad());
-        boolean autoCorrect = start.rawTicks.length > 0 && end.rawTicks.length > 0;
+        boolean autoCorrect = start.getChannelCount() > 0 && end.getChannelCount() > 0;
         if (motion == Motion.FORWARD) {
             return new Response("Forward", robotDelta.getX().getIn(),
                     MIN_TRANSLATION_INCHES, autoCorrect);

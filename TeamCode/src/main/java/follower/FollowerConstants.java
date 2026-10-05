@@ -14,7 +14,7 @@ import controllers.FeedbackController.Coefficients;
 
 /**
  * Class to hold constants for the Follower class. These constants are loaded from a JSON file
- * created by the tuners. If the file does not exist or cannot be read, default values will be used.
+ * created by the tuners. A missing file uses defaults; malformed saved data is reported explicitly.
  *
  * @author Sohum Arora - 22985 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
@@ -155,9 +155,61 @@ public class FollowerConstants {
         activeProfile = profile;
     }
 
+    /** Independent runtime configuration; constructing one follower cannot modify another. */
+    public FollowerConstants copy() {
+        FollowerConstants result = new FollowerConstants(true);
+        result.motionCharacterization = motionCharacterization;
+        result.brakingVelocityFeedbackGain = brakingVelocityFeedbackGain;
+        result.brakingOverspeedToleranceIn = brakingOverspeedToleranceIn;
+        result.brakingPulsePower = brakingPulsePower;
+        result.tankBrakingPulsePower = tankBrakingPulsePower;
+        result.brakingPulseCooldownCycles = brakingPulseCooldownCycles;
+        result.brakingNeutralPowerMargin = brakingNeutralPowerMargin;
+        result.profileCornerSpeedScale = profileCornerSpeedScale;
+        result.profileVelocityPowerCoefficient = profileVelocityPowerCoefficient;
+        result.brakingCornerToleranceIn = brakingCornerToleranceIn;
+        result.tankBrakingCornerToleranceIn = tankBrakingCornerToleranceIn;
+        result.profiledTrackingTuned = profiledTrackingTuned;
+        result.drivetrainType = drivetrainType;
+        result.velocityFeedbackGain = velocityFeedbackGain;
+        result.angularVelocityFeedbackGain = angularVelocityFeedbackGain;
+        result.translationalKV = translationalKV;
+        result.translationalKA = translationalKA;
+        result.angularKV = angularKV;
+        result.angularKA = angularKA;
+        result.translationalFeedforwardKS = translationalFeedforwardKS;
+        result.angularFeedforwardKS = angularFeedforwardKS;
+        result.kCentripetal = kCentripetal;
+        result.forwardVelLimitIn = forwardVelLimitIn;
+        result.forwardAccelLimitIn = forwardAccelLimitIn;
+        result.strafeVelLimitIn = strafeVelLimitIn;
+        result.strafeAccelLimitIn = strafeAccelLimitIn;
+        result.angularVelLimitRad = angularVelLimitRad;
+        result.angularAccelLimitRad = angularAccelLimitRad;
+        result.maxCentripetalAccelIn = maxCentripetalAccelIn;
+        result.allowUntuned = allowUntuned;
+        result.activeProfile = activeProfile;
+        result.angularCoeffs = copyCoefficients(angularCoeffs);
+        result.translationalCoeffs = copyCoefficients(translationalCoeffs);
+        for (Profile profile : profiles.keySet()) {
+            result.profiles.put(profile, copyJson(profiles.get(profile)));
+        }
+        result.unassignedLegacy = unassignedLegacy == null ? null : copyJson(unassignedLegacy);
+        return result;
+    }
+
+    private static Coefficients copyCoefficients(Coefficients source) {
+        return new Coefficients().p(source.kP).d(source.kD).s(source.kS)
+                .sqrt(source.kSqrt).vel(source.kV).accel(source.kA);
+    }
+    private static JSONObject copyJson(JSONObject source) {
+        try { return new JSONObject(source.toString()); }
+        catch (org.json.JSONException failure) { throw new IllegalArgumentException("Invalid constants", failure); }
+    }
+
     /** Detached values for path generation; does not change the active drivetrain mode. */
     public FollowerConstants forProfile(Profile profile) {
-        if (drivetrainType != BaseDrivetrain.DrivetrainType.DUAL_ACTUATED) { return this; }
+        if (drivetrainType != BaseDrivetrain.DrivetrainType.DUAL_ACTUATED) { return copy(); }
         validateProfile(profile);
         if (profile != activeProfile && !profiles.containsKey(profile) && !allowUntuned) {
             throw new IllegalStateException("No saved follower profile for " + profile);
@@ -238,12 +290,13 @@ public class FollowerConstants {
     }
 
     private double loadDouble(JSONObject json, String key) {
+        if (!json.has(key)) { return 0; }
         try {
             double value = json.getDouble(key);
             if (!Double.isFinite(value)) { throw new IllegalArgumentException("Non-finite " + key); }
             return value;
-        } catch (Exception e) {
-            return 0.0;
+        } catch (org.json.JSONException failure) {
+            throw new IllegalArgumentException("Invalid numeric setting: " + key, failure);
         }
     }
 
@@ -252,18 +305,16 @@ public class FollowerConstants {
         if (!file.exists()) { return; }
 
         JSONObject json;
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(file));
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             StringBuilder sb = new StringBuilder();
             String line = reader.readLine();
             while (line != null) {
                 sb.append(line);
                 line = reader.readLine();
             }
-            reader.close();
             json = new JSONObject(sb.toString());
         } catch (Exception e) {
-            return;
+            throw new IllegalStateException("Cannot read follower constants: " + file, e);
         }
 
         readJson(json);

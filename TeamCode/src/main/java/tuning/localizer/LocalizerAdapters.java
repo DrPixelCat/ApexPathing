@@ -52,7 +52,7 @@ public final class LocalizerAdapters {
         @Override public boolean supportsDistance(CalibrationAxis axis) { return true; }
         @Override public boolean supportsSpinCalibration() { return false; }
         @Override public CalibrationSnapshot snapshot(BaseLocalizer<?> localizer) {
-            return new CalibrationSnapshot(localizer.getPose(), ticks(localizer));
+            return new CalibrationSnapshot(localizer.getRawPose(), ticks(localizer));
         }
         @Override public CalibrationCandidate fitDirections(BaseLocalizerConstants<?> config,
                                                              List<DirectionTrial> trials) {
@@ -159,7 +159,7 @@ public final class LocalizerAdapters {
                 CalibrationAxis axis, CalibrationSnapshot start, CalibrationSnapshot end,
                 double measured) {
             TankDriveEncoders.Constants config = (TankDriveEncoders.Constants) raw;
-            if (start.rawTicks.length != config.leftEncoders.size() + config.rightEncoders.size()) {
+            if (start.getChannelCount() != config.leftEncoders.size() + config.rightEncoders.size()) {
                 throw new IllegalStateException("Tank encoder channel count changed during trial");
             }
             JSONObject values = copy(config);
@@ -177,7 +177,7 @@ public final class LocalizerAdapters {
             double sum = 0.0;
             for (int i = 0; i < specs.size(); i++, index++) {
                 TankDriveEncoders.Encoder spec = specs.get(i);
-                int delta = end.rawTicks[index] - start.rawTicks[index];
+                int delta = end.getRawTick(index) - start.getRawTick(index);
                 double distance = delta * (spec.reversed ? -1.0 : 1.0) / spec.ticksPerInch;
                 sum += Math.abs(distance);
             }
@@ -416,10 +416,10 @@ public final class LocalizerAdapters {
     }
 
     private static int delta(DirectionTrial trial, int channel, String label) {
-        if (channel >= trial.start.rawTicks.length || channel >= trial.end.rawTicks.length) {
+        if (channel >= trial.start.getChannelCount() || channel >= trial.end.getChannelCount()) {
             throw new IllegalArgumentException(label + " channel is unavailable");
         }
-        int value = trial.end.rawTicks[channel] - trial.start.rawTicks[channel];
+        int value = trial.end.getRawTick(channel) - trial.start.getRawTick(channel);
         if (Math.abs(value) < 5) {
             throw new IllegalArgumentException(label + " did not move enough");
         }
@@ -427,7 +427,7 @@ public final class LocalizerAdapters {
     }
 
     private static int signedDelta(SpinTrial trial, int channel, boolean reversed) {
-        int value = trial.end.rawTicks[channel] - trial.start.rawTicks[channel];
+        int value = trial.end.getRawTick(channel) - trial.start.getRawTick(channel);
         return reversed ? -value : value;
     }
 
@@ -483,7 +483,7 @@ public final class LocalizerAdapters {
             requireSpin(trial);
             for (int i = 0; i < channels.length; i++) {
                 int channel = channels[i];
-                int delta = trial.end.rawTicks[channel] - trial.start.rawTicks[channel];
+                int delta = trial.end.getRawTick(channel) - trial.start.getRawTick(channel);
                 result[i] += signs[i] * delta / countsPerInch / trial.angleRad;
             }
         }
@@ -524,7 +524,7 @@ public final class LocalizerAdapters {
         if (!Double.isFinite(trial.angleRad) || Math.abs(trial.angleRad) < Math.PI) {
             throw new IllegalArgumentException("Each spin trial needs at least half a revolution");
         }
-        if (trial.start.rawTicks.length != trial.end.rawTicks.length) {
+        if (trial.start.getChannelCount() != trial.end.getChannelCount()) {
             throw new IllegalArgumentException("Raw channel count changed during spin");
         }
     }

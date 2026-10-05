@@ -100,5 +100,10 @@ public class Angle {
     @NonNull
     public String toString() { return String.format("%.3f rad", this.radians); }
 
-    // endregion
+    @Override public boolean equals(Object other) {
+        return other != null && getClass() == other.getClass()
+                && Double.compare(radians, ((Angle) other).radians) == 0;
+    }
+
+    @Override public int hashCode() { return Double.hashCode(radians); }
 }

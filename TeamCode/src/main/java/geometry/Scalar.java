@@ -75,5 +75,10 @@ public class Scalar {
     @NonNull
     public String toString() { return String.format("%.3f", value); }
 
-    // endregion
+    @Override public boolean equals(Object other) {
+        return other != null && getClass() == other.getClass()
+                && Double.compare(value, ((Scalar) other).value) == 0;
+    }
+
+    @Override public int hashCode() { return Double.hashCode(value); }
 }

@@ -9,6 +9,8 @@ import follower.FollowerConstants;
 import feedforward.MotionCharacterization.Axis;
 import trajectory.profile.CoupledMotionProfile;
 import trajectory.profile.MotionParameters;
+import trajectory.profile.FFLut;
+import trajectory.VelocityPursuit;
 import geometry.PathPoint;
 import geometry.Vector;
 import paths.constraint.PathConstraint;
@@ -45,8 +47,14 @@ public abstract class BaseProfileGenerator {
     private final double[] accelerationBreaks = new double[4];
     private final CoupledMotionProfile.Workspace windowSolver = new CoupledMotionProfile.Workspace();
     private final CoupledMotionProfile.Transitions windowTransitions = (i, squared, nextCeiling) ->
-            maximumNextSquared(windowSamples[i], squared, nextCeiling, windowPositions[i + 1] - windowPositions[i]);
+            maximumNextSquared(windowSamples[i], windowSamples[i+1], squared, nextCeiling, windowPositions[i + 1] - windowPositions[i]);
     public int getLastWindowSampleCount() { return lastWindowSampleCount; }
+    private final VelocityPursuit velocityPursuit = new VelocityPursuit();
+    private FFLut pursuitReference;
+    private double[] windowGoalSquared = new double[16];
+    public void resetVelocityPursuit() { velocityPursuit.reset(); }
+    /** Stored paths retain their precomputed speed goals; feasibility is checked at actual speed. */
+    public void setVelocityPursuitReference(FFLut reference) { pursuitReference = reference; }
 
     private ConstraintSchedule constraints(Path actualPath) {
         long revision = actualPath.getConstraintRevision();
@@ -109,6 +117,7 @@ public abstract class BaseProfileGenerator {
         }
     }
     protected boolean useAnalyticPowerBounds() { return true; }
+    protected boolean enforceIntervalPowerBounds() { return false; }
     /** Custom generators can opt in when their mutable planning inputs are covered above. */
     protected boolean cacheSolverSamples() {
         return getClass() == MecanumProfileGenerator.class || getClass() == TankProfileGenerator.class
@@ -150,7 +159,7 @@ public abstract class BaseProfileGenerator {
             ceilings[0] = maximumSteadyVelocity(actualPath, points[0], samples[0]);
         }
         double[] velocities = CoupledMotionProfile.solve(positions, ceilings, boosted, endVelocity,
-                (i, squared, nextCeiling) -> maximumNextSquared(samples[i], squared,
+                (i, squared, nextCeiling) -> maximumNextSquared(samples[i], samples[i+1], squared,
                         nextCeiling, positions[i + 1] - positions[i]));
         lastReport = new DebugReport();
         lastReport.powerLimit = utilizationLimit(); lastReport.iterationsRun = 1;
@@ -190,12 +199,34 @@ public abstract class BaseProfileGenerator {
         return generateWindow(startIn, horizonIn, measuredVelocity, Double.NaN, dt);
     }
 
+    /** Legacy preview overload. OnlineTrajectoryPlanner explicitly chooses zero for holonomic paths. */
     public WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt) {
-        return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, ONLINE_GEOMETRY_STRIDE);
+        return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, .05);
+    }
+
+    /** A zero preview publishes the solved state at the measurement time; acceleration remains the command. */
+    public WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega,
+                                       double dt, double previewSeconds) {
+        if(!Double.isFinite(previewSeconds) || previewSeconds<0 || previewSeconds>.05)
+            throw new IllegalArgumentException("Reference preview must be in [0, .05] seconds");
+        return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, previewSeconds, ONLINE_GEOMETRY_STRIDE);
     }
 
     private WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
-                                        int geometryStride) {
+                                        double previewSeconds, int geometryStride) {
+        return generateWindow(startIn,horizonIn,measuredVelocity,measuredOmega,dt,previewSeconds,geometryStride,0);
+    }
+
+    /** Converge to the independently solved stopping envelope ahead, without an integrated speed reference. */
+    public WindowTarget generatePursuitWindow(double startIn,double horizonIn,double measuredVelocity,
+                                             double measuredOmega,double dt,double convergenceSeconds) {
+        if (!Double.isFinite(convergenceSeconds) || convergenceSeconds<=0 || convergenceSeconds>1)
+            throw new IllegalArgumentException("Velocity convergence time must be in (0, 1] seconds");
+        return generateWindow(startIn,horizonIn,measuredVelocity,measuredOmega,dt,0,ONLINE_GEOMETRY_STRIDE,convergenceSeconds);
+    }
+
+    private WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
+                                        double previewSeconds, int geometryStride,double pursuitSeconds) {
         Path actualPath = (Path) path;
         geometry.PathSegment segment = actualPath.getParametricPath();
         ConstraintSchedule schedule = constraints(actualPath);
@@ -211,7 +242,11 @@ public abstract class BaseProfileGenerator {
             }
             Sample boundary = samples(actualPath, new PathPoint[]{segment.getPointAtDistance(start)})[0];
             MotionParameters recovery = recoveryMotion(boundary, measuredVelocity, measuredOmega);
+            if(previewSeconds==0) recovery.setTangentialVel(measuredVelocity)
+                    .setAngularVel(Double.isFinite(measuredOmega)?measuredOmega:recovery.getAngularVel());
             recovery.setDistAlongCurve(start);
+            recovery.setMotorPower(boundary.power.utilization(recovery.getTangentialVel(),
+                    recovery.getTangentialAccel(), recovery.getAngularVel(), recovery.getAngularAccel(), 0));
             return new WindowTarget(recovery, true, 0);
         }
         PathPoint[] geometry = segment.getPointLUT();
@@ -266,17 +301,31 @@ public abstract class BaseProfileGenerator {
             // A coarse interval can miss a reachable transition across changing curvature.
             // Retry the original resolution before treating the window as infeasible.
             if (geometryStride > 1) {
-                return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, 1);
+                return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, previewSeconds, 1,pursuitSeconds);
             }
             throw exception;
         }
-        // A short reference preview provides velocity feedback with a reachable target while
-        // the solved boundary remains the measured state. It also avoids a zero-rate heading
-        // reference cancelling launch acceleration at a curved start.
-        double step = .05;
+        double goalDistance = Double.NaN, goalVelocity = Double.NaN, currentCeiling = Double.NaN;
+        if (pursuitSeconds > 0 && !overspeed) {
+            for (int i = 0; i < windowSize; i++) {
+                windowGoalSquared[i] = windowSolver.controllableSquaredAt(i);
+                if (pursuitReference != null) {
+                    windowGoalSquared[i] = Math.min(windowGoalSquared[i],
+                            pursuitReference.getSquaredTangentialVelocity(windowPositions[i]));
+                }
+            }
+            VelocityPursuit.Goal goal = velocityPursuit.goal(start, end, measuredVelocity,
+                    pursuitSeconds, windowPositions, windowGoalSquared, windowSize);
+            goalDistance = goal.distanceIn; goalVelocity = goal.velocity;
+            currentCeiling = Math.sqrt(Math.max(0, windowSolver.controllableSquaredAt(0)));
+            acceleration = constrainPursuitAcceleration(limits[0], measuredVelocity,
+                    velocityPursuit.damp(goal, start, measuredVelocity, pursuitSeconds, dt), acceleration,
+                    windowPositions[1] - start);
+        }
+        double step = previewSeconds;
         double solvedAcceleration = acceleration;
-        // The published state is one control interval ahead. Validate the same acceleration
-        // there too; checking only the measured state can overrun power/alpha during launch.
+        // When preview is requested, validate the same acceleration at that future state;
+        // checking only the measured state can overrun power/alpha during launch.
         if (!overspeed && acceleration > 0 && step > 0) {
             double lowAccel = 0, highAccel = acceleration;
             for (int i = 0; i < SEARCH_ITERATIONS; i++) {
@@ -303,10 +352,38 @@ public abstract class BaseProfileGenerator {
             }
         }
         if (measuredVelocity >= 0 && commandedVelocity < 0) { commandedVelocity = 0; }
-        return new WindowTarget(new MotionParameters(commandedVelocity, acceleration,
-                overspeed ? recoveryOmega : initial.headingPrime * commandedVelocity,
-                overspeed ? recoveryAlpha : initial.headingSecond * commandedVelocity * commandedVelocity + initial.headingPrime * acceleration, start), overspeed,
-                Double.isFinite(normalVelocity) ? normalVelocity : commandedVelocity);
+        if (pursuitSeconds > 0) velocityPursuit.applied(acceleration);
+        double commandedOmega=overspeed && Double.isFinite(measuredOmega)
+                ? measuredOmega+recoveryAlpha*step : overspeed?recoveryOmega:initial.headingPrime*commandedVelocity;
+        MotionParameters motion = new MotionParameters(commandedVelocity, acceleration,
+                commandedOmega,
+                overspeed ? recoveryAlpha : initial.headingSecond * commandedVelocity * commandedVelocity + initial.headingPrime * acceleration, start);
+        double commandedNormalVelocity = Double.isFinite(normalVelocity) ? normalVelocity : commandedVelocity;
+        motion.setMotorPower(initial.power.utilization(commandedVelocity, acceleration,
+                motion.getAngularVel(), motion.getAngularAccel(), commandedNormalVelocity));
+        return new WindowTarget(motion, overspeed, commandedNormalVelocity,goalDistance,goalVelocity,currentCeiling);
+    }
+
+    /** Mandatory braking wins over damping; extra braking must fit current alpha and wheel authority. */
+    private double constrainPursuitAcceleration(Sample sample, double velocity, double desired,
+                                               double feasibleMaximum, double intervalDistance) {
+        double minimum = Math.max(-sample.maxAccel, -velocity * velocity / (2 * intervalDistance));
+        if (Math.abs(sample.headingPrime) > 1e-12) {
+            double baseAlpha = sample.headingSecond * velocity * velocity;
+            double a = (-sample.maxAlpha - baseAlpha) / sample.headingPrime;
+            double b = (sample.maxAlpha - baseAlpha) / sample.headingPrime;
+            minimum = Math.max(minimum, Math.min(a, b));
+        }
+        desired = Math.min(feasibleMaximum, Math.max(minimum, desired));
+        if (power(sample, velocity, desired) <= utilizationLimit() + 1e-6) return desired;
+        // Search toward the solver's known feasible command, within the same kinematic bounds.
+        double infeasible = desired, feasible = feasibleMaximum;
+        for (int i = 0; i < 24; i++) {
+            double candidate = (infeasible + feasible) / 2;
+            if (power(sample, velocity, candidate) <= utilizationLimit() + 1e-6) feasible = candidate;
+            else infeasible = candidate;
+        }
+        return feasible;
     }
 
     private boolean validPreview(Sample sample, double velocity, double acceleration) {
@@ -343,9 +420,15 @@ public abstract class BaseProfileGenerator {
         public final MotionParameters motion;
         public final boolean overspeed;
         public final double normalVelocity;
+        public final double goalDistanceIn,goalVelocity,currentSpeedCeiling;
         public WindowTarget(MotionParameters motion, boolean overspeed) { this(motion, overspeed, motion.getTangentialVel()); }
         public WindowTarget(MotionParameters motion, boolean overspeed, double normalVelocity) {
+            this(motion,overspeed,normalVelocity,Double.NaN,Double.NaN,Double.NaN);
+        }
+        public WindowTarget(MotionParameters motion, boolean overspeed, double normalVelocity,
+                            double goalDistanceIn,double goalVelocity,double currentSpeedCeiling) {
             this.motion = motion; this.overspeed = overspeed; this.normalVelocity = normalVelocity;
+            this.goalDistanceIn=goalDistanceIn;this.goalVelocity=goalVelocity;this.currentSpeedCeiling=currentSpeedCeiling;
         }
     }
 
@@ -361,6 +444,7 @@ public abstract class BaseProfileGenerator {
             int size = windowSize * 2;
             windowPositions = Arrays.copyOf(windowPositions, size); windowCeilings = Arrays.copyOf(windowCeilings, size);
             windowGeometry = Arrays.copyOf(windowGeometry, size); windowSamples = Arrays.copyOf(windowSamples, size);
+            windowGoalSquared = Arrays.copyOf(windowGoalSquared, size);
         }
         windowPositions[windowSize] = distance; windowGeometry[windowSize++] = point;
     }
@@ -421,7 +505,7 @@ public abstract class BaseProfileGenerator {
         }
     }
 
-    private double maximumNextSquared(Sample sample, double squared, double nextCeiling, double ds) {
+    private double maximumNextSquared(Sample sample, Sample nextSample, double squared, double nextCeiling, double ds) {
         double min = Math.max(-sample.maxAccel, -squared / (2 * ds));
         double max = Math.min(sample.maxAccel, (nextCeiling - squared) / (2 * ds));
         double baseAlpha = sample.headingSecond * squared;
@@ -443,6 +527,20 @@ public abstract class BaseProfileGenerator {
         for (int j = breaks.length - 2; j >= 0; j--) {
             double candidate = maximumPowerFeasibleAcceleration(sample, v, breaks[j], breaks[j + 1]);
             if (Double.isFinite(candidate)) { best = candidate; break; }
+        }
+        if(Double.isFinite(best) && enforceIntervalPowerBounds()) {
+            // A held acceleration must also fit the wheel authority later in the
+            // interval. Checking only its starting speed permits a launch overrun.
+            double endVelocity=Math.sqrt(Math.max(0,squared+2*ds*best));
+            double lowVelocity=Math.max(1e-6,Math.min(v,endVelocity)),highVelocity=Math.max(1e-6,Math.max(v,endVelocity));
+            double a1=sample.power.maximumAcceleration(lowVelocity,sample.headingPrime,sample.headingSecond,min,best,utilizationLimit());
+            double a2=sample.power.maximumAcceleration(highVelocity,sample.headingPrime,sample.headingSecond,min,best,utilizationLimit());
+            double a3=nextSample.power.maximumAcceleration(lowVelocity,nextSample.headingPrime,nextSample.headingSecond,min,best,utilizationLimit());
+            double a4=nextSample.power.maximumAcceleration(highVelocity,nextSample.headingPrime,nextSample.headingSecond,min,best,utilizationLimit());
+            if(!Double.isFinite(a1) || !Double.isFinite(a2) || !Double.isFinite(a3) || !Double.isFinite(a4)) return Double.NaN;
+            best=Math.min(best,Math.min(Math.min(a1,a2),Math.min(a3,a4)));
+            if(power(sample,lowVelocity,best)>utilizationLimit()+1e-6 || power(sample,highVelocity,best)>utilizationLimit()+1e-6
+                    || power(nextSample,lowVelocity,best)>utilizationLimit()+1e-6 || power(nextSample,highVelocity,best)>utilizationLimit()+1e-6) return Double.NaN;
         }
         return Double.isFinite(best) ? Math.max(0, Math.min(nextCeiling, squared + 2 * ds * best)) : Double.NaN;
     }

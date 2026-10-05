@@ -103,6 +103,10 @@ public final class FeedforwardTuner extends TuningPhase {
     }
     private void sample() {
         Follower f = context.getFollower();
+        if (!f.getLocalizer().isLastMeasurementValid()) {
+            stopMotion();
+            throw new IllegalStateException("Feedforward tuning requires valid localization");
+        }
         double time = timer.seconds(), v = measuredVelocity(), dt = time - previousTime;
         double heading = f.getPose().getHeading().getRad();
         travel += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));

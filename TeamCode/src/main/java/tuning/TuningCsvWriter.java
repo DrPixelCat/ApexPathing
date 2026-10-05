@@ -10,13 +10,15 @@ import java.util.Locale;
 import storage.ApexStorage;
 
 /** Small failure-tolerant CSV writer for tuner evidence captured on robot or desktop. */
-public final class TuningCsvWriter {
+public final class TuningCsvWriter implements AutoCloseable {
     private final File file;
     private final FileWriter writer;
     private final int autoFlushRows;
     private final StringBuilder pending;
     private String error;
     private int rowsSinceFlush;
+    private boolean closed;
+    private static final int MAX_BUFFERED_CHARACTERS = 1_000_000;
 
     public static TuningCsvWriter open(String prefix, String... header) {
         return open(prefix, 25, header);
@@ -61,7 +63,7 @@ public final class TuningCsvWriter {
     }
 
     public void writeRow(Object... values) {
-        if (writer == null) { return; }
+        if (writer == null || closed || error != null) { return; }
         try {
             StringBuilder row = new StringBuilder();
             for (int i = 0; i < values.length; i++) {
@@ -70,6 +72,10 @@ public final class TuningCsvWriter {
             }
             row.append('\n');
             if (pending != null) {
+                if (pending.length() + row.length() > MAX_BUFFERED_CHARACTERS) {
+                    error = "CSV buffer limit exceeded; flush at a safe point";
+                    return;
+                }
                 pending.append(row);
             } else {
                 writer.write(row.toString());
@@ -84,7 +90,7 @@ public final class TuningCsvWriter {
     }
 
     public void flush() {
-        if (writer == null) { return; }
+        if (writer == null || closed || error != null) { return; }
         try {
             if (pending != null && pending.length() > 0) {
                 writer.write(pending.toString());
@@ -97,11 +103,12 @@ public final class TuningCsvWriter {
         }
     }
 
-    public void close() {
-        if (writer == null) { return; }
+    @Override public void close() {
+        if (writer == null || closed) { return; }
         try {
             flush();
             writer.close();
+            closed = true;
         } catch (IOException e) {
             error = e.getMessage();
         }

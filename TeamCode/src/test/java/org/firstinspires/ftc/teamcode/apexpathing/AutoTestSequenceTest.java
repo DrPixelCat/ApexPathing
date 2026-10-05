@@ -6,17 +6,9 @@ import org.junit.Test;
 
 public class AutoTestSequenceTest {
     @Test
-    public void autoTestRunsAllFollowerChecksInOrder() {
-        assertEquals(AutoTest.AutoState.POINT_TURN,
-                AutoTest.nextState(AutoTest.AutoState.OUTBOUND_CURVE));
-        assertEquals(AutoTest.AutoState.REVERSE_RETURN,
-                AutoTest.nextState(AutoTest.AutoState.POINT_TURN));
-        assertEquals(AutoTest.AutoState.STRAFE_OUT,
-                AutoTest.nextState(AutoTest.AutoState.REVERSE_RETURN));
-        assertEquals(AutoTest.AutoState.STRAFE_BACK,
-                AutoTest.nextState(AutoTest.AutoState.STRAFE_OUT));
+    public void autoTestStopsAfterOutboundCurve() {
         assertEquals(AutoTest.AutoState.COMPLETE,
-                AutoTest.nextState(AutoTest.AutoState.STRAFE_BACK));
+                AutoTest.nextState(AutoTest.AutoState.OUTBOUND_CURVE));
     }
 
     @Test

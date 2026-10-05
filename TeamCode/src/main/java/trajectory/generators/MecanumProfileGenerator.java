@@ -2,6 +2,7 @@ package trajectory.generators;
 
 import follower.FollowerConstants;
 import feedforward.HolonomicFeedforward;
+import feedforward.MecanumWheelModel;
 import feedforward.MotionCharacterization.Axis;
 import drivetrains.Mecanum;
 import drivetrains.Mecanum.DirectionalLut.DirectionalKinematics;
@@ -12,17 +13,42 @@ import paths.movements.Path;
 
 /** Mecanum physical limits with the same signed body-axis powers as the follower. */
 public class MecanumProfileGenerator extends BaseProfileGenerator {
-    private final Mecanum.DirectionalLut limitCalculator;
+    private Mecanum.DirectionalLut limitCalculator;
+    private double cachedForwardVelocity, cachedForwardAcceleration, cachedStrafeVelocity, cachedStrafeAcceleration;
+
+    private Mecanum.DirectionalLut limits() {
+        if (limitCalculator == null || cachedForwardVelocity != constants.forwardVelLimitIn
+                || cachedForwardAcceleration != constants.forwardAccelLimitIn
+                || cachedStrafeVelocity != constants.strafeVelLimitIn
+                || cachedStrafeAcceleration != constants.strafeAccelLimitIn) {
+            cachedForwardVelocity = constants.forwardVelLimitIn;
+            cachedForwardAcceleration = constants.forwardAccelLimitIn;
+            cachedStrafeVelocity = constants.strafeVelLimitIn;
+            cachedStrafeAcceleration = constants.strafeAccelLimitIn;
+            limitCalculator = new Mecanum.DirectionalLut(cachedForwardVelocity, cachedForwardAcceleration,
+                    cachedStrafeVelocity, cachedStrafeAcceleration);
+        }
+        return limitCalculator;
+    }
+    private final boolean straightGeometry;
+    private final MecanumWheelModel.Demand wheelDemand = new MecanumWheelModel.Demand();
+    private MecanumWheelModel wheelModel() {
+        return constants.motionCharacterization == null ? null : constants.motionCharacterization.mecanumWheelModel;
+    }
+    // The velocity/geometry box is conservative for a straight path. Rapidly changing
+    // curvature requires adaptive interval geometry rather than crossed endpoint states.
+    @Override protected boolean enforceIntervalPowerBounds() { return wheelModel()!=null && straightGeometry; }
+    private static boolean isStraight(Path path) {
+        for(PathPoint point:path.getGeneratedPoints()) if(Math.abs(point.getSignedCurvature())>1e-9) return false;
+        return true;
+    }
     public MecanumProfileGenerator(FollowerConstants constants, Path path) {
         super(constants, path);
-        limitCalculator = limits(constants);
+        straightGeometry = isStraight(path);
     }
     public MecanumProfileGenerator(FollowerConstants constants, Path path, double powerLimit) {
         super(constants, path, powerLimit);
-        limitCalculator = limits(constants);
-    }
-    private static Mecanum.DirectionalLut limits(FollowerConstants c) {
-        return new Mecanum.DirectionalLut(c.forwardVelLimitIn, c.forwardAccelLimitIn, c.strafeVelLimitIn, c.strafeAccelLimitIn);
+        straightGeometry = isStraight(path);
     }
     private Angle heading(PathPoint point, Path path) {
         return path.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(), point.getFirstDerivative(),
@@ -30,7 +56,7 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
     }
     @Override protected double calculateMaxTangentialVelocity(PathPoint point, Path path, double maxAngVel, double maxAngAccel) {
         Angle heading = heading(point, path);
-        DirectionalKinematics directional = limitCalculator.getKinematics(point.getFirstDerivative(), heading);
+        DirectionalKinematics directional = limits().getKinematics(point.getFirstDerivative(), heading);
         double ceiling = cornerVelocityLimit(directional.maxVel, point.getSignedCurvature());
         Vector body = point.getFirstDerivative().normalize().rotate(heading.times(-1));
         if (Math.abs(body.getX().getIn()) > 1e-12) {
@@ -44,12 +70,18 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         if (Math.abs(prime) > 1e-12) {
             ceiling = Math.min(ceiling, Math.min(maxAngVel, calibratedVelocityLimit(Axis.ANGULAR, constants.angularVelLimitRad)) / Math.abs(prime));
         }
+        if (wheelModel() != null) {
+            double factor = Math.abs(body.getX().getIn()) + Math.abs(body.getY().getIn())
+                    + Math.abs(wheelModel().effectiveRadius * prime);
+            if (factor > 1e-12) ceiling = Math.min(ceiling, wheelModel().maximumWheelSpeed / factor);
+            return ceiling;
+        }
         double normalCost = Math.abs(point.getSignedCurvature() * constants.kCentripetal);
         if (normalCost > 1e-12) { ceiling = Math.min(ceiling, Math.sqrt(HolonomicFeedforward.MAX_CENTRIPETAL_POWER / normalCost)); }
         return ceiling;
     }
     @Override protected double getPhysicalTangentialAccel(PathPoint point, Path path) {
-        return limitCalculator.getKinematics(point.getFirstDerivative(), heading(point, path)).maxAccel;
+        return limits().getKinematics(point.getFirstDerivative(), heading(point, path)).maxAccel;
     }
     @Override protected PowerEvaluator powerEvaluator(Path path, PathPoint point) {
         Vector end = path.getParametricPath().getFirstDerivative(1);
@@ -60,7 +92,13 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         return new PowerEvaluator() {
             private final double[] coefficients = new double[6];
             private final AccelerationInterval interval = new AccelerationInterval();
+            private final MecanumWheelModel.Demand wheels = new MecanumWheelModel.Demand();
             @Override public double utilization(double v, double a, double omega, double alpha, double normalVelocity) {
+            if (wheelModel() != null) {
+                double an = point.getSignedCurvature() * normalVelocity * normalVelocity;
+                wheelModel().solve(bx*v, by*v, omega, bx*a-by*an, by*a+bx*an, alpha, wheels);
+                return wheels.peak;
+            }
             double x, y;
             if (constants.motionCharacterization == null) {
                 double tangent = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
@@ -80,6 +118,8 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
             return Math.abs(x) + Math.abs(y) + Math.abs(turn);
             }
             @Override public double maximumAcceleration(double v, double prime, double second, double min, double max, double limit) {
+                if (wheelModel() != null) return wheelModel().maximumAcceleration(bx,by,point.getSignedCurvature(),v,
+                        prime,second,min,max,limit);
                 double omega = prime * v, baseAlpha = second * v * v;
                 double firstAlpha = baseAlpha + prime * min, lastAlpha = baseAlpha + prime * max;
                 if (feedforward.HolonomicFeedforward.motionSign(v, min) != feedforward.HolonomicFeedforward.motionSign(v, max)
@@ -109,6 +149,16 @@ public class MecanumProfileGenerator extends BaseProfileGenerator {
         Vector body = current.getFirstDerivative().normalize().rotate(heading(current, path).times(-1));
         double prime = path.getInterpolator().getHeadingFirstDerivative(current.getDistanceToEndIn(), current.getSignedCurvature(), end);
         double second = path.getInterpolator().getHeadingSecondDerivative(current.getDistanceToEndIn(), current.getCurvatureDerivative(), end);
+        if (wheelModel() != null) {
+            double bx=body.getX().getIn(), by=body.getY().getIn(), an=current.getSignedCurvature()*velocity*velocity;
+            wheelModel().solve(bx*velocity, by*velocity, prime*velocity, bx*acceleration-by*an,
+                    by*acceleration+bx*an, second*velocity*velocity+prime*acceleration, wheelDemand);
+            result.pForward = Math.abs((wheelDemand.mean(0)+wheelDemand.mean(1)+wheelDemand.mean(2)+wheelDemand.mean(3))/4);
+            result.pLateral = Math.abs((-wheelDemand.mean(0)+wheelDemand.mean(1)+wheelDemand.mean(2)-wheelDemand.mean(3))/4);
+            result.pHeading = Math.abs((-wheelDemand.mean(0)+wheelDemand.mean(1)-wheelDemand.mean(2)+wheelDemand.mean(3))/4);
+            result.totalPower = result.maxUtilization = wheelDemand.peak;
+            return;
+        }
         Vector tangentPower = HolonomicFeedforward.translation(constants, body, velocity, acceleration, profileKV());
         Vector normalPower = HolonomicFeedforward.centripetal(body, velocity, current.getSignedCurvature(), constants.kCentripetal);
         double turn = HolonomicFeedforward.heading(constants, prime * velocity, second * velocity * velocity + prime * acceleration);

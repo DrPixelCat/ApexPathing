@@ -138,6 +138,18 @@ public final class DynamicMotionProfile {
                     double kinematic = Math.sqrt(nextVelocity * nextVelocity
                             + 2.0 * brakingAccelerationLimit * distance);
                     double reachable = Math.min(ceiling, kinematic);
+                    if (measuredPower != null && distance > EPSILON && reachable > nextVelocity) {
+                        double low = nextVelocity, high = reachable;
+                        for (int i = 0; i < 40; i++) {
+                            double mid = (low + high) / 2;
+                            double acceleration = (nextVelocity * nextVelocity - mid * mid) / (2 * distance);
+                            double power = Math.max(Math.abs(measuredPower.applyAsDouble(mid, acceleration)),
+                                    Math.abs(measuredPower.applyAsDouble(nextVelocity, acceleration)));
+                            if (Double.isFinite(power) && power <= powerLimit) { low = mid; }
+                            else { high = mid; }
+                        }
+                        return low;
+                    }
                     if (kA <= EPSILON) { return reachable; }
 
                     double distanceKV = distance * kV;
@@ -163,6 +175,7 @@ public final class DynamicMotionProfile {
         if (samples < 2 || model == null) {
             throw new IllegalArgumentException("At least two samples and a power model are required.");
         }
+        samples = Math.max(3, samples);
         double[] positions = new double[samples];
         double[] velocityLimits = new double[samples];
         double velocityLimit = model.getVelocityLimit();
@@ -228,6 +241,9 @@ public final class DynamicMotionProfile {
                     : (velocities[i + 1] * velocities[i + 1]
                     - velocities[i] * velocities[i]) / (2.0 * ds);
             states[i] = new State(positions[i], velocities[i], acceleration, elapsed);
+            if (ds > EPSILON && velocitySum <= EPSILON) {
+                throw new IllegalArgumentException("Positive-distance interval is unreachable at zero velocity");
+            }
             if (velocitySum > EPSILON) { elapsed += 2.0 * ds / velocitySum; }
         }
         states[last] = new State(positions[last], velocities[last], 0.0, elapsed);

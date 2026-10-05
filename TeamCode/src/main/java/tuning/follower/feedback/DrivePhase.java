@@ -52,7 +52,8 @@ public class DrivePhase extends TuningPhase {
                 .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
         testPath = () -> {
             geometry.Pose start = context.getFollower().getPose();
-            geometry.Pose end = start.plus(factory.pose(target, 0.0, 0.0));
+            geometry.Pose end = new geometry.Pose(start.getVec().plus(
+                    factory.vector(target, 0.0).rotate(start.getHeading())), start.getHeading());
             return context.getFollower().getDrivetrain().isHolonomic()
                     ? factory.holonomicPath(start, end)
                             .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild()
@@ -143,8 +144,8 @@ public class DrivePhase extends TuningPhase {
     @Override
     protected boolean manualTuned() {
         if (manualMetrics.isActive()) {
-            manualMetrics.sample(context.getFollower().getPose().getX().getIn(),
-                    context.getFollower().getVelocity().getX().getIn(),
+            manualMetrics.sample(project(context.getFollower().getPose()),
+                    project(context.getFollower().getVelocity()),
                     TuningMeasurements.maxMotorPower(
                             context.getFollower().getDrivetrain()));
             if (!context.getFollower().isBusy()) { manualMetrics.finish(); }
@@ -180,8 +181,11 @@ public class DrivePhase extends TuningPhase {
         testButtonHeld = opMode.gamepad1.x;
         if (testPathQueued && !context.getFollower().isBusy()) {
             activeTestTarget = target;
-            double start = context.getFollower().getPose().getX().getIn();
-            manualMetrics.begin("manual_drive_response", start, start + target, 0.75, 1.0);
+            trialHeading = context.getFollower().getPose().getHeading().getRad();
+            double start = project(context.getFollower().getPose());
+            manualMetrics.begin("manual_drive_response", start, start + target, 0.75, 1.0,
+                    context.getFollower().getDrivetrain().getConstants().maxPower);
+            context.getFollower().clearFailure();
             context.getFollower().follow(testPath.get());
             target = -target;
             testPathQueued = false;
@@ -237,4 +241,9 @@ public class DrivePhase extends TuningPhase {
                 manualMetrics.getSaturationFraction() * 1000.0) / 10.0 + "%");
         context.getTelemetry().addData("Response CSV", manualMetrics.getCsvPath());
     }
+    private double project(geometry.Pose value) {
+        return TuningMeasurements.projectVelocity(value.getX().getIn(), value.getY().getIn(), trialHeading, false);
+    }
+
+    @Override protected void onExit() { manualMetrics.finish(); }
 }

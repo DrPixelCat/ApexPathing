@@ -20,7 +20,7 @@ public class TunerContext extends tuning.TunerContext {
     public TunerContext(LinearOpMode opMode) { super(opMode); }
 
     public void setFollower(Follower follower) {
-        this.follower = follower;
+        this.follower = java.util.Objects.requireNonNull(follower, "Follower");
         this.constants = follower.getConstants();
     }
 
@@ -28,6 +28,7 @@ public class TunerContext extends tuning.TunerContext {
 
     /** Adds controls which must remain visible independently of the current phase. */
     public void addInterfaceHeader() {
+        addDebugHeader();
         if (follower != null && follower.getDrivetrain() instanceof drivetrains.DualActuated) {
             getTelemetry().addData("Tuning profile", constants.getActiveProfile());
         }

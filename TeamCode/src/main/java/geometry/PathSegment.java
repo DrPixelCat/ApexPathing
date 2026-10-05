@@ -316,7 +316,7 @@ public class PathSegment {
         return cross / Math.pow(vMag, 3);
     }
 
-    public PathPoint[] getPointLUT() { return LUTpoints; }
+    public PathPoint[] getPointLUT() { return LUTpoints.clone(); }
 
     /**
      * Retrieves the 2D principal unit normal vector to the curve at a given 't'.

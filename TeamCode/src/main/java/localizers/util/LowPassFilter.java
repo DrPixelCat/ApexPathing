@@ -1,7 +1,7 @@
 package localizers.util;
 
 /**
- * A simple low-pass filter to handle more accurate velocity and acceleration measurements.
+ * A boxcar moving average of measurements and timestamped first differences.
  *
  * @author DrPixelCat - 7842 alum
  */
@@ -37,7 +37,8 @@ public class LowPassFilter implements DataFilter {
     }
 
     public void setSampleSize(int size) {
-        this.size = Math.max(1, size);
+        if (size < 1) { throw new IllegalArgumentException("Sample size must be positive"); }
+        this.size = size;
         reset();
     }
 
@@ -47,7 +48,15 @@ public class LowPassFilter implements DataFilter {
 
     @Override
     public FilterState update(double measurement) {
-        long currentNanos = System.nanoTime();
+        return update(measurement, System.nanoTime());
+    }
+
+    @Override
+    public FilterState update(double measurement, long currentNanos) {
+        if (!Double.isFinite(measurement)) { throw new IllegalArgumentException("Measurement must be finite"); }
+        if (lastUpdateTimeNanos != -1 && currentNanos <= lastUpdateTimeNanos) {
+            throw new IllegalArgumentException("Measurement timestamps must increase");
+        }
         double dt = 0.02; // Default starting assumption
         double rawRate = 0.0;
 

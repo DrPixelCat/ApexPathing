@@ -9,17 +9,22 @@ package tuning.follower.centripetal;
  */
 public class BinarySearch {
     private final double threshold;
-    private double minimum, maximum, guess, lastGuess;
+    private double minimum, maximum, guess;
     private boolean converged;
     public enum SearchDirection { HIGHER, LOWER }
 
     BinarySearch(double minimum, double maximum, double threshold) {
+        if (!Double.isFinite(minimum) || !Double.isFinite(maximum) || !Double.isFinite(threshold)
+                || maximum <= minimum || threshold <= 0) {
+            throw new IllegalArgumentException("Search requires finite ordered bounds and positive threshold");
+        }
         this.maximum = maximum;
         this.minimum = minimum;
         this.threshold = threshold;
         guess = (maximum + minimum) / 2.0;
     }
     public void advance(SearchDirection direction) {
+        java.util.Objects.requireNonNull(direction, "Search direction");
         if (direction == SearchDirection.HIGHER) {
             minimum = guess;
         } else {

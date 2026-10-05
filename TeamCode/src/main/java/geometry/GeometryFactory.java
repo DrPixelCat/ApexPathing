@@ -18,6 +18,7 @@ import paths.movements.Turn;
 public class GeometryFactory {
     public enum PoseMirror { NONE, X, Y }
 
+    private final Follower follower;
     private PoseMirror mirror = PoseMirror.NONE;
     private DistUnit distUnit = DistUnit.IN;
     private AngleUnit angleUnit = AngleUnit.DEG;
@@ -25,10 +26,10 @@ public class GeometryFactory {
     // region Constructors
 
     /** Creates a factory with default units and mirroring; builders select drive mode. */
-    public GeometryFactory() { }
+    public GeometryFactory() { this.follower = null; }
 
-    /** Geometry no longer depends on the follower's current drivetrain mode. */
-    public GeometryFactory(Follower follower) { this(); }
+    /** Creates builders using a snapshot of this follower's planning settings. */
+    public GeometryFactory(Follower follower) { this.follower = java.util.Objects.requireNonNull(follower, "Follower"); }
 
     /** Applies the configured mirroring to a {@link Pose}. */
     private Pose applyMirror(Pose pose) {
@@ -41,19 +42,19 @@ public class GeometryFactory {
 
     /** Sets the factory mirroring configuration. Defaults to {@link PoseMirror#NONE}. */
     public GeometryFactory setPoseMirror(PoseMirror mirror) {
-        this.mirror = mirror;
+        this.mirror = java.util.Objects.requireNonNull(mirror, "Pose mirror");
         return this;
     }
 
     /** Sets the distance unit used for inputs. Defaults to {@link DistUnit#IN} (inches). */
     public GeometryFactory setDistUnit(DistUnit distUnit) {
-        this.distUnit = distUnit;
+        this.distUnit = java.util.Objects.requireNonNull(distUnit, "Distance unit");
         return this;
     }
 
     /** Sets the angle unit used for inputs. Defaults to {@link AngleUnit#DEG} (degrees). */
     public GeometryFactory setAngleUnit(AngleUnit angleUnit) {
-        this.angleUnit = angleUnit;
+        this.angleUnit = java.util.Objects.requireNonNull(angleUnit, "Angle unit");
         return this;
     }
 
@@ -97,20 +98,32 @@ public class GeometryFactory {
      */
     public ArcPose arcPose(double x, double y, double radius) {
         ArcPose pose = new ArcPose(Vector.of(x, y, distUnit), Dist.of(radius, distUnit));
-        return (ArcPose) applyMirror(pose); // Will always return an ArcPose, so we can just cast it
+        return mirror == PoseMirror.X ? pose.mirrorX()
+                : mirror == PoseMirror.Y ? pose.mirrorY() : pose;
     }
 
     // endregion
     // region Paths and turns
 
     /** Builds a tank path; following it selects traction mode on a dual-actuated drive. */
-    public TankPathBuilder tankPath(Pose... poses) { return new TankPathBuilder(poses); }
+    public TankPathBuilder tankPath(Pose... poses) {
+        TankPathBuilder builder = new TankPathBuilder(poses);
+        if (follower != null) { builder.setPlanningConstants(follower.getConstants()); }
+        return builder;
+    }
 
     /** Builds a holonomic path; following it selects holonomic mode on a dual-actuated drive. */
-    public HolonomicPathBuilder holonomicPath(Pose... poses) { return new HolonomicPathBuilder(poses); }
+    public HolonomicPathBuilder holonomicPath(Pose... poses) {
+        HolonomicPathBuilder builder = new HolonomicPathBuilder(poses);
+        if (follower != null) { builder.setPlanningConstants(follower.getConstants()); }
+        return builder;
+    }
 
     /** Creates a {@link TurnBuilder} from the given start pose. */
-    public TurnBuilder turn(Pose startPose) { return new TurnBuilder(startPose); }
+    public TurnBuilder turn(Pose startPose) {
+        return follower == null ? new TurnBuilder(startPose)
+                : new TurnBuilder(startPose, follower.getConstants());
+    }
 
     // endregion
     // region Vectors

@@ -106,6 +106,12 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
 
         @Override
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {
+            if (!Double.isFinite(ticksPerInch) || ticksPerInch <= 0) {
+                throw new IllegalArgumentException("Encoder ticks per inch must be finite and positive");
+            }
+            if (offsets == null || !offsets.isFinite() || Math.abs(offsets.getX().getIn()) < 1e-9) {
+                throw new IllegalArgumentException("Odometry offsets must be finite; forward baseline must be nonzero");
+            }
             if (this.forwardLeftPodName == null || this.forwardRightPodName == null ||
                     this.strafePodName == null) {
                 throw new IllegalArgumentException(

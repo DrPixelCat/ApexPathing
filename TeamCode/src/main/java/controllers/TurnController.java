@@ -26,10 +26,16 @@ public class TurnController {
     public TurnController(FeedbackController.Coefficients headingCoefficients,
                           double angularKV, double angularKA, double angularFeedforwardKS,
                           double ignoredAngularVelocityFeedbackGain) {
-        headingController = new FeedbackController(headingCoefficients);
+        this(headingCoefficients, angularKV, angularKA, angularFeedforwardKS, System::nanoTime);
+    }
+
+    public TurnController(FeedbackController.Coefficients headingCoefficients,
+                          double angularKV, double angularKA, double angularFeedforwardKS,
+                          java.util.function.LongSupplier monotonicClock) {
+        headingController = new FeedbackController(headingCoefficients, monotonicClock);
         headingController.setAngularController();
         motionController = new FeedbackController(new FeedbackController.Coefficients()
-                .vel(angularKV).accel(angularKA));
+                .vel(angularKV).accel(angularKA), monotonicClock);
 
         this.angularFeedforwardKS = angularFeedforwardKS;
     }

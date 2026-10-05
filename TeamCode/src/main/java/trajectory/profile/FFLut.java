@@ -26,8 +26,19 @@ public class FFLut {
         if (generatedParams == null || generatedParams.length == 0) {
             throw new IllegalArgumentException("A feedforward LUT requires at least one sample.");
         }
+        for (MotionParameters row : generatedParams) {
+            if (row == null || !Double.isFinite(row.getProgression())
+                    || !Double.isFinite(row.getTimeSeconds())
+                    || !Double.isFinite(row.getTangentialVel())
+                    || !Double.isFinite(row.getTangentialAccel())
+                    || !Double.isFinite(row.getAngularVel())
+                    || !Double.isFinite(row.getAngularAccel())) {
+                throw new IllegalArgumentException("Feedforward samples must contain finite kinematics");
+            }
+        }
         for (int i = 1; i < generatedParams.length; i++) {
-            if (generatedParams[i].getProgression() < generatedParams[i-1].getProgression()) {
+            if (generatedParams[i].getProgression() < generatedParams[i-1].getProgression()
+                    || generatedParams[i].getTimeSeconds() < generatedParams[i-1].getTimeSeconds()) {
                 throw new IllegalArgumentException(
                         "Feedforward LUT progression keys must be ordered from low to high."
                 );
@@ -127,11 +138,47 @@ public class FFLut {
     /** @return final elapsed-time key, or zero for a displacement-only profile */
     public double getDurationSeconds() { return params[params.length - 1].getTimeSeconds(); }
 
+    /** Independent time playback with the interval's actual constant acceleration.
+     * Linear interpolation of distance in time violates ds/dt=v during ramps. */
+    public MotionParameters getKinematicParamsByTime(double timeSeconds) {
+        if (!Double.isFinite(timeSeconds)) throw new IllegalArgumentException("Finite reference time required");
+        if (params.length == 1 || timeSeconds <= params[0].getTimeSeconds()) return copyOf(params[0]);
+        if (timeSeconds >= getDurationSeconds()) return copyOf(params[params.length-1]);
+        int low=0,high=params.length-1;
+        while(high-low>1) { int mid=(low+high)>>>1;if(params[mid].getTimeSeconds()<=timeSeconds)low=mid;else high=mid; }
+        MotionParameters before=params[low],after=params[high];
+        double dt=after.getTimeSeconds()-before.getTimeSeconds(), elapsed=timeSeconds-before.getTimeSeconds();
+        if(dt<=1e-9) return copyOf(after);
+        double acceleration=(after.getTangentialVel()-before.getTangentialVel())/dt;
+        MotionParameters result=interpolate(before,elapsed/dt,after);
+        result.setTangentialVel(before.getTangentialVel()+acceleration*elapsed).setTangentialAccel(acceleration);
+        result.setDistAlongCurve(before.getProgression()+before.getTangentialVel()*elapsed+.5*acceleration*elapsed*elapsed);
+        return result;
+    }
+
     public double getFirstIntervalEnd() { return params[Math.min(1, params.length - 1)].getProgression(); }
     public double getLastIntervalStart() { return params[Math.max(0, params.length - 2)].getProgression(); }
 
     /** Spatial kinematic interpolation preserves v^2 = v0^2 + 2*a*ds at launch and braking. */
     public MotionParameters getKinematicParams(double distance) { return kinematic(distance, false); }
+    /** Allocation-free squared-speed lookup for repeated future-goal queries. */
+    public double getSquaredTangentialVelocity(double distance) {
+        if (!Double.isFinite(distance)) throw new IllegalArgumentException("Finite lookup coordinate required.");
+        if (params.length == 1 || distance <= params[0].getProgression())
+            return params[0].getTangentialVel() * params[0].getTangentialVel();
+        int last = params.length - 1;
+        if (distance >= params[last].getProgression())
+            return params[last].getTangentialVel() * params[last].getTangentialVel();
+        int low = 0, high = last;
+        while (high - low > 1) {
+            int mid = (low + high) >>> 1;
+            if (params[mid].getProgression() <= distance) low = mid; else high = mid;
+        }
+        double ds = params[high].getProgression() - params[low].getProgression();
+        double fraction = ds > 1e-9 ? (distance - params[low].getProgression()) / ds : 1;
+        double v0 = params[low].getTangentialVel(), v1 = params[high].getTangentialVel();
+        return Math.max(0, v0 * v0 + fraction * (v1 * v1 - v0 * v0));
+    }
     public MotionParameters getAngularKinematicParams(double distance) { return kinematic(distance, true); }
 
     private MotionParameters kinematic(double distance, boolean angular) {

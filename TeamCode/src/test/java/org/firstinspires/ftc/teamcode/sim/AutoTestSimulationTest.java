@@ -29,23 +29,41 @@ public class AutoTestSimulationTest {
     private static final double MAX_TOTAL_MOVEMENT_SECONDS = 18.0;
 
     @Test(timeout = 130_000L)
-    public void autoTestCompletesEveryMovement() throws Exception {
+    public void autoTestCompletesTwistingPath() throws Exception {
         runAutoTest("true".equalsIgnoreCase(System.getenv("APEX_USE_SAVED_TUNER_CONSTANTS")));
     }
 
     @Test(timeout = 130_000L)
-    public void storedAutoTestCompletesEveryMovement() throws Exception { runAutoTest(false, true); }
+    public void storedAutoTestCompletesTwistingPath() throws Exception { runAutoTest(false, true); }
 
     Path runAutoTest(boolean useSavedConstants) throws Exception { return runAutoTest(useSavedConstants, false); }
 
     Path runAutoTest(boolean useSavedConstants, boolean stored) throws Exception {
+        return runAutoTest(useSavedConstants, stored, false);
+    }
+
+    Path runAutoTest(boolean useSavedConstants, boolean stored, boolean centeredBraking) throws Exception {
         configureStableConstants(useSavedConstants);
+        final double[] brakingCoefficients = centeredBraking
+                ? BrakingFeedforwardDiagnosticTest.measuredForwardCoefficients() : null;
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         List<String> frames = new CopyOnWriteArrayList<>();
         ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
         telemetry.setMsTransmissionInterval(0);
 
-        AutoTest auto = new AutoTest();
+        AutoTest auto = centeredBraking ? new AutoTest() {
+            @Override protected void configureFollower(follower.Follower follower) {
+                // Retain an explicit regression of the earlier axis-only fallback.
+                feedforward.MotionCharacterization calibrated=FollowerConstants.getInstance().motionCharacterization;
+                feedforward.MotorPowerModel[][] axes=new feedforward.MotorPowerModel[3][2];
+                for(feedforward.MotionCharacterization.Axis axis:feedforward.MotionCharacterization.Axis.values()) {
+                    axes[axis.ordinal()][0]=calibrated.model(axis,1);axes[axis.ordinal()][1]=calibrated.model(axis,-1);
+                }
+                FollowerConstants.getInstance().motionCharacterization=new feedforward.MotionCharacterization(axes,true,calibrated.availableMotorPower);
+                follower.setBrakingFeedforward(new feedforward.CenteredBrakingFeedforward(
+                        brakingCoefficients, 51));
+            }
+        } : new AutoTest();
         auto.hardwareMap = hardware.hardwareMap;
         auto.telemetry = telemetry;
         auto.gamepad1 = new Gamepad();
@@ -61,22 +79,8 @@ public class AutoTestSimulationTest {
             }
             Path outbound = auto.getOutboundPath();
             assertTrue("Auto Test did not finish building its outbound path", outbound != null);
-            if (stored) {
-                java.lang.reflect.Field routeField = AutoTest.class.getDeclaredField("path");
-                routeField.setAccessible(true);
-                Object route = routeField.get(auto);
-                for (java.lang.reflect.Field field : route.getClass().getDeclaredFields()) {
-                    field.setAccessible(true);
-                    Object movement = field.get(route);
-                    if (movement instanceof Path) {
-                        ((Path) movement).setBuildMode(Path.BuildMode.MEMORY);
-                        ((Path) movement).precomputeTrajectory();
-                    } else if (movement instanceof paths.movements.Turn) {
-                        ((paths.movements.Turn) movement).setBuildMode(Path.BuildMode.MEMORY);
-                        ((paths.movements.Turn) movement).precomputeTrajectory();
-                    }
-                }
-            }
+            outbound.setBuildMode(stored ? Path.BuildMode.MEMORY : Path.BuildMode.ONLINE);
+            if (stored) { outbound.precomputeTrajectory(); }
             long routeStartedNanos = System.nanoTime();
             SimLinearOpModeBridge.start(session);
             long deadline = System.nanoTime() + 100_000_000_000L;
@@ -90,18 +94,37 @@ public class AutoTestSimulationTest {
             double routeRunSeconds = (System.nanoTime() - routeStartedNanos) * 1e-9;
             File velocityTrace = new File(auto.getOutboundVelocityCsvPath());
             if (velocityTrace.isFile()) {
-                writeVelocityTrackingGraph(velocityTrace, useSavedConstants);
+                String graphPrefix = centeredBraking ? "AutoTest_Centered_Braking"
+                        : stored ? "AutoTest_Stored" : "AutoTest";
+                writeTrackingGraphs(velocityTrace, useSavedConstants, graphPrefix, centeredBraking, outbound);
+                String graphDirectory = System.getenv("APEX_AUTOTEST_GRAPH_DIR");
+                AutoTestPowerGraphs.write(velocityTrace, new File(graphDirectory == null
+                        ? System.getProperty("user.dir") : graphDirectory),
+                        graphPrefix + "_Power_Tracking", centeredBraking
+                                ? "Apex AutoTest Outbound, Centered Braking + Feedback" : "AutoTest Outbound");
+                if (centeredBraking) {
+                    int activeSamples = 0;
+                    for (String row : Files.readAllLines(velocityTrace.toPath())) {
+                        String[] columns = row.split(",");
+                        if (columns.length >= 2 && "true".equals(columns[columns.length - 2])) { activeSamples++; }
+                    }
+                    System.out.println("CENTERED AUTOTEST: activeBrakingSamples=" + activeSamples
+                            + " outboundBuildMode=" + outbound.getBuildMode() + " trace=" + velocityTrace);
+                    assertTrue("AutoTest must exercise the centered braking model", activeSamples > 10);
+                }
             }
             assertFalse("Auto Test failed after its outbound path:\n" + frame,
                     frame.contains("Current check FAILED"));
-            assertTrue("Auto Test did not complete every movement:\n" + frame,
+            assertTrue("Auto Test did not complete its twisting path:\n" + frame,
                     frame.contains("Current check COMPLETE"));
+            assertEquals("Auto Test must stop after its first path", 1, auto.getPassedStages());
+            System.out.println("AUTO TEST RESULT: " + frame);
             System.out.println("AUTO TEST COMMAND DEMAND: " + auto.getCommandDemandReport());
             System.out.println("AUTO TEST TIMING: " + auto.getMovementTimingReport());
             System.out.println("AUTO TEST EXTERNAL RUNTIME: " + routeRunSeconds + " s");
             System.out.println("AUTO TEST LOOP: " + auto.getAverageLoopMilliseconds() + " ms");
-            validateVelocityTrace(new File(auto.getOutboundVelocityCsvPath()));
-            // The saved corner fixture builds additional diagnostics on the host event loop.
+            validateVelocityTrace(new File(auto.getOutboundVelocityCsvPath()),stored);
+            // Preserve the existing host-loop timing guard for the twisting fixture.
             double maximumLoopMs = useSavedConstants ? 30.0 : 23.0;
             assertTrue("Auto Test loop exceeded fixture timing range: " +
                             auto.getAverageLoopMilliseconds(),
@@ -155,7 +178,7 @@ public class AutoTestSimulationTest {
     }
 
     /** Validate the controller's actual signals, not just whether a CSV file exists. */
-    private static void validateVelocityTrace(File csv) throws Exception {
+    private static void validateVelocityTrace(File csv,boolean stored) throws Exception {
         List<String> lines = Files.readAllLines(csv.toPath());
         String[] headers = lines.get(0).split(",");
         java.util.Map<String, Integer> columns = new java.util.HashMap<>();
@@ -169,8 +192,18 @@ public class AutoTestSimulationTest {
         double previousElapsed = Double.NaN, previousRawVelocity = Double.NaN;
         double previousTargetVelocity = Double.NaN;
         double previousAcceleration = Double.NaN;
+        double headingSquaredError = 0, headingPeakError = 0, omegaSquaredError = 0;
+        double maximumTargetOmega = 0, minimumTargetOmega = 0;
         for (int i = 1; i < lines.size(); i++) {
             String[] row = lines.get(i).split(",");
+            double headingError = Double.parseDouble(row[columns.get("heading_error_rad")]);
+            double targetOmega = Double.parseDouble(row[columns.get("target_omega_rad_s")]);
+            double omegaError = Double.parseDouble(row[columns.get("actual_omega_rad_s")]) - targetOmega;
+            headingSquaredError += headingError * headingError;
+            headingPeakError = Math.max(headingPeakError, Math.abs(headingError));
+            omegaSquaredError += omegaError * omegaError;
+            maximumTargetOmega = Math.max(maximumTargetOmega, targetOmega);
+            minimumTargetOmega = Math.min(minimumTargetOmega, targetOmega);
             double elapsed = Double.parseDouble(row[columns.get("elapsed_s")]);
             double target = Double.parseDouble(row[columns.get("controller_target_in_s")]);
             double plotted = Double.parseDouble(row[columns.get("kalman_velocity_in_s")]);
@@ -178,8 +211,17 @@ public class AutoTestSimulationTest {
             double measured = Double.parseDouble(row[columns.get("controller_measured_in_s")]);
             assertEquals("CSV must show the feedback measurement", plotted, measured, 1e-5);
             double profileTarget = Double.parseDouble(row[columns.get("target_velocity_in_s")]);
-            assertEquals("Follower must consume the constrained profile without a speed floor",
-                    profileTarget, target, 1e-5);
+            boolean pursuit = Double.isFinite(Double.parseDouble(row[columns.get("velocity_goal_distance_in")]));
+            if (pursuit) {
+                assertEquals("Pursuit inverse is evaluated at the measured current speed", profileTarget, measured, 1e-4);
+                assertTrue("Convergence goal must lie ahead of current progress", Double.parseDouble(row[columns.get("velocity_goal_distance_in")])
+                        >= Double.parseDouble(row[columns.get("path_distance_in")]));
+                assertEquals("Pursuit replaces tangential velocity power feedback", 0,
+                        Double.parseDouble(row[columns.get("signed_velocity_feedback")]), 1e-5);
+            } else if(stored) assertEquals("Stored legacy feedback must consume the constrained spatial reference",
+                    profileTarget,target,1e-5);
+            else assertEquals("Online planner publishes the measured current state; tracking reference is separate",
+                    profileTarget,measured,1e-4);
             double acceleration = Double.parseDouble(row[columns.get("target_accel_in_s2")]);
             double rawVelocity = Double.parseDouble(row[columns.get("raw_velocity_in_s")]);
             double dt = elapsed - previousElapsed;
@@ -212,6 +254,12 @@ public class AutoTestSimulationTest {
         }
         assertTrue("Expected accelerating trace samples", acceleratingSamples > 10);
         assertTrue("Expected braking trace samples", brakingSamples > 10);
+        assertTrue("Twisting path must exercise counterclockwise rotation", maximumTargetOmega > 0.05);
+        assertTrue("Twisting path must exercise clockwise rotation", minimumTargetOmega < -0.05);
+        System.out.println("TWIST TRACKING: headingRMSEdeg=" +
+                Math.toDegrees(Math.sqrt(headingSquaredError / (lines.size() - 1))) +
+                " headingPeakDeg=" + Math.toDegrees(headingPeakError) +
+                " angularVelocityRMSE=" + Math.sqrt(omegaSquaredError / (lines.size() - 1)));
         System.out.println("ACCELERATION TRACKING: samples=" + acceleratingSamples +
                 " bias=" + bias / acceleratingSamples + " RMSE=" +
                 Math.sqrt(squaredError / acceleratingSamples) + " peakOverspeed=" + peak);
@@ -220,13 +268,18 @@ public class AutoTestSimulationTest {
                 Math.sqrt(brakingSquaredError / brakingSamples) + " peakOverspeed=" + brakingPeak);
     }
 
-    /** Writes the simulated outbound target-versus-measured velocity trace beside profile graphs. */
-    private static void writeVelocityTrackingGraph(File trace,
-                                                   boolean useSavedConstants) throws Exception {
+    /** Writes translation and twist tracking graphs from the outbound trace. */
+    private static void writeTrackingGraphs(File trace, boolean useSavedConstants,
+                                                   String prefix, boolean centered, Path path) throws Exception {
+        trajectory.profile.FFLut nominal = new trajectory.profile.FFLut(
+                path.createGenerator(path.getPlanningConstants()).generateRestToRest());
         List<Double> elapsedSeconds = new ArrayList<>();
+        List<Double> distances = new ArrayList<>();
         List<Double> targetVelocity = new ArrayList<>();
         List<Double> actualVelocity = new ArrayList<>();
         List<Double> rawVelocity = new ArrayList<>();
+        List<Double> targetHeading = new ArrayList<>(), actualHeading = new ArrayList<>();
+        List<Double> targetOmega = new ArrayList<>(), actualOmega = new ArrayList<>();
         List<String> lines = Files.readAllLines(trace.toPath());
         if (lines.size() < 2) { return; }
         String[] headers = lines.get(0).split(",");
@@ -235,20 +288,28 @@ public class AutoTestSimulationTest {
         for (int i = 1; i < lines.size(); i++) {
             String[] row = lines.get(i).split(",");
             elapsedSeconds.add(Double.parseDouble(row[columns.get("elapsed_s")]));
-            targetVelocity.add(Double.parseDouble(row[columns.get("controller_target_in_s")]));
+            distances.add(Double.parseDouble(row[columns.get("path_distance_in")]));
+            targetVelocity.add(nominal.getKinematicParams(distances.get(distances.size()-1)).getTangentialVel());
             actualVelocity.add(Double.parseDouble(row[columns.get("kalman_velocity_in_s")]));
             rawVelocity.add(Double.parseDouble(row[columns.get("raw_velocity_in_s")]));
+            double heading = Double.parseDouble(row[columns.get("target_heading_rad")]);
+            double headingError = Double.parseDouble(row[columns.get("heading_error_rad")]);
+            targetHeading.add(Math.toDegrees(heading));
+            // Choose the equivalent measured angle closest to the unwrapped reference.
+            actualHeading.add(Math.toDegrees(heading - headingError));
+            targetOmega.add(Double.parseDouble(row[columns.get("target_omega_rad_s")]));
+            actualOmega.add(Double.parseDouble(row[columns.get("actual_omega_rad_s")]));
         }
         if (elapsedSeconds.isEmpty()) { return; }
         XYChart chart = new XYChartBuilder().width(1000).height(460)
-                .title("AutoTest Outbound Velocity Tracking ("
+                .title((centered ? "Apex AutoTest, Centered Braking + Feedback" : "AutoTest Outbound Velocity Tracking") + " ("
                         + (useSavedConstants ? "saved profile" : "simulator fixture") + ")")
                 .xAxisTitle("Elapsed Time (s)")
                 .yAxisTitle("Velocity (in/s)").build();
         chart.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
         chart.getStyler().setMarkerSize(0);
         chart.getStyler().setPlotGridLinesVisible(true);
-        chart.addSeries("Target velocity", elapsedSeconds, targetVelocity);
+        chart.addSeries("Nominal speed at current progress", elapsedSeconds, targetVelocity);
         chart.addSeries("Actual velocity (Kalman)", elapsedSeconds, actualVelocity);
         chart.addSeries("Raw velocity", elapsedSeconds, rawVelocity);
         String graphDirectory = System.getenv("APEX_AUTOTEST_GRAPH_DIR");
@@ -257,8 +318,32 @@ public class AutoTestSimulationTest {
         if (!directory.exists() && !directory.mkdirs()) {
             throw new IllegalStateException("Could not create graph directory " + directory);
         }
-        File output = new File(directory, "AutoTest_Velocity_Tracking");
+        File output = new File(directory, prefix + "_Velocity_Tracking");
         BitmapEncoder.saveBitmap(chart, output.getAbsolutePath(), BitmapFormat.PNG);
+        XYChart spatial = new XYChartBuilder().width(1000).height(460)
+                .title(centered ? "Apex AutoTest Outbound: Centered Braking Velocity" : "AutoTest: Velocity Along Path")
+                .xAxisTitle("Distance along path (in)").yAxisTitle("Velocity (in/s)").build();
+        spatial.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
+        spatial.getStyler().setMarkerSize(0);
+        spatial.addSeries("Nominal speed at current progress", distances, targetVelocity);
+        spatial.addSeries("Measured velocity", distances, actualVelocity);
+        BitmapEncoder.saveBitmap(spatial, new File(directory, prefix + "_Velocity_Distance").getAbsolutePath(), BitmapFormat.PNG);
+        XYChart heading = new XYChartBuilder().width(1000).height(460)
+                .title("AutoTest: Heading Along Path").xAxisTitle("Distance along path (in)")
+                .yAxisTitle("Unwrapped heading (deg)").build();
+        heading.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
+        heading.getStyler().setMarkerSize(0);
+        heading.addSeries("Target heading", distances, targetHeading);
+        heading.addSeries("Measured heading", distances, actualHeading);
+        BitmapEncoder.saveBitmap(heading, new File(directory, prefix + "_Heading_Distance").getAbsolutePath(), BitmapFormat.PNG);
+        XYChart angular = new XYChartBuilder().width(1000).height(460)
+                .title("AutoTest: Angular Velocity Along Path").xAxisTitle("Distance along path (in)")
+                .yAxisTitle("Angular velocity (rad/s)").build();
+        angular.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
+        angular.getStyler().setMarkerSize(0);
+        angular.addSeries("Target angular velocity", distances, targetOmega);
+        angular.addSeries("Measured angular velocity", distances, actualOmega);
+        BitmapEncoder.saveBitmap(angular, new File(directory, prefix + "_Angular_Velocity_Distance").getAbsolutePath(), BitmapFormat.PNG);
     }
 
     private static void configureStableConstants(boolean useSavedConstants) {

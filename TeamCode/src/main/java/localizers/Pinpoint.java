@@ -38,6 +38,16 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
     public Pinpoint(Constants constants, HardwareMap hardwareMap) {
         super(constants);
 
+        if (constants.name == null || constants.name.trim().isEmpty()
+                || constants.offsets == null || !constants.offsets.isFinite()
+                || constants.customEncoderResolution == null
+                || !Double.isFinite(constants.customEncoderResolution.getIn())
+                || constants.customEncoderResolution.getIn() < 0
+                || !Double.isFinite(constants.angularScalar) || constants.angularScalar < 0
+                || constants.xPodDirection == null || constants.yPodDirection == null
+                || (constants.customEncoderResolution.getIn() == 0 && constants.encoderResolution == null)) {
+            throw new IllegalArgumentException("Pinpoint requires valid device, offsets, resolution, directions and yaw scalar");
+        }
         pinpoint = hardwareMap.get(Driver.class, constants.name);
         pinpoint.setOffsets(constants.offsets);
         pinpoint.setEncoderDirections(constants.xPodDirection, constants.yPodDirection);
@@ -53,8 +63,9 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
     @Override
     public void update() {
         pinpoint.update();
+        if (!pinpoint.isLastSampleValid()) { markMeasurementInvalid(); return; }
         pose = pinpoint.getPosition();
-        calculate(pinpoint.getVelocity());
+        calculate(pinpoint.getVelocity(), pinpoint.getSampleTimeNanos());
     }
 
     /** Returns the raw X/Y pod encoder positions from the last bulk update. */
@@ -171,10 +182,9 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
                     "Odometry), optimized for Apex Pathing"
     )
     public static class Driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
-        final int POSITION_CORRUPT_THRESHOLD = 5000; // Millimeters (bigger than standard and CRI field)
-        final int HEADING_CORRUPT_THRESHOLD = 120; // Rad
-        final int VELOCITY_CORRUPT_THRESHOLD = 1000; // Millimeters/s (a robot can't move this fast.... right?)
-        final int HEADING_VELOCITY_CORRUPT_THRESHOLD = 15; // Rad/s
+        private boolean lastSampleValid;
+        private long sampleTimeNanos;
+        private int deviceStatus;
 
         private final GeometryFactory geometryFactory = new GeometryFactory()
                 .setDistUnit(DistUnit.MM)
@@ -287,86 +297,35 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
             deviceClient.write(reg.bVal, bytes);
         }
 
-        /**
-         * Confirm that the number received is a number, and does not include a change above the
-         * threshold
-         *
-         * @param oldValue the reading from the previous cycle
-         * @param newValue the new reading
-         * @param threshold the maximum change between this reading and the previous one
-         * @return newValue if the position is good, oldValue otherwise
-         */
-        private double isPositionCorrupt(double oldValue, double newValue, int threshold) {
-            boolean noData = loopTime < 1;
-            boolean isCorrupt = noData || Double.isNaN(newValue) ||
-                    Math.abs(newValue - oldValue) > threshold;
-
-            if (!isCorrupt) { return newValue; }
-
-            return oldValue;
-        }
-
-        /**
-         * Confirm that the number received is a number, and does not include a change above the
-         * threshold
-         *
-         * @param oldValue the reading from the previous cycle
-         * @param newValue the new reading
-         * @param threshold the velocity allowed to be reported
-         * @return newValue if the velocity is good, oldValue otherwise
-         */
-        private double isVelocityCorrupt(double oldValue, double newValue, int threshold) {
-            boolean isCorrupt = Double.isNaN(newValue) || Math.abs(newValue) > threshold;
-
-            if (!isCorrupt) { return newValue; }
-
-            return oldValue;
-        }
-
-        /** Call this once per loop to read new data from the Odometry Computer. */
+        /** Reads one complete packet; invalid packets never refresh the accepted state. */
         public void update() {
-
-            byte[] bArr = deviceClient.read(Register.BULK_READ.bVal, 40);
-            loopTime = byteArrayToInt(Arrays.copyOfRange(bArr, 4, 8), ByteOrder.LITTLE_ENDIAN);
-            encoderX = byteArrayToInt(Arrays.copyOfRange(bArr, 8, 12), ByteOrder.LITTLE_ENDIAN);
-            encoderY = byteArrayToInt(Arrays.copyOfRange(bArr, 12, 16), ByteOrder.LITTLE_ENDIAN);
-
-            pose = geometryFactory.pose(
-                    isPositionCorrupt(
-                            pose.getX().getMm(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 16, 20)),
-                            POSITION_CORRUPT_THRESHOLD
-                    ),
-                    isPositionCorrupt(
-                            pose.getY().getMm(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 20, 24)),
-                            POSITION_CORRUPT_THRESHOLD
-                    ),
-                    isPositionCorrupt(
-                            pose.getHeading().getRad(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 24, 28)),
-                            HEADING_CORRUPT_THRESHOLD
-                    )
-            );
-
-            velocity = geometryFactory.pose(
-                    isVelocityCorrupt(
-                            velocity.getX().getMm(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 28, 32)),
-                            VELOCITY_CORRUPT_THRESHOLD
-                    ),
-                    isVelocityCorrupt(
-                            velocity.getY().getMm(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 32, 36)),
-                            VELOCITY_CORRUPT_THRESHOLD
-                    ),
-                    isVelocityCorrupt(
-                            velocity.getHeading().getRad(),
-                            byteArrayToFloat(Arrays.copyOfRange(bArr, 36, 40)),
-                            HEADING_VELOCITY_CORRUPT_THRESHOLD
-                    )
-            );
+            lastSampleValid = false;
+            byte[] bytes = deviceClient.read(Register.BULK_READ.bVal, 40);
+            if (bytes == null || bytes.length != 40) { return; }
+            ByteBuffer packet = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+            deviceStatus = packet.getInt();
+            loopTime = packet.getInt();
+            int newEncoderX = packet.getInt();
+            int newEncoderY = packet.getInt();
+            Pose newPose = geometryFactory.pose(packet.getFloat(), packet.getFloat(), packet.getFloat());
+            Pose newVelocity = geometryFactory.pose(packet.getFloat(), packet.getFloat(), packet.getFloat());
+            // Register 3: READY bit, followed by calibration and missing-pod fault bits.
+            if (deviceStatus != 1 || loopTime <= 0 || !finite(newPose) || !finite(newVelocity)) { return; }
+            pose = newPose;
+            velocity = newVelocity;
+            encoderX = newEncoderX;
+            encoderY = newEncoderY;
+            sampleTimeNanos = System.nanoTime();
+            lastSampleValid = true;
         }
+
+        private static boolean finite(Pose value) {
+            return value.getVec().isFinite() && !value.getHeading().isNotFinite();
+        }
+
+        public boolean isLastSampleValid() { return lastSampleValid; }
+        public long getSampleTimeNanos() { return sampleTimeNanos; }
+        public int getDeviceStatus() { return deviceStatus; }
 
         /** Returns raw X/Y encoder counts captured by the latest bulk read. */
         public int[] getEncoderPositions() { return new int[] {encoderX, encoderY}; }
@@ -378,8 +337,8 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
          * @param offset a Vector containing the X and Y offsets of the odometry pods
          */
         public void setOffsets(Vector offset) {
-            writeFloat(Register.X_POD_OFFSET, (float) offset.getX().getM());
-            writeFloat(Register.Y_POD_OFFSET, (float) offset.getY().getM());
+            writeFloat(Register.X_POD_OFFSET, (float) offset.getX().getMm());
+            writeFloat(Register.Y_POD_OFFSET, (float) offset.getY().getMm());
         }
 
         /**
@@ -460,6 +419,9 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
             writeByteArray(Register.Y_POSITION, floatToByteArray((float) pos.getY().getMm()));
             writeByteArray(Register.H_ORIENTATION,
                     floatToByteArray((float) pos.getHeading().getRad()));
+            pose = pos;
+            velocity = Pose.zero();
+            lastSampleValid = false;
         }
 
         /**

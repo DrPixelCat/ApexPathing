@@ -92,11 +92,12 @@ public class BSpline implements ParametricSegment {
         }
 
         double newT = t;
-        if (newT >= 1.0) { newT = 0.999999; }
+        if (!Double.isFinite(newT)) { throw new IllegalArgumentException("Spline parameter must be finite"); }
+        if (newT >= 1.0) { newT = 1.0; }
         if (newT < 0.0) { newT = 0.0; }
 
         double continuousIndex = newT * numSegments;
-        int segment = (int) continuousIndex;
+        int segment = Math.min((int) continuousIndex, numSegments - 1);
         double localT = continuousIndex - segment;
 
         cachedSegment = new SegmentData(t, localT, cx[segment], cy[segment]);

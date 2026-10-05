@@ -19,6 +19,7 @@ public final class RelativeImuAccumulator {
     private double angle;
     private double offAxisSquared;
     private int samples;
+    private double pendingX, pendingY, pendingZ;
 
     /** Discards the learned axis before beginning a new independent calibration run. */
     public void clearAxis() {
@@ -27,11 +28,13 @@ public final class RelativeImuAccumulator {
         axisX = axisY = axisZ = 0.0;
         angle = offAxisSquared = 0.0;
         samples = 0;
+        pendingX = pendingY = pendingZ = 0;
     }
 
     /** Clears the angle while retaining the learned physical spin axis. */
     public void resetMeasurement(Quaternion initial) {
         previous = normalized(initial);
+        pendingX = pendingY = pendingZ = 0;
         angle = 0.0;
         offAxisSquared = 0.0;
         samples = 0;
@@ -54,10 +57,15 @@ public final class RelativeImuAccumulator {
         if (vectorLength > 1e-8) {
             double step = 2.0 * Math.atan2(vectorLength, Math.max(0.0, w));
             double ux = x / vectorLength, uy = y / vectorLength, uz = z / vectorLength;
-            if (!axisKnown && step > 1e-4) {
-                axisX = ux; axisY = uy; axisZ = uz; axisKnown = true;
-            }
-            if (axisKnown) {
+            if (!axisKnown) {
+                pendingX += step * ux; pendingY += step * uy; pendingZ += step * uz;
+                double accumulated = Math.sqrt(pendingX * pendingX + pendingY * pendingY + pendingZ * pendingZ);
+                if (accumulated >= Math.toRadians(2)) {
+                    axisX = pendingX / accumulated; axisY = pendingY / accumulated;
+                    axisZ = pendingZ / accumulated; axisKnown = true;
+                    angle += accumulated;
+                }
+            } else {
                 double projection = ux * axisX + uy * axisY + uz * axisZ;
                 angle += step * projection;
                 offAxisSquared += (1.0 - projection * projection) * step * step;

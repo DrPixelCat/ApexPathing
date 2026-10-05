@@ -74,7 +74,8 @@ public class FeedbackController {
         this(coefficients, System::nanoTime);
     }
 
-    FeedbackController(Coefficients coefficients, LongSupplier nanoTime) {
+    /** A shared monotonic clock keeps reference and derivative calculations on the same timeline. */
+    public FeedbackController(Coefficients coefficients, LongSupplier nanoTime) {
         this.coefficients = Objects.requireNonNull(coefficients, "coefficients");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.lastTimestamp = nanoTime.getAsLong();

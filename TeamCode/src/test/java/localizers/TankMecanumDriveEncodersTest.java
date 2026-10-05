@@ -8,6 +8,7 @@ import org.junit.Test;
 import java.util.function.IntSupplier;
 import static org.junit.Assert.*;
 
+/** Geometry checks use native pose so smoothing cannot hide integration errors. */
 public class TankMecanumDriveEncodersTest {
     private static final double EPS = 1e-8;
 
@@ -38,8 +39,20 @@ public class TankMecanumDriveEncodersTest {
         rig.ticks[1] -= 240;
         rig.ticks[2] += 200;
         rig.localizer.update();
-        assertEquals(15, rig.localizer.getPose().getX().getIn(), EPS);
-        assertEquals(0, rig.localizer.getPose().getY().getIn(), EPS);
+        assertEquals(15, rig.localizer.getRawPose().getX().getIn(), EPS);
+        assertEquals(0, rig.localizer.getRawPose().getY().getIn(), EPS);
+    }
+
+    @Test public void driveSamplesFilterPoseWithoutChangingNativeEncoderIntegration() throws Exception {
+        Rig rig = new Rig(config().addLeftEncoder("l", 100, false)
+                .addRightEncoder("r", 100, false), 0, 0);
+        Thread.sleep(20);
+        rig.ticks[0] = rig.ticks[1] = 10;
+        rig.localizer.update();
+        assertEquals(0.1, rig.localizer.getRawPose().getX().getIn(), EPS);
+        assertTrue(rig.localizer.isPoseFilteringEnabled());
+        assertTrue(rig.localizer.getPose().getX().getIn() > 0);
+        assertTrue(rig.localizer.getPose().getX().getIn() < 0.1);
     }
 
     @Test public void quarterCircleUsesArcIntegration() {
@@ -49,8 +62,8 @@ public class TankMecanumDriveEncodersTest {
         rig.ticks[1] = 200;
         rig.yaw = Math.PI / 2;
         rig.localizer.update();
-        assertEquals(30 / Math.PI, rig.localizer.getPose().getX().getIn(), EPS);
-        assertEquals(30 / Math.PI, rig.localizer.getPose().getY().getIn(), EPS);
+        assertEquals(30 / Math.PI, rig.localizer.getRawPose().getX().getIn(), EPS);
+        assertEquals(30 / Math.PI, rig.localizer.getRawPose().getY().getIn(), EPS);
     }
 
     @Test public void spinWrapAndResetPreserveContinuousHeading() {
@@ -62,12 +75,12 @@ public class TankMecanumDriveEncodersTest {
         rig.ticks[0] -= 10;
         rig.ticks[1] += 10;
         rig.localizer.update();
-        assertEquals(5, rig.localizer.getPose().getX().getIn(), EPS);
-        assertEquals(6, rig.localizer.getPose().getY().getIn(), EPS);
-        assertEquals(1 + Math.toRadians(2), rig.localizer.getPose().getHeading().getRad(), EPS);
+        assertEquals(5, rig.localizer.getRawPose().getX().getIn(), EPS);
+        assertEquals(6, rig.localizer.getRawPose().getY().getIn(), EPS);
+        assertEquals(1 + Math.toRadians(2), rig.localizer.getRawPose().getHeading().getRad(), EPS);
         rig.localizer.setPose(Pose.zero());
         rig.localizer.update();
-        assertEquals(0, rig.localizer.getPose().getX().getIn(), EPS);
+        assertEquals(0, rig.localizer.getRawPose().getX().getIn(), EPS);
         assertEquals(0, rig.localizer.getRawVel().getHeading().getRad(), EPS);
     }
 
@@ -77,11 +90,11 @@ public class TankMecanumDriveEncodersTest {
         rig.ticks[0] += 20;
         rig.ticks[1] += 20;
         rig.localizer.update();
-        assertEquals(2, rig.localizer.getPose().getX().getIn(), EPS);
+        assertEquals(2, rig.localizer.getRawPose().getX().getIn(), EPS);
         rig.ticks[0] -= 30;
         rig.ticks[1] -= 30;
         rig.localizer.update();
-        assertEquals(-1, rig.localizer.getPose().getX().getIn(), EPS);
+        assertEquals(-1, rig.localizer.getRawPose().getX().getIn(), EPS);
     }
 
     @Test public void rejectsInvalidConfigurationBeforeHardwareAccess() {

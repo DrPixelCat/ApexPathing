@@ -36,7 +36,9 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
                 constants.forwardPodReversed
         );
         this.imu = hardwareMap.get(IMU.class, constants.imuName);
-        this.imu.initialize(new IMU.Parameters(constants.hubOrientation));
+        if (!this.imu.initialize(new IMU.Parameters(constants.hubOrientation))) {
+            throw new IllegalStateException("IMU initialization failed: " + constants.imuName);
+        }
 
         this.forwardOffsetIn = constants.offsets.getX(DistUnit.IN);
         this.strafeOffsetIn = constants.offsets.getY(DistUnit.IN);
@@ -44,11 +46,13 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
 
     @Override
     public void update() {
+        double imuYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+        if (!Double.isFinite(imuYaw)) { markMeasurementInvalid(); return; }
         forwardPod.update();
         strafePod.update();
         double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
-                imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction
+                imuYaw - correction
         );
         double deltaYaw = Angle.wrap(currentYaw - oldYaw);
         double deltaX = forwardPod.getDeltaInches() - forwardOffsetIn * deltaYaw;
@@ -101,6 +105,12 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
 
         @Override
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {
+            if (!Double.isFinite(ticksPerInch) || ticksPerInch <= 0) {
+                throw new IllegalArgumentException("Encoder ticks per inch must be finite and positive");
+            }
+            if (offsets == null || !offsets.isFinite()) {
+                throw new IllegalArgumentException("Odometry offsets must be finite");
+            }
             if (this.forwardPodName == null || this.strafePodName == null) {
                 // noinspection ConstantExpression
                 throw new IllegalArgumentException(

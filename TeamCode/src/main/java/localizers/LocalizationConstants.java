@@ -11,8 +11,9 @@ import java.io.FileReader;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import localizers.util.AdaptiveKalmanFilter;
+import localizers.util.PoseEstimator;
 
-/** Persisted geometry and velocity-filter calibration for one robot configuration. */
+/** Persisted geometry, pose-filter and velocity-filter calibration for one robot configuration. */
 public final class LocalizationConstants {
     public static final int SCHEMA_VERSION = 1;
 
@@ -69,13 +70,47 @@ public final class LocalizationConstants {
         try {
             BaseLocalizer.VelocityFilterMode mode = BaseLocalizer.VelocityFilterMode.valueOf(
                     filter.getString("mode"));
+            int window = mode == BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE
+                    ? Math.max(1, filter.getInt("window")) : localizer.getFilterWindowSize();
+            AdaptiveKalmanFilter.KalmanTuning x = null, y = null, heading = null;
+            if (mode == BaseLocalizer.VelocityFilterMode.ADAPTIVE_KALMAN) {
+                x = readTuning(filter.getJSONObject("x"));
+                y = readTuning(filter.getJSONObject("y"));
+                heading = readTuning(filter.getJSONObject("heading"));
+            }
+            JSONObject pose = filter.optJSONObject("pose");
+            if (filter.has("pose") && pose == null) { throw new IllegalArgumentException("Invalid pose record"); }
+            PoseEstimator.Tuning poseTuning = null;
+            if (pose != null) {
+                if (!"SENSOR_SMOOTHING".equals(pose.getString("kind"))) {
+                    throw new IllegalArgumentException("Unsupported pose filter");
+                }
+                boolean legacyModel = !pose.has("model");
+                if (!legacyModel && !"CONSTANT_ACCELERATION".equals(pose.getString("model"))) {
+                    throw new IllegalArgumentException("Unsupported kinematic model");
+                }
+                AdaptiveKalmanFilter.KalmanTuning px = readPoseAxis(pose.getJSONObject("x"), x, legacyModel);
+                AdaptiveKalmanFilter.KalmanTuning py = readPoseAxis(pose.getJSONObject("y"), y, legacyModel);
+                AdaptiveKalmanFilter.KalmanTuning ph = readPoseAxis(pose.getJSONObject("heading"), heading, legacyModel);
+                poseTuning = new PoseEstimator.Tuning(px, py, ph,
+                        readVelocityVariance(pose.getJSONObject("x"), x, 0.25, legacyModel),
+                        readVelocityVariance(pose.getJSONObject("y"), y, 0.25, legacyModel),
+                        readVelocityVariance(pose.getJSONObject("heading"), heading, 0.01, legacyModel));
+            }
             localizer.setVelocityFilterMode(mode);
             if (mode == BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE) {
-                localizer.setFilterWindow(Math.max(1, filter.getInt("window")));
+                localizer.setFilterWindow(window);
             } else {
-                localizer.setXKalmanTuning(readTuning(filter.getJSONObject("x")));
-                localizer.setYKalmanTuning(readTuning(filter.getJSONObject("y")));
-                localizer.setHeadingKalmanTuning(readTuning(filter.getJSONObject("heading")));
+                localizer.setXKalmanTuning(x);
+                localizer.setYKalmanTuning(y);
+                localizer.setHeadingKalmanTuning(heading);
+            }
+            if (poseTuning != null) {
+                localizer.setPoseKalmanTuning(poseTuning);
+                boolean auto = pose.optBoolean("autoTuning", true);
+                localizer.setPoseAutoTuning(pose.optBoolean("tuneX", auto),
+                        pose.optBoolean("tuneY", auto), pose.optBoolean("tuneHeading", auto));
+                localizer.setPoseFilteringEnabled(pose.optBoolean("enabled", true));
             }
             return true;
         } catch (Exception ignored) {
@@ -100,6 +135,17 @@ public final class LocalizationConstants {
                 filter.put("y", tuning(localizer.getYKalmanTuning()));
                 filter.put("heading", tuning(localizer.getHeadingKalmanTuning()));
             }
+            PoseEstimator.Tuning pose = localizer.getPoseKalmanTuning();
+            filter.put("pose", new JSONObject().put("kind", "SENSOR_SMOOTHING")
+                    .put("model", "CONSTANT_ACCELERATION")
+                    .put("enabled", localizer.isPoseFilteringEnabled())
+                    .put("autoTuning", localizer.isPoseAutoTuning())
+                    .put("tuneX", localizer.isPoseAutoTuning(0))
+                    .put("tuneY", localizer.isPoseAutoTuning(1))
+                    .put("tuneHeading", localizer.isPoseAutoTuning(2))
+                    .put("x", tuning(pose.x).put("velocityVariance", pose.xVelocityVariance))
+                    .put("y", tuning(pose.y).put("velocityVariance", pose.yVelocityVariance))
+                    .put("heading", tuning(pose.heading).put("velocityVariance", pose.headingVelocityVariance)));
             setup.put("filter", filter);
             followerRevalidationRequired = true;
         } catch (Exception e) {
@@ -210,5 +256,24 @@ public final class LocalizationConstants {
             throw new IllegalArgumentException("Kalman variances must be finite and positive");
         }
         return new AdaptiveKalmanFilter.KalmanTuning(measurement, process);
+    }
+
+    private static AdaptiveKalmanFilter.KalmanTuning readPoseAxis(JSONObject value,
+            AdaptiveKalmanFilter.KalmanTuning velocity, boolean legacyModel) throws Exception {
+        AdaptiveKalmanFilter.KalmanTuning pose = readTuning(value);
+        if (!legacyModel) { return pose; }
+        // The old pose filter used white acceleration; the velocity filter already used white jerk.
+        // Preserve its jerk calibration, or choose a starting baseline for pose-only files.
+        double jerk = velocity == null ? Math.min(1e12, pose.processVariance * 100) : velocity.processVariance;
+        return new AdaptiveKalmanFilter.KalmanTuning(pose.measurementVariance,
+                Math.max(1e-12, Math.min(1e12, jerk)));
+    }
+
+    private static double readVelocityVariance(JSONObject pose, AdaptiveKalmanFilter.KalmanTuning velocity,
+            double defaultVariance, boolean legacyModel) throws Exception {
+        double value = pose.has("velocityVariance") ? pose.getDouble("velocityVariance")
+                : velocity == null ? defaultVariance : velocity.measurementVariance;
+        if (!Double.isFinite(value) || value <= 0) { throw new IllegalArgumentException("Invalid velocity variance"); }
+        return legacyModel ? Math.max(1e-12, Math.min(1e12, value)) : value;
     }
 }

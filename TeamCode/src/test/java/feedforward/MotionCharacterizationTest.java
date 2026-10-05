@@ -65,6 +65,18 @@ public class MotionCharacterizationTest {
         copy.selectProfile(FollowerConstants.Profile.HOLONOMIC);
         assertNotNull(copy.motionCharacterization.model(MotionCharacterization.Axis.STRAFE, 1));
     }
+    @Test public void optionalWheelModelSurvivesCharacterizationPersistence() {
+        MotionCharacterization original=calibration(true);
+        MotorPowerModel[][] axes=new MotorPowerModel[3][2];
+        for(MotionCharacterization.Axis axis:MotionCharacterization.Axis.values()) {
+            axes[axis.ordinal()][0]=original.model(axis,1);axes[axis.ordinal()][1]=original.model(axis,-1);
+        }
+        MecanumWheelModel wheels=new MecanumWheelModel(100,1,3,2,8,16,2,3,40,.01);
+        MotionCharacterization restored=MotionCharacterization.fromJson(new MotionCharacterization(axes,true,.8,wheels).toJson(),true);
+        assertEquals(3,restored.mecanumWheelModel.effectiveRadius,0);assertEquals(.8,restored.availableMotorPower,0);
+        assertNull(MotionCharacterization.fromJson(original.toJson(),true).mecanumWheelModel);
+        assertThrows(IllegalArgumentException.class,()->new MotionCharacterization(axes,false,1,wheels));
+    }
     @Test public void straightProfilesRespectMeasuredAuthorityAndConfiguredLimits() throws Exception {
         FollowerConstants c = constants();
         GeometryFactory geometry = new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);

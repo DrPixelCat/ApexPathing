@@ -275,93 +275,116 @@ public class ApexSimulationTest {
 
     @Test
     public void exampleAutoPathAndTurnConvergeInSimulation() throws Exception {
-        ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        configureKnownFollowerConstants();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
-        ExampleAutoPath auto = new ExampleAutoPath(follower, GeometryFactory.PoseMirror.NONE);
+        String previousStorage = System.getProperty(storage.ApexStorage.DIRECTORY_PROPERTY);
+        java.lang.reflect.Field singleton = FollowerConstants.class.getDeclaredField("instance");
+        singleton.setAccessible(true);
+        Object previousConstants = singleton.get(null);
+        try {
+            System.setProperty(storage.ApexStorage.DIRECTORY_PROPERTY,
+                    java.nio.file.Files.createTempDirectory("apex-tracking-").toString());
+            ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
+            singleton.set(null, SimulatorTuning.snapshot());
+            java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+            ((SimApexPinpoint) hardware.hardwareMap.get(Pinpoint.Driver.class, ApexSimulation.PINPOINT)).setClock(clock::get);
+            Follower follower = new Follower(new Constants(), hardware.hardwareMap, false, clock::get);
+            ExampleAutoPath auto = new ExampleAutoPath(follower, GeometryFactory.PoseMirror.NONE);
 
-        follower.follow(auto.testPath);
-        follower.update();
-        assertEquals("Callback not triggered yet", auto.callbackMessage);
-        // The example now contains several large arcs and is intentionally much longer than the
-        // original three-point path. Give the complete profiled route time to finish.
-        double outboundCrossTrack = runMovement(hardware, follower, 22.0);
-        trajectory.profile.MotionParameters first = auto.testPath.getFeedforwardLut() == null ? null :
-                auto.testPath.getFeedforwardLut().getFFParams(0.0);
-        assertTrue("Example auto path did not finish: pose=" + follower.getPose() +
-                ", t=" + follower.getBestT() +
-                ", crossTrack=" + follower.getCrossTrackErrorIn() +
-                ", velocity=" + follower.getVelocity() +
-                ", firstV=" + (first == null ? "quick-fallback" : first.getTangentialVel()) +
-                ", firstA=" + (first == null ? "quick-fallback" : first.getTangentialAccel()) +
-                ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
-                follower.getDrivetrain().getLastFrPower() + "," +
-                follower.getDrivetrain().getLastBlPower() + "," +
-                follower.getDrivetrain().getLastBrPower(), !follower.isBusy());
-        assertTrue("Example auto path stopped too far from its endpoint",
-                follower.getPose().distanceTo(auto.testPath.getEndPose()).getIn() < 2.0);
-        assertTrue("Outbound distance callback did not fire", auto.outboundCallbackTriggered);
-        assertTrue("Outbound path cross-track error was excessive: " + outboundCrossTrack,
-                outboundCrossTrack < 6.0);
+            follower.follow(auto.testPath);
+            follower.update();
+            assertEquals("Callback not triggered yet", auto.callbackMessage);
+            // The example now contains several large arcs and is intentionally much longer than the
+            // original three-point path. Give the complete profiled route time to finish.
+            double outboundCrossTrack;
+            File traceFile = new File("build/example-auto-tracking.csv");
+            traceFile.getParentFile().mkdirs();
+            try (java.io.PrintWriter trace = new java.io.PrintWriter(traceFile)) {
+                trace.println("time_s,t,x,y,heading_rad,error_in,target_v,measured_v,normal_v,target_a,target_omega,measured_omega,heading_error_rad,lateral_power,centripetal_power,correction_scale,feedforward_scale,velocity_scale,fl,fr,bl,br");
+                outboundCrossTrack = runMovement(hardware, follower, 22.0, trace, clock);
+            }
+            trajectory.profile.MotionParameters first = auto.testPath.getFeedforwardLut() == null ? null :
+                    auto.testPath.getFeedforwardLut().getFFParams(0.0);
+            assertTrue("Example auto path did not finish: pose=" + follower.getPose() +
+                    ", t=" + follower.getBestT() +
+                    ", crossTrack=" + follower.getCrossTrackErrorIn() +
+                    ", velocity=" + follower.getVelocity() +
+                    ", firstV=" + (first == null ? "quick-fallback" : first.getTangentialVel()) +
+                    ", firstA=" + (first == null ? "quick-fallback" : first.getTangentialAccel()) +
+                    ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
+                    follower.getDrivetrain().getLastFrPower() + "," +
+                    follower.getDrivetrain().getLastBlPower() + "," +
+                    follower.getDrivetrain().getLastBrPower(), follower.movementSucceeded());
+            assertTrue("Example auto path stopped too far from its endpoint",
+                    follower.getPose().distanceTo(auto.testPath.getEndPose()).getIn() < 2.0);
+            assertTrue("Outbound distance callback did not fire", auto.outboundCallbackTriggered);
+            assertTrue("Outbound path cross-track error was excessive: " + outboundCrossTrack,
+                    outboundCrossTrack < 0.5);
 
-        follower.follow(auto.testTurn);
-        runMovement(hardware, follower, 8.0);
-        assertTrue("Example auto turn did not finish: pose=" + follower.getPose() +
-                ", velocity=" + follower.getVelocity() +
-                ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
-                follower.getDrivetrain().getLastFrPower() + "," +
-                follower.getDrivetrain().getLastBlPower() + "," +
-                follower.getDrivetrain().getLastBrPower(), !follower.isBusy());
-        assertTrue("Example auto turn stopped at the wrong heading",
-                Math.abs(follower.getPose().getHeading().getShortestAngleTo(
-                        auto.testTurn.getEndPose().getHeading()).getRad()) < Math.toRadians(3.0));
-        assertTrue("Angular callback did not fire", auto.turnCallbackTriggered);
+            follower.follow(auto.testTurn);
+            runMovement(hardware, follower, 8.0, null, clock);
+            assertTrue("Example auto turn did not finish: pose=" + follower.getPose() +
+                    ", velocity=" + follower.getVelocity() +
+                    ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
+                    follower.getDrivetrain().getLastFrPower() + "," +
+                    follower.getDrivetrain().getLastBlPower() + "," +
+                    follower.getDrivetrain().getLastBrPower(), follower.movementSucceeded());
+            assertTrue("Example auto turn stopped at the wrong heading",
+                    Math.abs(follower.getPose().getHeading().getShortestAngleTo(
+                            auto.testTurn.getEndPose().getHeading()).getRad()) < Math.toRadians(3.0));
+            assertTrue("Angular callback did not fire", auto.turnCallbackTriggered);
 
-        follower.follow(auto.returnPath);
-        double returnCrossTrack = runMovement(hardware, follower, 12.0);
-        assertTrue("Reverse return path did not finish: pose=" + follower.getPose() +
-                ", t=" + follower.getBestT() +
-                ", crossTrack=" + follower.getCrossTrackErrorIn() +
-                ", velocity=" + follower.getVelocity() +
-                ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
-                follower.getDrivetrain().getLastFrPower() + "," +
-                follower.getDrivetrain().getLastBlPower() + "," +
-                follower.getDrivetrain().getLastBrPower(), !follower.isBusy());
-        assertTrue("Reverse return path stopped too far from home: " + follower.getPose(),
-                follower.getPose().distanceTo(auto.returnPath.getEndPose()).getIn() <
-                        MAX_ENDPOINT_ERROR_INCHES);
-        assertTrue("Reverse return path ended at the wrong heading",
-                Math.abs(follower.getPose().getHeading().getShortestAngleTo(
-                        auto.returnPath.getEndPose().getHeading()).getRad()) < Math.toRadians(3.0));
-        assertTrue("Return distance callback did not fire", auto.returnCallbackTriggered);
-        assertTrue("Reverse path cross-track error was excessive: " + returnCrossTrack,
-                returnCrossTrack < 6.0);
+            follower.follow(auto.returnPath);
+            double returnCrossTrack = runMovement(hardware, follower, 12.0, null, clock);
+            assertTrue("Reverse return path did not finish: pose=" + follower.getPose() +
+                    ", t=" + follower.getBestT() +
+                    ", crossTrack=" + follower.getCrossTrackErrorIn() +
+                    ", velocity=" + follower.getVelocity() +
+                    ", powers=" + follower.getDrivetrain().getLastFlPower() + "," +
+                    follower.getDrivetrain().getLastFrPower() + "," +
+                    follower.getDrivetrain().getLastBlPower() + "," +
+                    follower.getDrivetrain().getLastBrPower(), follower.movementSucceeded());
+            assertTrue("Reverse return path stopped too far from home: " + follower.getPose(),
+                    follower.getPose().distanceTo(auto.returnPath.getEndPose()).getIn() <
+                            MAX_ENDPOINT_ERROR_INCHES);
+            assertTrue("Reverse return path ended at the wrong heading",
+                    Math.abs(follower.getPose().getHeading().getShortestAngleTo(
+                            auto.returnPath.getEndPose().getHeading()).getRad()) < Math.toRadians(3.0));
+            assertTrue("Return distance callback did not fire", auto.returnCallbackTriggered);
+            assertTrue("Reverse path cross-track error was excessive: " + returnCrossTrack,
+                    returnCrossTrack < 0.5);
 
-        follower.follow(auto.strafeOutPath);
-        double strafeOutCrossTrack = runMovement(hardware, follower, 8.0);
-        assertTrue("Outbound strafe did not finish: pose=" + follower.getPose() +
-                ", t=" + follower.getBestT() + ", velocity=" + follower.getVelocity(),
-                !follower.isBusy());
-        assertTrue("Outbound strafe stopped too far from its endpoint",
-                follower.getPose().distanceTo(auto.strafeOutPath.getEndPose()).getIn() <
-                        MAX_ENDPOINT_ERROR_INCHES);
-        assertTrue("Outbound strafe cross-track error was excessive: " + strafeOutCrossTrack,
-                strafeOutCrossTrack < 6.0);
+            follower.follow(auto.strafeOutPath);
+            double strafeOutCrossTrack = runMovement(hardware, follower, 8.0, null, clock);
+            assertTrue("Outbound strafe did not finish: pose=" + follower.getPose() +
+                    ", t=" + follower.getBestT() + ", velocity=" + follower.getVelocity(),
+                    follower.movementSucceeded());
+            assertTrue("Outbound strafe stopped too far from its endpoint",
+                    follower.getPose().distanceTo(auto.strafeOutPath.getEndPose()).getIn() <
+                            MAX_ENDPOINT_ERROR_INCHES);
+            assertTrue("Outbound strafe cross-track error was excessive: " + strafeOutCrossTrack,
+                    strafeOutCrossTrack < 0.5);
 
-        follower.follow(auto.strafeBackPath);
-        double strafeBackCrossTrack = runMovement(hardware, follower, 8.0);
-        assertTrue("Return strafe did not finish: pose=" + follower.getPose() +
-                        ", t=" + follower.getBestT() + ", velocity=" +
-                        follower.getVelocity(),
-                !follower.isBusy());
-        assertTrue("Full auto sequence did not return to the origin: " + follower.getPose(),
-                follower.getPose().distanceTo(Pose.zero()).getIn() <
-                        MAX_ENDPOINT_ERROR_INCHES);
-        assertTrue("Full auto sequence did not finish at zero heading",
-                Math.abs(follower.getPose().getHeading().getShortestAngleTo(
-                        Pose.zero().getHeading()).getRad()) < Math.toRadians(3.0));
-        assertTrue("Return strafe cross-track error was excessive: " + strafeBackCrossTrack,
-                strafeBackCrossTrack < 6.0);
+            follower.follow(auto.strafeBackPath);
+            double strafeBackCrossTrack = runMovement(hardware, follower, 8.0, null, clock);
+            assertTrue("Return strafe did not finish: pose=" + follower.getPose() +
+                            ", t=" + follower.getBestT() + ", velocity=" +
+                            follower.getVelocity(),
+                    follower.movementSucceeded());
+            assertTrue("Full auto sequence did not return to the origin: " + follower.getPose(),
+                    follower.getPose().distanceTo(Pose.zero()).getIn() <
+                            MAX_ENDPOINT_ERROR_INCHES);
+            assertTrue("Full auto sequence did not finish at zero heading",
+                    Math.abs(follower.getPose().getHeading().getShortestAngleTo(
+                            Pose.zero().getHeading()).getRad()) < Math.toRadians(3.0));
+            assertTrue("Return strafe cross-track error was excessive: " + strafeBackCrossTrack,
+                    strafeBackCrossTrack < 0.5);
+            System.out.printf(java.util.Locale.ROOT,
+                    "Example auto peak cross-track (in): outbound=%.6f, return=%.6f, strafeOut=%.6f, strafeBack=%.6f%n",
+                    outboundCrossTrack, returnCrossTrack, strafeOutCrossTrack, strafeBackCrossTrack);
+        } finally {
+            singleton.set(null, previousConstants);
+            if (previousStorage == null) { System.clearProperty(storage.ApexStorage.DIRECTORY_PROPERTY); }
+            else { System.setProperty(storage.ApexStorage.DIRECTORY_PROPERTY, previousStorage); }
+        }
     }
 
     @Test
@@ -640,14 +663,48 @@ public class ApexSimulationTest {
 
     private static double runMovement(ApexSimulation.Hardware hardware, Follower follower,
                                       double timeoutSeconds) throws Exception {
-        long deadline = System.nanoTime() + (long) (timeoutSeconds * 1e9);
+        return runMovement(hardware, follower, timeoutSeconds, null);
+    }
+
+    private static double runMovement(ApexSimulation.Hardware hardware, Follower follower,
+                                      double timeoutSeconds, java.io.PrintWriter trace) throws Exception {
+        return runMovement(hardware, follower, timeoutSeconds, trace, null);
+    }
+
+    private static double runMovement(ApexSimulation.Hardware hardware, Follower follower,
+                                      double timeoutSeconds, java.io.PrintWriter trace,
+                                      java.util.concurrent.atomic.AtomicLong clock) throws Exception {
+        java.util.function.LongSupplier now = clock == null ? System::nanoTime : clock::get;
+        long started = now.getAsLong();
+        long deadline = started + (long) (timeoutSeconds * 1e9);
         double maximumCrossTrackError = 0.0;
-        while (follower.isBusy() && System.nanoTime() < deadline) {
-            stepPhysics(hardware, 0.02);
+        while (follower.isBusy() && now.getAsLong() < deadline) {
+            if (clock != null) ApexSimulation.stepPhysics(hardware, .02);
+            else stepPhysics(hardware, .02);
+            if (clock != null) { clock.addAndGet(20_000_000L); }
             follower.update();
             maximumCrossTrackError = Math.max(maximumCrossTrackError,
                     Math.abs(follower.getCrossTrackErrorIn()));
-            Thread.sleep(20);
+            trajectory.TrajectorySample target = follower.getTrajectoryTarget();
+            if (trace != null && target != null && follower.isBusy()) {
+                Pose pose = follower.getPose(), velocity = follower.getVelocity();
+                Follower.CommandDemand demand = follower.getLastCommandDemand();
+                trace.printf(java.util.Locale.ROOT,
+                        "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
+                        (now.getAsLong() - started) * 1e-9, target.pathT,
+                        pose.getX().getIn(), pose.getY().getIn(), pose.getHeading().getRad(),
+                        follower.getCrossTrackErrorIn(), target.tangentialVelocity(),
+                        follower.getTrackingMeasuredVelocity(),
+                        velocity.getVec().dot(follower.getCrossTrackNormal()).getIn(),
+                        target.tangentialAcceleration(), target.angularVelocity,
+                        velocity.getHeading().getRad(), pose.getHeading().getShortestAngleTo(target.heading).getRad(),
+                        follower.getCrossTrackCorrection().getMag().getIn(),
+                        follower.getCentripetalCorrection().getMag().getIn(),
+                        demand.correctionScale, demand.feedforwardScale, demand.velocityScale,
+                        follower.getDrivetrain().getLastFlPower(), follower.getDrivetrain().getLastFrPower(),
+                        follower.getDrivetrain().getLastBlPower(), follower.getDrivetrain().getLastBrPower());
+            }
+            if (clock == null) { Thread.sleep(20); }
         }
         return maximumCrossTrackError;
     }

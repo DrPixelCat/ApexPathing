@@ -26,51 +26,46 @@ final class TankPathFollower {
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;
     private final FollowerConstants constants;
+    private final java.util.function.LongSupplier monotonicClock;
     private final double distanceTolerance;
     private final double headingTolerance;
     private final FeedbackController endpointHeadingController;
     private final FeedbackController translationFeedforwardController;
     private final FeedbackController headingFeedforwardController;
-    private final FeedbackController translationVelocityController;
-    private final FeedbackController headingVelocityController;
 
     TankPathFollower(BaseDrivetrain<?> drivetrain, DriveController driveController,
                      FollowerConstants constants, double distanceTolerance,
-                     double headingTolerance) {
+                     double headingTolerance,java.util.function.LongSupplier monotonicClock) {
         this.drivetrain = drivetrain;
         this.driveController = driveController;
         this.constants = constants;
+        this.monotonicClock=monotonicClock;
         this.distanceTolerance = distanceTolerance;
         this.headingTolerance = headingTolerance;
-        endpointHeadingController = new FeedbackController(constants.angularCoeffs);
+        endpointHeadingController = new FeedbackController(constants.angularCoeffs, monotonicClock);
         endpointHeadingController.setAngularController();
         translationFeedforwardController = new FeedbackController(
                 new FeedbackController.Coefficients().vel(0.0).accel(0.0));
         headingFeedforwardController = new FeedbackController(
                 new FeedbackController.Coefficients().vel(0.0).accel(0.0));
-        translationVelocityController = new FeedbackController(
-                new FeedbackController.Coefficients().p(0.0));
-        headingVelocityController = new FeedbackController(
-                new FeedbackController.Coefficients().p(0.0));
     }
 
-    boolean update(Path path, PathSegment segment, Pose current, BaseLocalizer<?> localizer,
+    Follower.MovementOutcome update(Path path, PathSegment segment, Pose current, BaseLocalizer<?> localizer,
                    MovementCallbackRunner callbacks, FollowerPathState state,
                    double translationalKV, double translationalKA,
                    double angularKV, double angularKA,
-                   double velocityFeedbackGain, double angularVelocityFeedbackGain) {
+                   double velocityFeedbackGain, double angularVelocityFeedbackGain,
+                   boolean driveEnabled, boolean headingEnabled) {
         translationFeedforwardController.getCoefficients()
                 .vel(translationalKV).accel(translationalKA);
         headingFeedforwardController.getCoefficients().vel(angularKV).accel(angularKA);
-        translationVelocityController.getCoefficients().p(velocityFeedbackGain);
-        headingVelocityController.getCoefficients().p(angularVelocityFeedbackGain);
 
         // region 1. Path Information
         // 1.1 Robot pose and path geometry
         Vector currentPosition = current.getVec();
         Angle currentHeading = current.getHeading();
         Vector robotVelocity = localizer.getVel().getVec();
-        trajectory.TrajectorySample sample = state.target(path, currentPosition, robotVelocity, localizer.getVel().getHeading().getRad(), System.nanoTime());
+        trajectory.TrajectorySample sample = state.target(path, currentPosition, robotVelocity, localizer.getVel().getHeading().getRad(), monotonicClock.getAsLong());
         state.t = sample.pathT;
         Vector closestPathPoint = sample.positionOnPath;
         state.closestPathPoint = closestPathPoint;
@@ -117,9 +112,10 @@ final class TankPathFollower {
         // Ramsete returns a linear correction in m/s and an angular correction in rad/s. Convert
         // only the linear correction back to Apex's inch-based feedforward-gain convention.
         double forwardCorrectionInches = k * forwardErrorMetres / INCHES_TO_METRES;
-        double correctedVelocity = targetVelocity * Math.cos(headingError) + forwardCorrectionInches;
-        double correctedAngularVelocity = targetAngularVelocity + k * headingError
-                + RAMSETE_B * targetVelocityMetres * sinc * lateralErrorMetres;
+        double correctedVelocity = targetVelocity + (driveEnabled
+                ? targetVelocity * (Math.cos(headingError) - 1) + forwardCorrectionInches : 0);
+        double correctedAngularVelocity = targetAngularVelocity + (headingEnabled
+                ? k * headingError + RAMSETE_B * targetVelocityMetres * sinc * lateralErrorMetres : 0);
         double currentAngularVelocity = localizer.getVel().getHeading().getRad();
 
         // 2.4 Measured progress and tracking state
@@ -133,10 +129,8 @@ final class TankPathFollower {
         state.velocitySampleAvailable = true;
 
         // 2.5 Velocity feedback and motion feedforward
-        double forwardVelocityFeedback = translationVelocityController.p()
-                .calculate(correctedVelocity - actualForwardVelocity).get();
-        double turnVelocityFeedback = headingVelocityController.p()
-                .calculate(correctedAngularVelocity - currentAngularVelocity).get();
+        double forwardVelocityFeedback = driveEnabled ? velocityFeedbackGain * (correctedVelocity - actualForwardVelocity) : 0;
+        double turnVelocityFeedback = headingEnabled ? angularVelocityFeedbackGain * (correctedAngularVelocity - currentAngularVelocity) : 0;
         // Preserve the generated acceleration in both travel directions. Ramsete pose
         // correction remains in correctedVelocity; velocity feedback uses the same power gain.
         double motionSign = MotionFeedforward.profiledStaticSign(
@@ -160,11 +154,13 @@ final class TankPathFollower {
                 constants.translationalCoeffs.kS,
                 PathCompletionPolicy.distanceTolerance(distanceTolerance), distanceRemaining);
         double endpointBlend = Follower.endpointCaptureBlend(distanceRemaining);
+        if (!driveEnabled) { endpointPower = 0; }
         endpointHeadingController.setCoefficients(constants.angularCoeffs);
         double endpointHeadingError = currentHeading
                 .getShortestAngleTo(path.getEndPose().getHeading()).getRad();
         double endpointTurn = endpointHeadingController.p().d(-currentAngularVelocity).s()
                 .calculate(endpointHeadingError).get();
+        if (!headingEnabled) { endpointTurn = 0; }
         state.trackingEndpointBlend = endpointBlend;
         state.trackingFeedforward = forwardFeedforward;
         state.trackingVelocityFeedback = forwardVelocityFeedback;
@@ -195,14 +191,13 @@ final class TankPathFollower {
         boolean velocitySettled = PathCompletionPolicy.isVelocitySettled(
                 robotVelocity.getMagSq().getIn(), currentAngularVelocity);
         // A dwell inside pose tolerance is not a substitute for actually slowing down.
-        if (velocitySettled
-                && state.completion.isComplete(insideTolerance, true, System.nanoTime())) {
-            return true;
+        if (state.completion.isComplete(insideTolerance, velocitySettled, monotonicClock.getAsLong())) {
+            return Follower.MovementOutcome.COMPLETED;
         }
         // End the movement if the robot remains stuck.
         if (state.stuckWatchdog.update(
-                Follower.stuckForSpeed(robotVelocity.getMag().getIn()), System.nanoTime())) {
-            return true;
+                !insideTolerance && Follower.stuckForSpeed(robotVelocity.getMag().getIn()), monotonicClock.getAsLong())) {
+            return Follower.MovementOutcome.FAILED;
         }
 
         // endregion
@@ -220,6 +215,6 @@ final class TankPathFollower {
                 0.0, turnPower);
         // endregion
 
-        return false;
+        return Follower.MovementOutcome.RUNNING;
     }
 }

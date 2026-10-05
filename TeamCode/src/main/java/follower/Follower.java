@@ -54,6 +54,7 @@ public class Follower {
     private final FollowerConstants constants;
     private final BaseDrivetrain<?> drivetrain;
     private BaseLocalizer<?> localizer;
+    private final java.util.function.LongSupplier monotonicClock;
     private final LocalizerSet localizerSet;
     private final double headingTolerance;
     private final double distanceTolerance;
@@ -73,6 +74,18 @@ public class Follower {
     private Pose lastPose;
     private boolean paused;
     private String trajectoryFailure;
+    public enum MovementOutcome { IDLE, RUNNING, COMPLETED, CANCELLED, FAILED }
+    private MovementOutcome movementOutcome = MovementOutcome.IDLE;
+
+    public MovementOutcome getMovementOutcome() { return movementOutcome; }
+    public boolean movementSucceeded() { return movementOutcome == MovementOutcome.COMPLETED; }
+
+    /** Acknowledge a failure before deliberately starting another movement. */
+    public void clearFailure() {
+        if (isBusy()) { throw new IllegalStateException("Cannot clear a running movement"); }
+        trajectoryFailure = null;
+        movementOutcome = MovementOutcome.IDLE;
+    }
     private trajectory.TrajectorySample latestTrajectoryTarget;
     private boolean headingControllerEnabled = true;
     private boolean driveControllerEnabled = true;
@@ -149,9 +162,16 @@ public class Follower {
     }
 
     public Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode) {
+        this(constants,hardwareMap,tuningMode,System::nanoTime);
+    }
+
+    /** Simulation may supply a monotonic clock matching its sensor acquisition timestamps. */
+    public Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode,
+                    java.util.function.LongSupplier monotonicClock) {
+        this.monotonicClock=java.util.Objects.requireNonNull(monotonicClock);
         BaseDrivetrainConstants<?> drivetrainConstants = constants.drivetrainConstants();
         drivetrain = drivetrainConstants.build(hardwareMap);
-        this.constants = FollowerConstants.getInstance();
+        this.constants = FollowerConstants.getInstance().copy();
         this.constants.configure(drivetrain.getDrivetrainType(),
                 drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
                         : FollowerConstants.Profile.TANK, tuningMode);
@@ -163,24 +183,24 @@ public class Follower {
         distanceTolerance = drivetrainConstants.distanceTolerance.getIn();
 
 
-        headingController = new FeedbackController(this.constants.angularCoeffs);
+        headingController = new FeedbackController(this.constants.angularCoeffs,monotonicClock);
         headingController.setAngularController();
         turnController = new TurnController(this.constants.angularCoeffs, this.constants.angularKV, this.constants.angularKA,
-                this.constants.angularFeedforwardKS, this.constants.angularVelocityFeedbackGain);
+                this.constants.angularFeedforwardKS, monotonicClock);
         driveController = new DriveController(
                 Dist.fromIn(this.constants.forwardVelLimitIn),
                 Dist.fromIn(this.constants.strafeVelLimitIn),
                 this.constants.translationalCoeffs,
-                !tuningMode && (drivetrain instanceof Mecanum || drivetrain instanceof DualActuated));
+                !tuningMode && (drivetrain instanceof Mecanum || drivetrain instanceof DualActuated),monotonicClock);
 
         commandAllocator = new HolonomicCommandAllocator(drivetrain, driveController);
         turnExecutor = new TurnExecutor(drivetrain, driveController, turnController,
-                commandAllocator, this.constants, headingTolerance, distanceTolerance);
+                commandAllocator, this.constants, headingTolerance, distanceTolerance,monotonicClock);
         holonomicPathFollower = new HolonomicPathFollower(
                 drivetrain, driveController, headingController, commandAllocator, this.constants,
-                distanceTolerance, headingTolerance);
+                distanceTolerance, headingTolerance,monotonicClock);
         tankPathFollower = new TankPathFollower(
-                drivetrain, driveController, this.constants, distanceTolerance, headingTolerance);
+                drivetrain, driveController, this.constants, distanceTolerance, headingTolerance,monotonicClock);
     }
 
     /** Must be called continuously during the active OpMode loop. */
@@ -194,14 +214,24 @@ public class Follower {
         if (drivetrain instanceof DualActuated && ((DualActuated) drivetrain).isTransitioning()) {
             drivetrain.stop();
             localizer.update();
-            turnExecutor.markTransitionTick(System.nanoTime());
+            turnExecutor.markTransitionTick(monotonicClock.getAsLong());
             return;
         }
 
         localizer.update();
         diagnostics.recordPose(localizer.getPose());
-        if (currentMovement == null || paused) {
-            if (paused && currentMovement instanceof Turn) { turnExecutor.observeHeading(getPose().getHeading()); }
+        if (!localizer.isLastMeasurementValid()) {
+            drivetrain.stop();
+            turnExecutor.markTransitionTick(monotonicClock.getAsLong());
+            pathState.pause();
+            return;
+        }
+        if (paused) {
+            if (currentMovement instanceof Turn) { turnExecutor.observeHeading(getPose().getHeading()); }
+            drivetrain.stop();
+            return;
+        }
+        if (currentMovement == null) {
             if (holdPose && lastPose != null) {
                 holdPose(lastPose);
             }
@@ -210,35 +240,42 @@ public class Follower {
 
         Pose current = getPose();
         pathState.lastCommandDemand = CommandDemand.ZERO;
-        boolean complete;
+        MovementOutcome outcome;
         try {
             if (currentMovement instanceof Turn) {
-                complete = turnExecutor.update((Turn) currentMovement, current, localizer,
-                        callbackRunner, pathState, driveControllerEnabled);
+                outcome = turnExecutor.update((Turn) currentMovement, current, localizer,
+                        callbackRunner, pathState, driveControllerEnabled, headingControllerEnabled);
             } else if (segment == null) {
-                complete = true;
+                outcome = MovementOutcome.COMPLETED;
             } else if (drivetrain.isHolonomic()) {
-                complete = holonomicPathFollower.update(
+                outcome = holonomicPathFollower.update(
                         (Path) currentMovement, segment, current, localizer,
                         callbackRunner, pathState, headingControllerEnabled, driveControllerEnabled,
                         this.constants.translationalKV, this.constants.translationalKA, this.constants.angularKV, this.constants.angularKA, this.constants.kCentripetal,
                         this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
             } else {
-                complete = tankPathFollower.update(
+                outcome = tankPathFollower.update(
                         (Path) currentMovement, segment, current, localizer,
                         callbackRunner, pathState, this.constants.translationalKV, this.constants.translationalKA,
-                        this.constants.angularKV, this.constants.angularKA, this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
+                        this.constants.angularKV, this.constants.angularKA, this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain,
+                        driveControllerEnabled, headingControllerEnabled);
             }
 
         } catch (RuntimeException exception) {
             latestTrajectoryTarget = null; trajectoryFailure = exception.getMessage();
             stop();
+            movementOutcome = MovementOutcome.FAILED;
             diagnostics.recordTrajectoryFailure(trajectoryFailure);
             throw exception;
         }
         if (pathState.trajectorySample != null) { latestTrajectoryTarget = pathState.trajectorySample; diagnostics.recordTrajectoryTarget(latestTrajectoryTarget); }
-        if (complete) {
+        if (outcome != MovementOutcome.RUNNING) {
             stop();
+            movementOutcome = outcome;
+            if (outcome == MovementOutcome.FAILED) {
+                trajectoryFailure = "Movement stalled before reaching its endpoint";
+                diagnostics.recordTrajectoryFailure(trajectoryFailure);
+            }
         }
     }
 
@@ -253,17 +290,25 @@ public class Follower {
                     target.getVec(), getPose().getVec());
         } else {
             Vector globalError = target.getVec().minus(getPose().getVec());
-            Vector localError = globalError.rotate(target.getHeading().times(-1.0));
+            Vector localError = globalError.rotate(getPose().getHeading().times(-1.0));
             translationalResponse = new Vector(
                     Dist.fromIn(driveController.calculateEndDistance(
                             localError.getX(DistUnit.IN))), Dist.zero());
         }
-        drivetrain.drive(translationalResponse.getX().getIn(),
+        if (drivetrain.isHolonomic()) {
+            translationalResponse = translationalResponse.rotate(getPose().getHeading().times(-1));
+        }
+        drivetrain.moveWithVectors(translationalResponse.getX().getIn(),
                 translationalResponse.getY().getIn(), angularResponse);
     }
 
     /** Starts following the given movement. */
     public void follow(FollowerMovement movement) {
+        java.util.Objects.requireNonNull(movement, "Movement");
+        if (movementOutcome == MovementOutcome.FAILED) {
+            throw new IllegalStateException("Previous movement failed: " + trajectoryFailure
+                    + ". Call clearFailure() before retrying.");
+        }
         if (isBusy()) {
             throw new IllegalStateException(
                     "Cannot execute a new movement while another movement is still in progress. "
@@ -290,15 +335,16 @@ public class Follower {
             }
 
             currentMovement = movement;
+            movementOutcome = MovementOutcome.RUNNING;
             pathState.reset();
             trajectoryFailure = null; latestTrajectoryTarget = null;
-            if (movement instanceof Path) { pathState.prepare((Path) movement); }
+            if (movement instanceof Path) { pathState.prepare((Path) movement, this.constants); }
             movement.setStarted(true);
             movement.setEnded(false);
             lastPose = movement.getEndPose();
             if (movement instanceof Turn) {
                 diagnostics.clearCurrentPath();
-                turnExecutor.start((Turn) movement, System.nanoTime());
+                turnExecutor.start((Turn) movement, monotonicClock.getAsLong());
             } else if (movement instanceof Path) {
                 segment = ((Path) movement).getParametricPath();
                 diagnostics.recordCurrentPath((Path) movement);
@@ -312,6 +358,7 @@ public class Follower {
             latestTrajectoryTarget = null;
             trajectoryFailure = exception.getMessage();
             stop();
+            movementOutcome = MovementOutcome.FAILED;
             diagnostics.recordTrajectoryFailure(trajectoryFailure);
             throw exception;
         }
@@ -319,10 +366,12 @@ public class Follower {
 
     /** Instantly stops the drivetrain and ends any ongoing movement. */
     public void stop() {
+        if (movementOutcome == MovementOutcome.RUNNING) { movementOutcome = MovementOutcome.CANCELLED; }
         if (currentMovement != null) {
             currentMovement.setEnded(true);
         }
         currentMovement = null;
+        paused = false;
         segment = null;
         turnExecutor.reset();
         pathState.reset();
@@ -341,7 +390,7 @@ public class Follower {
     public void resume() {
         if (paused) {
             paused = false;
-            turnExecutor.resume(System.nanoTime());
+            turnExecutor.resume(monotonicClock.getAsLong());
             pathState.pause();
             resetControllers();
         }
@@ -388,11 +437,20 @@ public class Follower {
     }
 
     public double getTrackingVelocityTarget() { return pathState.trackingVelocityTarget; }
+    /** Future speed goal and its path location; NaN when pursuit is inactive or recovering overspeed. */
+    public double getVelocityGoalDistanceIn() { return pathState.onlinePlanner == null ? Double.NaN
+            : pathState.onlinePlanner.getVelocityGoalDistanceIn(); }
+    public double getVelocityGoal() { return pathState.onlinePlanner == null ? Double.NaN
+            : pathState.onlinePlanner.getVelocityGoal(); }
+    public double getCurrentSpeedCeiling() { return pathState.onlinePlanner == null ? Double.NaN
+            : pathState.onlinePlanner.getCurrentSpeedCeiling(); }
     public trajectory.TrajectorySample getTrajectoryTarget() { return latestTrajectoryTarget; }
     public String getTrajectoryFailure() { return trajectoryFailure; }
     public double getTrackingMeasuredVelocity() { return pathState.trackingMeasuredVelocity; }
     public double getTrackingProgressVelocity() { return pathState.trackingProgressVelocity; }
     public double getTrackingFeedforward() { return pathState.trackingFeedforward; }
+    public double getTrackingHeadingFeedforward() { return pathState.trackingHeadingFeedforward; }
+    public boolean isWheelFeedforwardActive() { return pathState.wheelFeedforwardActive; }
     public double getTrackingVelocityFeedback() { return pathState.trackingVelocityFeedback; }
     public double getTrackingAngularVelocityTarget() {
         return pathState.trackingAngularVelocityTarget;
@@ -408,8 +466,19 @@ public class Follower {
     public Vector getCrossTrackCorrection() { return pathState.crossTrackCorrection; }
     public Vector getCentripetalCorrection() { return pathState.centripetalCorrection; }
 
+    public boolean isHeadingControllerEnabled() { return headingControllerEnabled; }
+    public boolean isDriveControllerEnabled() { return driveControllerEnabled; }
+
     public void disableHeadingController() { headingControllerEnabled = false; }
+    /** Install an explicitly calibrated forward-axis braking model for this follower only. */
+    public void setBrakingFeedforward(feedforward.CenteredBrakingFeedforward model) {
+        holonomicPathFollower.setBrakingFeedforward(model);
+    }
+    public boolean isCenteredBrakingActive() { return pathState.centeredBrakingActive; }
+    public double getCenteredBrakingMeanPower() { return pathState.centeredBrakingMeanPower; }
     public void disableDriveController() { driveControllerEnabled = false; }
+    /** Calibrated mecanum paths then play an independent rest-to-rest time reference,
+     * through the planned stop, without measured-motion replanning or endpoint capture. */
     public void disableControllers() { disableHeadingController(); disableDriveController(); }
     public void enableHeadingController() { headingControllerEnabled = true; }
     public void enableDriveController() { driveControllerEnabled = true; }
@@ -430,6 +499,7 @@ public class Follower {
         headingController.reset();
         turnController.reset();
         driveController.reset();
+        holonomicPathFollower.resetBrakingFeedforward();
     }
 
     private void synchronizeDriveProfile() {
@@ -589,9 +659,7 @@ public class Follower {
     static Vector calculateCentripetalCorrection(Vector principalNormal,
                                                  double tangentialVelocity,
                                                  double signedCurvature, double gain) {
-        FeedbackController controller = new FeedbackController(new Coefficients().p(gain));
-        double magnitude = controller.p().calculate(tangentialVelocity * tangentialVelocity
-                * Math.abs(signedCurvature)).get();
+        double magnitude = gain * tangentialVelocity * tangentialVelocity * Math.abs(signedCurvature);
         return principalNormal.times(Math.min(magnitude, MAX_CENTRIPETAL_POWER));
     }
 
@@ -622,9 +690,6 @@ public class Follower {
                                                   double targetAcceleration,
                                                   double kV, double kA, double kS) {
         double motionSign = MotionFeedforward.motionSign(targetVelocity, targetAcceleration);
-        FeedbackController controller = new FeedbackController(
-                new Coefficients().vel(kV).accel(kA));
-        return controller.vel(targetVelocity).accel(targetAcceleration)
-                .f(motionSign * kS).calculate(0.0).get();
+        return kV * targetVelocity + kA * targetAcceleration + motionSign * kS;
     }
 }

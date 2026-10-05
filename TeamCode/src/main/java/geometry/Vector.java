@@ -149,5 +149,5 @@ public class Vector {
         return this.x.equals(other.x) && this.y.equals(other.y);
     }
 
-    // endregion
+    @Override public int hashCode() { return 31 * x.hashCode() + y.hashCode(); }
 }

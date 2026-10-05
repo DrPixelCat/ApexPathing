@@ -8,7 +8,7 @@ import paths.movements.Path;
 
 /** Immutable rectangular, bilinearly interpolated field. No per-node Vector objects are retained. */
 public final class TrajectoryField2D {
-    private static final int CHANNELS = 11;
+    private static final int CHANNELS = 12;
     private final PathSegment segment;
     private final paths.heading.HeadingInterpolator interpolator;
     private final FFLut nominal;
@@ -30,7 +30,12 @@ public final class TrajectoryField2D {
         if (!Double.isFinite(length * width) || length * width * CHANNELS > Integer.MAX_VALUE - 8) {
             throw new IllegalArgumentException("Grid is too large; increase spacing.");
         }
-        columns = Math.max(2, (int) length); rows = Math.max(2, (int) width);
+        columns = Math.max(2, (int) length);
+        rows = Math.max(2, (int) width);
+        long storageBytes = (long) columns * rows * CHANNELS * Double.BYTES;
+        if (storageBytes > 32L * 1024 * 1024) {
+            throw new IllegalArgumentException("Trajectory grid exceeds 32 MiB; increase spacing or use online planning");
+        }
         data = new double[Math.multiplyExact(Math.multiplyExact(columns, rows), CHANNELS)];
         for (int row = 0; row < rows; row++) {
             for (int col = 0; col < columns; col++) {
@@ -46,6 +51,7 @@ public final class TrajectoryField2D {
                 data[offset + 4] = value.toPath.getX().getIn(); data[offset + 5] = value.toPath.getY().getIn();
                 data[offset + 6] = value.tangent.getX().getIn(); data[offset + 7] = value.tangent.getY().getIn();
                 data[offset + 8] = value.progressIn; data[offset + 9] = value.angularVelocity; data[offset + 10] = value.angularAcceleration;
+                data[offset + 11] = value.expectedMotorPower;
             }
         }
     }
@@ -80,6 +86,7 @@ public final class TrajectoryField2D {
         Vector velocity = TrajectorySample.vector(output[0], output[1]);
         Vector acceleration = TrajectorySample.vector(output[2], output[3]);
         double omega = output[9], alpha = output[10];
+        double expectedPower = output[11];
         // Bilinear blending of endpoint zero rows must not erase launch or terminal braking.
         MotionParameters boundary = nominal.getKinematicParams(s);
         // Interpolation across a sharp reduction must respect the stored stopping envelope.
@@ -89,12 +96,14 @@ public final class TrajectoryField2D {
             acceleration = tangent.times(boundary.getTangentialAccel()).plus(PathSegment.calculateLeftNormal(tangent)
                     .times(boundary.getTangentialVel() * boundary.getTangentialVel() * segment.getSignedCurvature(t)));
             omega = boundary.getAngularVel(); alpha = boundary.getAngularAccel();
+            expectedPower = boundary.getMotorPower();
         }
         Vector representedPoint = TrajectorySample.vector(x + output[4], y + output[5]);
         // Tangent heading styles must use the interpolated tangent too. A tiny mismatch
         // otherwise activates a second calibrated body-axis feedforward near straight sections.
         return new TrajectorySample(velocity, acceleration, representedPoint.minus(position), tangent, representedPoint,
                 s, remaining, t, interpolator.getHeadingTarg(remaining, tangent, segment.getFirstDerivative(1)),
-                omega, alpha, false, x != position.getX().getIn() || y != position.getY().getIn());
+                omega, alpha, false, x != position.getX().getIn() || y != position.getY().getIn())
+                .withExpectedMotorPower(expectedPower);
     }
 }

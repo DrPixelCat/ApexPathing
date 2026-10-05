@@ -40,6 +40,16 @@ public class Octoquad extends BaseLocalizer<Octoquad.Constants> {
     public Octoquad(Constants constants, HardwareMap hardwareMap) {
         super(constants);
 
+        if (constants.name == null || constants.name.trim().isEmpty()
+                || constants.encoderResolution == null || !Double.isFinite(constants.encoderResolution.getMm())
+                || constants.encoderResolution.getMm() <= 0
+                || !Double.isFinite(constants.angularScalar) || constants.angularScalar <= 0
+                || constants.offsets == null || !constants.offsets.isFinite()
+                || constants.xPort < 0 || constants.xPort > 7 || constants.yPort < 0 || constants.yPort > 7
+                || constants.xPort == constants.yPort
+                || constants.xPodDirection == null || constants.yPodDirection == null) {
+            throw new IllegalArgumentException("Octoquad requires a device name, distinct valid ports, finite offsets and positive resolution/scalar");
+        }
         octoquad = hardwareMap.get(Driver.class, constants.name);
         octoquad.setEncoderDirection(constants.xPort, constants.xPodDirection);
         octoquad.setEncoderDirection(constants.yPort, constants.yPodDirection);
@@ -52,12 +62,19 @@ public class Octoquad extends BaseLocalizer<Octoquad.Constants> {
         octoquad.setLocalizerImuHeadingScalar((float) constants.angularScalar);
         octoquad.resetLocalizerAndCalibrateIMU();
 
-        while (octoquad.getLocalizerStatus() != Driver.Status.RUNNING) {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (true) {
+            Driver.Status status = octoquad.getLocalizerStatus();
+            if (status == Driver.Status.RUNNING) { break; }
+            if (status == Driver.Status.FAULT_NO_IMU || System.nanoTime() >= deadline) {
+                throw new IllegalStateException("Octoquad initialization failed: " + status);
+            }
             try {
                 //noinspection BusyWait
                 Thread.sleep(25);
             } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Octoquad initialization interrupted", e);
             }
         }
     }
@@ -65,7 +82,7 @@ public class Octoquad extends BaseLocalizer<Octoquad.Constants> {
     @Override
     public void update() {
         octoquad.readLocalizerData(localizer);
-        if (localizer.crcOk) {
+        if (localizer.isPoseDataValid()) {
             pose = new Pose(
                     Vector.of(localizer.posX_mm, localizer.posY_mm, DistUnit.MM),
                     Angle.of(localizer.heading_rad, AngleUnit.RAD)

@@ -13,7 +13,8 @@ public final class CalibrationCandidate {
     private final List<String> metrics;
 
     public CalibrationCandidate(JSONObject values, List<String> metrics) {
-        this.values = values;
+        try { this.values = new JSONObject(values.toString()); }
+        catch (org.json.JSONException failure) { throw new IllegalArgumentException("Invalid calibration values", failure); }
         this.metrics = Collections.unmodifiableList(new ArrayList<>(metrics));
     }
 

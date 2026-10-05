@@ -16,12 +16,52 @@ final class HolonomicCommandAllocator {
         final Vector drive;
         final double turn;
         final Follower.CommandDemand demand;
+        final double[] wheelPowers;
 
         Result(Vector drive, double turn, Follower.CommandDemand demand) {
+            this(drive, turn, demand, null);
+        }
+        Result(Vector drive, double turn, Follower.CommandDemand demand, double[] wheelPowers) {
             this.drive = drive;
             this.turn = turn;
             this.demand = demand;
+            this.wheelPowers = wheelPowers;
         }
+    }
+
+    /** Preserve wheel-specific motor compensation, including the fourth wheel-power mode.
+     * Reserve position correction first, then scale the entire feedforward together. */
+    Result allocateWheels(Vector crossTrack, Vector tangent, Angle heading, double tangentCorrection,
+                          double headingCorrection, double[] feedforward, double tangentVelocity,
+                          double headingVelocity, Vector normalVelocity) {
+        if (!(drivetrain instanceof Mecanum)) throw new IllegalStateException("Wheel model requires a mecanum drivetrain");
+        Vector position = crossTrack.plus(tangent.times(tangentCorrection)).rotate(heading.times(-1));
+        Vector velocity = tangent.times(tangentVelocity).plus(normalVelocity).rotate(heading.times(-1));
+        double[] feedback = mix(position, headingCorrection), rate = mix(velocity, headingVelocity);
+        double correctionDemand=peak(feedback), ffDemand=peak(feedforward), rateDemand=peak(rate);
+        double correctionScale=1/Math.max(1,correctionDemand);
+        double remaining=Math.max(0,1-correctionDemand*correctionScale);
+        double ffScale=remainingScale(ffDemand,remaining);
+        double rateScale=remainingScale(rateDemand,Math.max(0,remaining-ffDemand*ffScale));
+        double[] powers=new double[4];
+        for(int i=0;i<4;i++) powers[i]=feedback[i]*correctionScale+feedforward[i]*ffScale+rate[i]*rateScale;
+        double x=(powers[0]+powers[1]+powers[2]+powers[3])/4;
+        double y=(-powers[0]+powers[1]+powers[2]-powers[3])/4;
+        double turn=(-powers[0]+powers[1]-powers[2]+powers[3])/4;
+        Follower.CommandDemand demand = new Follower.CommandDemand(true, crossTrack.getMag().getIn(),
+                Math.abs(tangentCorrection), Math.abs(headingCorrection), 0, Math.abs(tangentVelocity),
+                Math.abs(headingVelocity), Math.abs((feedforward[0]+feedforward[1]+feedforward[2]+feedforward[3])/4),
+                Math.abs((-feedforward[0]+feedforward[1]-feedforward[2]+feedforward[3])/4),
+                correctionDemand,rateDemand,ffDemand,correctionDemand+rateDemand+ffDemand,
+                correctionScale,ffScale,rateScale);
+        return new Result(trajectory.TrajectorySample.vector(x,y),turn,demand,powers);
+    }
+    private static double[] mix(Vector body,double turn) {
+        double x=body.getX().getIn(), y=body.getY().getIn();
+        return new double[]{x-y-turn,x+y+turn,x+y-turn,x-y+turn};
+    }
+    private static double peak(double[] powers) {
+        double max=0;for(double power:powers) max=Math.max(max,Math.abs(power));return max;
     }
 
     private final BaseDrivetrain<?> drivetrain;

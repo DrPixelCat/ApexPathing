@@ -107,5 +107,10 @@ public class Dist {
     @NonNull
     public String toString() { return String.format("%s in", this.inches); }
 
-    // endregion
+    @Override public boolean equals(Object other) {
+        return other != null && getClass() == other.getClass()
+                && Double.compare(getIn(), ((Dist) other).getIn()) == 0;
+    }
+
+    @Override public int hashCode() { return Double.hashCode(getIn()); }
 }

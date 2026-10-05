@@ -1,11 +1,21 @@
 package follower;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import org.json.JSONObject;
 import org.junit.Test;
 
 public class FollowerConstantsVelocityFeedbackTest {
+    @Test public void obsoletePursuitAndProjectionSettingsAreIgnoredAndProportionalGainPersists() throws Exception {
+        FollowerConstants constants = FollowerConstants.fromJson(new JSONObject().put("drivetrainType", "MECANUM")
+                .put("velocityFeedbackGain", .04).put("velocityPursuitTimeSeconds", .35)
+                .put("velocityErrorProjectionTimeSeconds", .05));
+        assertEquals(.04, constants.velocityFeedbackGain, 0);
+        assertFalse(constants.toJson().toString().contains("velocityPursuitTimeSeconds"));
+        assertFalse(constants.toJson().toString().contains("velocityErrorProjectionTimeSeconds"));
+        assertEquals(.04, FollowerConstants.fromJson(constants.toJson()).velocityFeedbackGain, 0);
+    }
     @Test
     public void derivesFeedbackFromIdentifiedVelocityAndAccelerationTerms() throws Exception {
         FollowerConstants constants = FollowerConstants.fromJson(

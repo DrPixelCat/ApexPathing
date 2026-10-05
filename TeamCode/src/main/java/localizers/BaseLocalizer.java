@@ -9,6 +9,7 @@ import localizers.util.AdaptiveKalmanFilter;
 import localizers.util.DataFilter;
 import localizers.util.FilterState;
 import localizers.util.LowPassFilter;
+import localizers.util.PoseEstimator;
 
 /**
  * Base class for all localizers.
@@ -36,8 +37,11 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
     protected T config;
     private VelocityFilterMode velocityFilterMode;
+    private final PoseEstimator poseEstimator = new PoseEstimator();
+    private boolean poseFilteringEnabled = true;
+    private Pose lastAcceptedPose = Pose.zero();
 
-    // A single set of filters. When fed velocity, they output [Velocity, Acceleration].
+    // Legacy fallback filters, used only when pose smoothing is bypassed or moving average selected.
     private DataFilter xFilter;
     private DataFilter yFilter;
     private DataFilter headingFilter;
@@ -74,14 +78,38 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
     protected BaseLocalizer(T config, VelocityFilterMode velocityFilterMode) {
         this.config = config;
+        if (config != null) { poseEstimator.setTuning(config.getPoseKalmanTuning()); }
         setVelocityFilterModeInternal(velocityFilterMode);
     }
 
     /** @return the current factory estimate of the robot from the localizer */
-    public Pose getPose() { return pose; }
+    public Pose getPose() {
+        return poseFilteringEnabled && poseEstimator.isInitialized() ? poseEstimator.getPose() : pose;
+    }
+
+    /** Unsmoothed native pose, used for geometry calibration and comparisons. */
+    public Pose getRawPose() { return pose; }
+    public double[][] getPoseCovariance() { return poseEstimator.getCovariance(); }
+    public double[][] getKinematicCovariance() { return poseEstimator.getStateCovariance(); }
+    public PoseEstimator.Tuning getPoseKalmanTuning() { return poseEstimator.getTuning(); }
+    public void setPoseKalmanTuning(PoseEstimator.Tuning tuning) { poseEstimator.setTuning(tuning); }
+    public void setPoseAutoTuning(boolean enabled) { poseEstimator.setAutoTuning(enabled); }
+    public void setPoseAutoTuning(boolean x, boolean y, boolean heading) { poseEstimator.setAutoTuning(x, y, heading); }
+    public boolean isPoseAutoTuning() { return poseEstimator.isAutoTuning(); }
+    public boolean isPoseAutoTuning(int axis) { return poseEstimator.isAutoTuning(axis); }
+    public boolean isPoseFilteringEnabled() { return poseFilteringEnabled; }
+    public void setPoseFilteringEnabled(boolean enabled) {
+        if (poseFilteringEnabled != enabled) {
+            poseFilteringEnabled = enabled;
+            poseEstimator.reset(pose);
+            resetMotionHistory(pose);
+        }
+    }
 
     /** @return the current velocity estimate of the robot from the localizer */
-    public Pose getVel() { return velocity; }
+    public Pose getVel() {
+        return usesJointEstimator() && poseEstimator.isInitialized() ? poseEstimator.getVelocity() : velocity;
+    }
 
     /**
      * NOTE: ONLY USE THIS IF YOU KNOW WHAT YOU ARE DOING
@@ -90,7 +118,13 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     public Pose getRawVel() { return rawVelocity; }
 
     /** @return the current acceleration estimate of the robot from the localizer */
-    public Pose getAccel() { return acceleration; }
+    public Pose getAccel() {
+        return usesJointEstimator() && poseEstimator.isInitialized() ? poseEstimator.getAcceleration() : acceleration;
+    }
+
+    private boolean usesJointEstimator() {
+        return poseFilteringEnabled && velocityFilterMode == VelocityFilterMode.ADAPTIVE_KALMAN;
+    }
 
     /**
      * NOTE: ONLY USE THIS IF YOU KNOW WHAT YOU ARE DOING
@@ -116,7 +150,8 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     public void setVelocityFilterMode(VelocityFilterMode mode) {
         if (mode == null || mode == velocityFilterMode) { return; }
         setVelocityFilterModeInternal(mode);
-        resetKinematicEstimate(pose);
+        poseEstimator.resetDerivatives();
+        resetMotionHistory(pose);
     }
 
     private void setVelocityFilterModeInternal(VelocityFilterMode mode) {
@@ -179,7 +214,12 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
      * support it
      **/
     protected void calculate(UpdateType updateType) {
-        long currentTimeNs = System.nanoTime();
+        calculate(updateType, System.nanoTime());
+    }
+
+    /** Uses one acquisition timestamp for pose and derivative filters. */
+    protected void calculate(UpdateType updateType, long currentTimeNs) {
+        if (!acceptPoseSample(currentTimeNs, null)) { return; }
         markMeasurementValid(currentTimeNs);
 
         if (prevTimeNs == -1) {
@@ -191,23 +231,30 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         double dt = (currentTimeNs - prevTimeNs) / 1_000_000_000.0;
         if (dt <= 1e-6) { return; }
 
-        applyVelocityMeasurement(pose.minus(prevPose).div(dt), updateType, dt);
+        Pose delta = new Pose(pose.getVec().minus(prevPose.getVec()),
+                Angle.fromRad(Angle.wrap(pose.getHeading().getRad() - prevPose.getHeading().getRad())));
+        applyVelocityMeasurement(delta.div(dt), updateType, dt, currentTimeNs);
         prevPose = pose;
         prevTimeNs = currentTimeNs;
     }
 
     /**
-     * Filters a native velocity measurement and derives acceleration from the same filter state.
+     * Updates the same pose/velocity/acceleration state with a native velocity measurement.
      * Localizers with hardware-provided velocity should use this instead of assigning
      * {@link #velocity} directly.
      */
     protected void calculate(Pose measuredVelocity) {
-        long currentTimeNs = System.nanoTime();
+        calculate(measuredVelocity, System.nanoTime());
+    }
+
+    protected void calculate(Pose measuredVelocity, long currentTimeNs) {
+        if (!PoseEstimator.finite(measuredVelocity)) { markMeasurementInvalid(); return; }
+        if (!acceptPoseSample(currentTimeNs, measuredVelocity)) { return; }
         markMeasurementValid(currentTimeNs);
         if (prevTimeNs == -1) {
             rawVelocity = measuredVelocity;
             rawAcceleration = Pose.zero();
-            applyFilterState(UpdateType.BOTH);
+            applyFilterState(UpdateType.BOTH, currentTimeNs);
             prevPose = pose;
             prevRawVelocity = measuredVelocity;
             prevTimeNs = currentTimeNs;
@@ -217,20 +264,38 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         double dt = (currentTimeNs - prevTimeNs) / 1_000_000_000.0;
         if (dt <= 1e-6) { return; }
 
-        applyVelocityMeasurement(measuredVelocity, UpdateType.BOTH, dt);
+        applyVelocityMeasurement(measuredVelocity, UpdateType.BOTH, dt, currentTimeNs);
         prevPose = pose;
         prevTimeNs = currentTimeNs;
     }
 
     private void applyVelocityMeasurement(Pose measuredVelocity, UpdateType updateType,
-                                          double dt) {
+                                          double dt, long currentTimeNs) {
         rawVelocity = measuredVelocity;
         rawAcceleration = rawVelocity.minus(prevRawVelocity).div(dt);
-        applyFilterState(updateType);
+        applyFilterState(updateType, currentTimeNs);
         prevRawVelocity = rawVelocity;
     }
 
-    private void applyFilterState(UpdateType updateType) {
+    private boolean acceptPoseSample(long currentTimeNs, Pose measuredVelocity) {
+        if (!PoseEstimator.finite(pose) || (lastMeasurementTimeNanos != -1
+                && currentTimeNs <= lastMeasurementTimeNanos) || currentTimeNs < 0) {
+            markMeasurementInvalid();
+            return false;
+        }
+        // Explicit moving-average mode keeps its existing velocity estimator. The pose estimator
+        // receives position only in that mode, so native velocity is never smoothed twice.
+        Pose nativeVelocity = usesJointEstimator() ? measuredVelocity : null;
+        if (poseFilteringEnabled && !poseEstimator.updateOdometry(pose, nativeVelocity, currentTimeNs)) {
+            markMeasurementInvalid();
+            return false;
+        }
+        lastAcceptedPose = pose;
+        return true;
+    }
+
+    private void applyFilterState(UpdateType updateType, long currentTimeNs) {
+        if (usesJointEstimator()) { return; }
 
         // Update sample size if using LowPass
         if (FILTER_WINDOW_SIZE != lastSize
@@ -240,9 +305,9 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
         // Filters MUST be updated every loop to maintain mathematical state continuity,
         // regardless of the UpdateType requested.
-        FilterState xState = xFilter.update(rawVelocity.getX().getIn());
-        FilterState yState = yFilter.update(rawVelocity.getY().getIn());
-        FilterState headingState = headingFilter.update(rawVelocity.getHeading().getRad());
+        FilterState xState = xFilter.update(rawVelocity.getX().getIn(), currentTimeNs);
+        FilterState yState = yFilter.update(rawVelocity.getY().getIn(), currentTimeNs);
+        FilterState headingState = headingFilter.update(rawVelocity.getHeading().getRad(), currentTimeNs);
 
         if (updateType == UpdateType.BOTH || updateType == UpdateType.VELOCITY) {
             velocity = new Pose(
@@ -262,7 +327,13 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
     /** Clears motion history after an odometry pose reset or simulator staging teleport. */
     protected void resetKinematicEstimate(Pose newPose) {
+        poseEstimator.reset(newPose);
         pose = newPose;
+        lastAcceptedPose = newPose;
+        resetMotionHistory(newPose);
+    }
+
+    private void resetMotionHistory(Pose newPose) {
         velocity = Pose.zero();
         rawVelocity = Pose.zero();
         acceleration = Pose.zero();
@@ -278,7 +349,10 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     }
 
     /** Marks a hardware update invalid without pretending a cached value is a new sample. */
-    protected void markMeasurementInvalid() { lastMeasurementValid = false; }
+    protected void markMeasurementInvalid() {
+        lastMeasurementValid = false;
+        pose = lastAcceptedPose;
+    }
 
     private void markMeasurementValid(long timestamp) {
         lastMeasurementTimeNanos = timestamp;
@@ -298,39 +372,48 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         ((AdaptiveKalmanFilter) xFilter).setAutoTuning(tuneX);
         ((AdaptiveKalmanFilter) yFilter).setAutoTuning(tuneY);
         ((AdaptiveKalmanFilter) headingFilter).setAutoTuning(tuneHeading);
+        poseEstimator.setAutoTuning(tuneX, tuneY, tuneHeading);
         isTuning = tuneX || tuneY || tuneHeading;
     }
 
-    public boolean isTuningVelocityFilter() { return isTuning; }
+    public boolean isTuningVelocityFilter() {
+        return usesJointEstimator() ? poseEstimator.isAutoTuning() : isTuning;
+    }
 
     // TUNING INJECTION/EXTRACTION
 
     public AdaptiveKalmanFilter.KalmanTuning getXKalmanTuning() {
+        if (usesJointEstimator()) { return poseEstimator.getVelocityTuning(0); }
         return kalman(xFilter) != null ? kalman(xFilter).getTuning() : null;
     }
 
     public void setXKalmanTuning(AdaptiveKalmanFilter.KalmanTuning tuning) {
         if (kalman(xFilter) != null && tuning != null) {
+            poseEstimator.setVelocityTuning(0, tuning);
             kalman(xFilter).setTuning(tuning);
         }
     }
 
     public AdaptiveKalmanFilter.KalmanTuning getYKalmanTuning() {
+        if (usesJointEstimator()) { return poseEstimator.getVelocityTuning(1); }
         return kalman(yFilter) != null ? kalman(yFilter).getTuning() : null;
     }
 
     public void setYKalmanTuning(AdaptiveKalmanFilter.KalmanTuning tuning) {
         if (kalman(yFilter) != null && tuning != null) {
+            poseEstimator.setVelocityTuning(1, tuning);
             kalman(yFilter).setTuning(tuning);
         }
     }
 
     public AdaptiveKalmanFilter.KalmanTuning getHeadingKalmanTuning() {
+        if (usesJointEstimator()) { return poseEstimator.getVelocityTuning(2); }
         return kalman(headingFilter) != null ? kalman(headingFilter).getTuning() : null;
     }
 
     public void setHeadingKalmanTuning(AdaptiveKalmanFilter.KalmanTuning tuning) {
         if (kalman(headingFilter) != null && tuning != null) {
+            poseEstimator.setVelocityTuning(2, tuning);
             kalman(headingFilter).setTuning(tuning);
         }
     }
@@ -352,6 +435,8 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
      * @param windowSize the size of the filter window
      */
     public void setFilterWindow(int windowSize) {
+        if (windowSize < 1) { throw new IllegalArgumentException("Filter window must be positive"); }
         this.FILTER_WINDOW_SIZE = windowSize;
+        if (velocityFilterMode == VelocityFilterMode.MOVING_AVERAGE) { applyMovingAverageWindow(); }
     }
 }

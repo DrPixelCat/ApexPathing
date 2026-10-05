@@ -50,6 +50,7 @@ public class Path extends FollowerMovement {
     private boolean isAccelBoosted = false;
     private BuildMode buildMode = BuildMode.ONLINE;
     private trajectory.TrajectoryField2D trajectoryField;
+    private FollowerConstants planningConstants;
     private Double lookaheadDistanceIn;
     private double memoryGridSpacingIn = 1.0, memoryGridPaddingIn = 12.0;
 
@@ -59,20 +60,33 @@ public class Path extends FollowerMovement {
     }
     public double getMemoryGridSpacingIn() { return memoryGridSpacingIn; }
     public void setMemoryGridSpacingIn(double spacing) {
-        requirePositive("Grid spacing", spacing); memoryGridSpacingIn = spacing;
+        requirePositive("Grid spacing", spacing); memoryGridSpacingIn = spacing; invalidateTrajectory();
     }
     public double getMemoryGridPaddingIn() { return memoryGridPaddingIn; }
     public void setMemoryGridPaddingIn(double padding) {
         if (!Double.isFinite(padding) || padding < 0) { throw new IllegalArgumentException("Grid padding must be finite and nonnegative."); }
         memoryGridPaddingIn = padding;
+        invalidateTrajectory();
     }
     private static void requirePositive(String name, double value) {
         if (!Double.isFinite(value) || value <= 0) { throw new IllegalArgumentException(name + " must be finite and positive."); }
     }
-    public trajectory.TrajectoryField2D getTrajectoryField() { return trajectoryField; }
-    public FollowerConstants getPlanningConstants() {
-        return FollowerConstants.getInstance().forProfile(pathType == PathType.TANK
+    public trajectory.TrajectoryField2D getTrajectoryField() {
+        precomputeTrajectory();
+        return trajectoryField;
+    }
+    private void invalidateTrajectory() { trajectoryField = null; FFLut = null; }
+    public void setPlanningConstants(FollowerConstants constants) {
+        planningConstants = constants.forProfile(pathType == PathType.TANK
                 ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC);
+        invalidateTrajectory();
+    }
+    public FollowerConstants getPlanningConstants() {
+        if (planningConstants == null) {
+            planningConstants = FollowerConstants.getInstance().forProfile(pathType == PathType.TANK
+                    ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC);
+        }
+        return planningConstants.copy();
     }
     public BaseProfileGenerator createGenerator(FollowerConstants constants) {
         return pathType == PathType.TANK ? new TankProfileGenerator(constants, this)
@@ -94,6 +108,7 @@ public class Path extends FollowerMovement {
             throw new IllegalArgumentException("Profile power limit must be finite and in (0, 1].");
         }
         profilePowerLimit = powerLimit;
+        invalidateTrajectory();
     }
 
     /**
@@ -119,8 +134,14 @@ public class Path extends FollowerMovement {
     private long constraintRevision;
     private boolean liveCustomConstraints;
     public void addConstraint(PathConstraint constraint) {
-        constraints.add(constraint); constraintRevision++;
-        if (!constraint.addChangeListener(() -> constraintRevision++)) { liveCustomConstraints = true; }
+        constraints.add(java.util.Objects.requireNonNull(constraint, "Constraint"));
+        constraintRevision++;
+        invalidateTrajectory();
+        java.lang.ref.WeakReference<Path> owner = new java.lang.ref.WeakReference<>(this);
+        if (!constraint.addChangeListener(() -> {
+            Path path = owner.get();
+            if (path != null) { path.constraintRevision++; path.invalidateTrajectory(); }
+        })) { liveCustomConstraints = true; }
     }
 
     /** A negative revision requests live sampling for custom mutable constraints. */
@@ -158,10 +179,10 @@ public class Path extends FollowerMovement {
     }
 
     /** @param endPose The final target pose of this path. */
-    public void setEndPose(Pose endPose) { this.endPose = endPose; }
+    public void setEndPose(Pose endPose) { this.endPose = endPose; invalidateTrajectory(); }
 
     /** @return The generated LUT points from the ParametricPath */
-    public PathPoint[] getGeneratedPoints() { return parametricPath.getPointLUT().clone(); }
+    public PathPoint[] getGeneratedPoints() { return parametricPath.getPointLUT(); }
 
     /**
      * Injects the calculated geometric curve (e.g., a B-Spline) that defines
@@ -169,7 +190,7 @@ public class Path extends FollowerMovement {
      *
      * @param path The compiled path segment.
      */
-    public void setParametricPath(PathSegment path) { this.parametricPath = path; }
+    public void setParametricPath(PathSegment path) { this.parametricPath = path; invalidateTrajectory(); }
 
     /**
      * Retrieves the geometric curve defining the physical route.
@@ -181,6 +202,7 @@ public class Path extends FollowerMovement {
     /** @param interpolator The heading interpolator to use */
     public void setInterpolator(HeadingInterpolator interpolator) {
         this.interpolator = interpolator;
+        invalidateTrajectory();
     }
 
     /** @return The heading interpolator. */
@@ -193,7 +215,7 @@ public class Path extends FollowerMovement {
     public FFLut getFeedforwardLut() { return FFLut; }
 
     /** @param FFLut The path's motion profile as a {@link FFLut} */
-    public void setFeedforwardLut(FFLut FFLut) { this.FFLut = FFLut; }
+    public void setFeedforwardLut(FFLut FFLut) { this.FFLut = FFLut; trajectoryField = null; }
 
     /** @return true if built with buildToMemory(), false if built with quickBuild() */
     @Deprecated public boolean isProfiled() { return buildMode == BuildMode.MEMORY; }
@@ -273,6 +295,7 @@ public class Path extends FollowerMovement {
         result.buildMode = buildMode;
         result.profilePowerLimit = profilePowerLimit;
         result.lookaheadDistanceIn = lookaheadDistanceIn;
+        result.planningConstants = planningConstants == null ? null : planningConstants.copy();
         result.memoryGridSpacingIn = memoryGridSpacingIn;
         result.memoryGridPaddingIn = memoryGridPaddingIn;
         for (String warning : buildWarnings) { result.addWarning(warning); }
@@ -280,11 +303,11 @@ public class Path extends FollowerMovement {
         return result;
     }
 
-    /** Builder initialization: computes stored data once and never replaces it. */
+    /** Builds stored data lazily; mutations invalidate it before the next access. */
     public void precomputeTrajectory() {
         if (buildMode == BuildMode.ONLINE || trajectoryField != null) { return; }
         FollowerConstants constants = getPlanningConstants();
-        FFLut nominal = new FFLut(createGenerator(constants).generateRestToRest());
+        FFLut nominal = FFLut != null ? FFLut : new FFLut(createGenerator(constants).generateRestToRest());
         trajectory.TrajectoryField2D field = new trajectory.TrajectoryField2D(this, nominal,
                 memoryGridSpacingIn, memoryGridPaddingIn);
         FFLut = nominal; trajectoryField = field;

@@ -16,111 +16,85 @@ import geometry.Dist;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
-    private final static double pi2 = 2 * Math.PI;
-    private final static double piOver2 = Math.PI / 2;
+    private final Module frontLeft, frontRight, backLeft, backRight;
 
-    private final CRServo flServo, frServo, blServo, brServo;
-    private final AnalogInput flEncoder, frEncoder, blEncoder, brEncoder;
-    private final FeedbackController flSteerController, frSteerController, blSteerController,
-            brSteerController;
-    private final double voltageToRad; // Radians = voltage * this
-    private final double offsetAngleRad; // Radians added to encoder angle to get actual wheel angle
+    private static final class Module {
+        final CRServo servo;
+        final AnalogInput encoder;
+        final FeedbackController controller;
+        final double offset;
 
-    private double lastFlError = 0, lastFrError = 0, lastBlError = 0, lastBrError = 0;
+        Module(HardwareMap hardware, String servoName, String encoderName, Coefficients coefficients, double offset) {
+            servo = hardware.get(CRServo.class, servoName);
+            encoder = hardware.get(AnalogInput.class, encoderName);
+            controller = new FeedbackController(coefficients);
+            this.offset = offset;
+        }
+
+        double command(double forward, double strafe) {
+            double angle = encoder.getVoltage() * 2 * Math.PI / encoder.getMaxVoltage() + offset;
+            double error = Angle.wrap(Math.atan2(strafe, forward) - angle);
+            double power = Math.hypot(forward, strafe);
+            if (Math.abs(error) > Math.PI / 2) {
+                power = -power;
+                error -= Math.copySign(Math.PI, error);
+            }
+            double steeringPower = controller.p().d().s().calculate(error).get();
+            if (!Double.isFinite(steeringPower)) {
+                throw new IllegalStateException("Invalid swerve steering measurement");
+            }
+            servo.setPower(Math.max(-1, Math.min(1, steeringPower)));
+            return power;
+        }
+
+        void stop() {
+            servo.setPower(0);
+            controller.reset();
+        }
+    }
 
     public CoaxialSwerve(Constants constants, HardwareMap hardwareMap) {
         super(constants, hardwareMap, DrivetrainType.COAXIAL_SWERVE);
 
-        flServo = hardwareMap.get(CRServo.class, constants.flServoName);
-        frServo = hardwareMap.get(CRServo.class, constants.frServoName);
-        blServo = hardwareMap.get(CRServo.class, constants.blServoName);
-        brServo = hardwareMap.get(CRServo.class, constants.brServoName);
-        flEncoder = hardwareMap.get(AnalogInput.class, constants.flEncoderName);
-        frEncoder = hardwareMap.get(AnalogInput.class, constants.frEncoderName);
-        blEncoder = hardwareMap.get(AnalogInput.class, constants.blEncoderName);
-        brEncoder = hardwareMap.get(AnalogInput.class, constants.brEncoderName);
-
-        flSteerController = new FeedbackController(constants.steeringCoefficients);
-        frSteerController = new FeedbackController(constants.steeringCoefficients);
-        blSteerController = new FeedbackController(constants.steeringCoefficients);
-        brSteerController = new FeedbackController(constants.steeringCoefficients);
-
-        voltageToRad = 2 * Math.PI / flEncoder.getMaxVoltage();
-        offsetAngleRad = constants.offsetAngle.getRad();
+        double offset = constants.offsetAngle.getRad();
+        frontLeft = new Module(hardwareMap, constants.flServoName, constants.flEncoderName, constants.steeringCoefficients, offset);
+        frontRight = new Module(hardwareMap, constants.frServoName, constants.frEncoderName, constants.steeringCoefficients, offset);
+        backLeft = new Module(hardwareMap, constants.blServoName, constants.blEncoderName, constants.steeringCoefficients, offset);
+        backRight = new Module(hardwareMap, constants.brServoName, constants.brEncoderName, constants.steeringCoefficients, offset);
     }
 
     @Override
     public void moveWithVectors(double x, double y, double turn) {
         // Coaxial swerve kinematics explanation:
         // https://www.chiefdelphi.com/t/paper-4-wheel-independent-drive-independent-steering-swerve/107383
-        double cwTurn = turn * -1; // Clockwise turn angle
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(turn)) {
+            stop();
+            throw new IllegalArgumentException("Drive commands must be finite");
+        }
+        if (x == 0 && y == 0 && turn == 0) { stop(); return; }
+        double cwTurn = -turn;
 
         double strafeFront = y + cwTurn * constants.wheelbaseRatio;
         double strafeRear = y - cwTurn * constants.wheelbaseRatio;
         double forwardLeft = x + cwTurn * constants.trackWidthRatio;
         double forwardRight = x - cwTurn * constants.trackWidthRatio;
 
-        double flAngleTarget = Math.atan2(strafeFront, forwardLeft);
-        double frAngleTarget = Math.atan2(strafeFront, forwardRight);
-        double blAngleTarget = Math.atan2(strafeRear, forwardLeft);
-        double brAngleTarget = Math.atan2(strafeRear, forwardRight);
-
-        double flAngle = Angle.normalize(flEncoder.getVoltage() * voltageToRad + offsetAngleRad);
-        double frAngle = Angle.normalize(frEncoder.getVoltage() * voltageToRad + offsetAngleRad);
-        double blAngle = Angle.normalize(blEncoder.getVoltage() * voltageToRad + offsetAngleRad);
-        double brAngle = Angle.normalize(brEncoder.getVoltage() * voltageToRad + offsetAngleRad);
-
-        double flError = wrapError(flAngleTarget, flAngle);
-        double frError = wrapError(frAngleTarget, frAngle);
-        double blError = wrapError(blAngleTarget, blAngle);
-        double brError = wrapError(brAngleTarget, brAngle);
-
-        // If error > 90 degrees, reverse wheel direction and subtract 180 from target angle
-        double flPower = Math.sqrt(Math.pow(strafeFront, 2) + Math.pow(forwardLeft, 2));
-        if (Math.abs(flError) > piOver2) {
-            flPower *= -1;
-            flError -= Math.copySign(Math.PI, flError);
+        try {
+            setPowers(frontLeft.command(forwardLeft, strafeFront), frontRight.command(forwardRight, strafeFront),
+                    backLeft.command(forwardLeft, strafeRear), backRight.command(forwardRight, strafeRear));
+        } catch (RuntimeException failure) {
+            stop();
+            throw failure;
         }
-        double frPower = Math.sqrt(Math.pow(strafeFront, 2) + Math.pow(forwardRight, 2));
-        if (Math.abs(frError) > piOver2) {
-            frPower *= -1;
-            frError -= Math.copySign(Math.PI, frError);
-        }
-        double blPower = Math.sqrt(Math.pow(strafeRear, 2) + Math.pow(forwardLeft, 2));
-        if (Math.abs(blError) > piOver2) {
-            blPower *= -1;
-            blError -= Math.copySign(Math.PI, blError);
-        }
-        double brPower = Math.sqrt(Math.pow(strafeRear, 2) + Math.pow(forwardRight, 2));
-        if (Math.abs(brError) > piOver2) {
-            brPower *= -1;
-            brError -= Math.copySign(Math.PI, brError);
-        }
-
-        if (flError != lastFlError) {
-            flServo.setPower(flSteerController.p().d().s().calculate(flError).get());
-            lastFlError = flError;
-        }
-        if (frError != lastFrError) {
-            frServo.setPower(frSteerController.p().d().s().calculate(frError).get());
-            lastFrError = frError;
-        }
-        if (blError != lastBlError) {
-            blServo.setPower(blSteerController.p().d().s().calculate(blError).get());
-            lastBlError = blError;
-        }
-        if (brError != lastBrError) {
-            brServo.setPower(brSteerController.p().d().s().calculate(brError).get());
-            lastBrError = brError;
-        }
-
-        setPowers(flPower, frPower, blPower, brPower);
     }
 
     /** @return the error wrapped to the range [-pi, pi] to ensure the shortest path is taken */
-    private double wrapError(double target, double current) {
-        double errorRaw = target - current;
-        return errorRaw - pi2 * Math.round(errorRaw / pi2);
+    @Override public void stop() {
+        super.stop();
+        frontLeft.stop();
+        frontRight.stop();
+        backLeft.stop();
+        backRight.stop();
     }
 
     /** Configuration class for Coaxial Swerve drivetrain. */
@@ -140,6 +114,11 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
         @Override
         public CoaxialSwerve build(HardwareMap hardwareMap) {
+            if (wheelbase == null || trackWidth == null || !Double.isFinite(wheelbase.getIn())
+                    || !Double.isFinite(trackWidth.getIn()) || wheelbase.getIn() <= 0 || trackWidth.getIn() <= 0
+                    || offsetAngle == null || offsetAngle.isNotFinite() || steeringCoefficients == null) {
+                throw new IllegalArgumentException("Swerve geometry and steering configuration must be finite and positive");
+            }
             diagonalDist = wheelbase.hypot(trackWidth);
             wheelbaseRatio = wheelbase.div(diagonalDist).getIn();
             trackWidthRatio = trackWidth.div(diagonalDist).getIn();

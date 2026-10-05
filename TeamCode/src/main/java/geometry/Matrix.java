@@ -17,6 +17,17 @@ public class Matrix {
      * @param data The 2D array representing the matrix [rows][columns]
      */
     public Matrix(double[][] data) {
+        if (data == null || data.length == 0 || data[0] == null || data[0].length == 0) {
+            throw new IllegalArgumentException("Matrix must be nonempty and rectangular");
+        }
+        for (double[] row : data) {
+            if (row == null || row.length != data[0].length) {
+                throw new IllegalArgumentException("Matrix must be rectangular");
+            }
+            for (double value : row) {
+                if (!Double.isFinite(value)) { throw new IllegalArgumentException("Matrix entries must be finite"); }
+            }
+        }
         this.rows = data.length;
         this.cols = data[0].length;
         this.data = new double[rows][cols];
@@ -135,9 +146,15 @@ public class Matrix {
             throw new UnsupportedOperationException("Inverse requires a square matrix.");
         }
         if (rows == 1) {
+            if (data[0][0] == 0) { throw new IllegalArgumentException("Matrix is singular"); }
             return new Matrix(new double[][]{{1.0 / data[0][0]}});
         } else if (rows == 2) {
             double det = data[0][0] * data[1][1] - data[0][1] * data[1][0];
+            double scale = Math.max(Math.max(Math.abs(data[0][0]), Math.abs(data[0][1])),
+                    Math.max(Math.abs(data[1][0]), Math.abs(data[1][1])));
+            if (!Double.isFinite(det) || Math.abs(det) <= 1e-12 * scale * scale) {
+                throw new IllegalArgumentException("Matrix is singular or ill-conditioned");
+            }
             return new Matrix(new double[][]{
                     {data[1][1] / det, -data[0][1] / det},
                     {-data[1][0] / det, data[0][0] / det}

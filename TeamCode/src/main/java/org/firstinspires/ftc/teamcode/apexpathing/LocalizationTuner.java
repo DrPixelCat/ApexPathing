@@ -44,30 +44,33 @@ public class LocalizationTuner extends LinearOpMode {
         selectedPhase = false;
         context = new LocalizationTunerContext(this, createConstants());
 
-        while (opModeInInit() && !selectedPhase) {
-            context.updateDebugMode(true);
-            selectPhase();
-            sleep(20);
-        }
-        while (opModeInInit()) {
-            telemetry.clearAll();
-            context.addInterfaceHeader();
-            telemetry.addLine("Press Start to run the selected phase.");
-            telemetry.update();
-            sleep(20);
-        }
-        while (opModeIsActive()) {
-            if (!selectedPhase) {
+        try {
+            while (opModeInInit() && !selectedPhase) {
+                context.updateDebugMode(true);
                 selectPhase();
                 sleep(20);
-                continue;
             }
-            Phase current = Phase.values()[selected];
-            boolean accepted = current.factory.apply(context).run(this);
-            selectedPhase = false;
-            if (accepted) { selectNextApplicable(); }
+            while (opModeInInit()) {
+                telemetry.clearAll();
+                context.addInterfaceHeader();
+                telemetry.addLine("Press Start to run the selected phase.");
+                telemetry.update();
+                sleep(20);
+            }
+            while (opModeIsActive()) {
+                if (!selectedPhase) {
+                    selectPhase();
+                    sleep(20);
+                    continue;
+                }
+                Phase current = Phase.values()[selected];
+                boolean accepted = current.factory.apply(context).run(this);
+                selectedPhase = false;
+                if (accepted) { selectNextApplicable(); }
+            }
+        } finally {
+            context.stop();
         }
-        context.stop();
     }
 
     /**

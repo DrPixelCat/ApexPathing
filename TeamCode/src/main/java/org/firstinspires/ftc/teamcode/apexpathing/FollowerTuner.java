@@ -45,24 +45,25 @@ public class FollowerTuner extends LinearOpMode {
         MOTION_CHARACTERIZATION(MotionCharacterizationPhase::new, constants ->
                 constants.motionCharacterization != null),
         HEADING(HeadingPhase::new, constants ->
-                constants.angularCoeffs.kP != 0.0),
+                positive(constants.angularCoeffs.kP)),
         DRIVE(DrivePhase::new, constants ->
-                constants.translationalCoeffs.kP != 0.0),
+                positive(constants.translationalCoeffs.kP)),
         LIMITS(LimitsPhase::new, constants ->
-                constants.forwardVelLimitIn != 0.0 &&
-                        constants.forwardAccelLimitIn != 0.0 &&
-                        (!constants.requiresStrafeLimits() || (constants.strafeVelLimitIn != 0.0 &&
-                        constants.strafeAccelLimitIn != 0.0)) &&
-                        constants.angularVelLimitRad != 0.0 &&
-                        constants.angularAccelLimitRad != 0.0),
+                positive(constants.forwardVelLimitIn) &&
+                        positive(constants.forwardAccelLimitIn) &&
+                        (!constants.requiresStrafeLimits() || (positive(constants.strafeVelLimitIn) &&
+                        positive(constants.strafeAccelLimitIn))) &&
+                        positive(constants.angularVelLimitRad) &&
+                        positive(constants.angularAccelLimitRad)),
         CENTRIPETAL(CentripetalPhase::new, constants ->
-                constants.kCentripetal != 0.0),
+                positive(constants.kCentripetal)),
         PROFILED_TRACKING(ProfiledTrackingPhase::new, constants ->
                 constants.profiledTrackingTuned);
 
         final Function<TunerContext, TuningPhase> phaseFactory;
         final Predicate<FollowerConstants> isTunedPredicate;
-        boolean tuned;
+        /** Compatibility diagnostic; runtime status is computed from this tuner's settings. */
+        @Deprecated boolean tuned;
 
         Phase(Function<TunerContext, TuningPhase> phaseFactory,
               Predicate<FollowerConstants> isTunedPredicate) {
@@ -92,69 +93,72 @@ public class FollowerTuner extends LinearOpMode {
         resetPhaseSelection();
         context = new TunerContext(this);
         context.setFollower(new Follower(createConstants(), hardwareMap, true));
-        context.constants.drivetrainType = context.getFollower().getDrivetrain().getDrivetrainType();
+        try {
+            context.constants.drivetrainType = context.getFollower().getDrivetrain().getDrivetrainType();
 
-        for (Phase phase : phases) { phase.updateTunedStatus(context.constants); }
-        selectFirstIncompletePhase();
 
-        while (opModeInInit() && !isPhaseSelected) {
-            context.updateDebugMode(true);
-            isPhaseSelected = phaseSelector();
-            sleep(20);
-        }
+            selectFirstIncompletePhase();
 
-        while (opModeInInit() && isPhaseSelected) {
-            context.updateDebugMode(false);
-            telemetry.clearAll();
-            context.addInterfaceHeader();
-            telemetry.addLine("Press Start to run the tuner.");
-            context.publishFrame(false);
-            sleep(20);
-        }
-
-        // Starting the OpMode must never silently accept a highlighted option. If Start was
-        // pressed before a phase was selected, keep presenting the same menu while RUNNING until
-        // the user explicitly confirms a phase.
-        while (opModeIsActive() && !isPhaseSelected) {
-            context.updateDebugMode(true);
-            isPhaseSelected = phaseSelector();
-            if (!isPhaseSelected) {
-                context.getFollower().update();
-                context.getFollower().manual(gamepad1);
+            while (opModeInInit() && !isPhaseSelected) {
+                context.updateDebugMode(true);
+                isPhaseSelected = phaseSelector();
+                sleep(20);
             }
-            sleep(20);
-        }
-        if (!opModeIsActive()) {
+
+            while (opModeInInit() && isPhaseSelected) {
+                context.updateDebugMode(false);
+                telemetry.clearAll();
+                context.addInterfaceHeader();
+                telemetry.addLine("Press Start to run the tuner.");
+                context.publishFrame(false);
+                sleep(20);
+            }
+
+            // Starting the OpMode must never silently accept a highlighted option. If Start was
+            // pressed before a phase was selected, keep presenting the same menu while RUNNING until
+            // the user explicitly confirms a phase.
+            while (opModeIsActive() && !isPhaseSelected) {
+                context.updateDebugMode(true);
+                isPhaseSelected = phaseSelector();
+                if (!isPhaseSelected) {
+                    context.getFollower().update();
+                    context.getFollower().manual(gamepad1);
+                }
+                sleep(20);
+            }
+            if (!opModeIsActive()) {
+                context.getFollower().stop();
+                resetPhaseSelection();
+                return;
+            }
+
+            while (opModeIsActive()) {
+                if (phase.run(this) && opModeIsActive() && !isStopRequested()) {
+                    if (selectedPhaseOrdinal != Phase.PROFILED_TRACKING) {
+                        context.constants.profiledTrackingTuned = false;
+                    }
+                    if (!saveCurrentProfile()) { break; }
+
+
+                    Phase nextPhase = nextPhase(selectedPhaseOrdinal);
+                    while (nextPhase != null && !applicable(nextPhase)) { nextPhase = nextPhase(nextPhase); }
+                    if (nextPhase == null) {
+                        finishTuningWorkflow();
+                        break;
+                    }
+
+                    context.getFollower().stop();
+                    context.getFollower().enableControllers();
+                    context.getFollower().setPose(Pose.zero());
+                    selectedPhaseOrdinal = nextPhase;
+                    selectPhase();
+                }
+            }
+
+        } finally {
             context.getFollower().stop();
             resetPhaseSelection();
-            return;
         }
-
-        while (opModeIsActive()) {
-            if (phase.run(this) && opModeIsActive() && !isStopRequested()) {
-                if (selectedPhaseOrdinal != Phase.PROFILED_TRACKING) {
-                    context.constants.profiledTrackingTuned = false;
-                }
-                if (!saveCurrentProfile()) { break; }
-                selectedPhaseOrdinal.updateTunedStatus(context.constants);
-
-                Phase nextPhase = nextPhase(selectedPhaseOrdinal);
-                while (nextPhase != null && !applicable(nextPhase)) { nextPhase = nextPhase(nextPhase); }
-                if (nextPhase == null) {
-                    finishTuningWorkflow();
-                    break;
-                }
-
-                context.getFollower().stop();
-                context.getFollower().enableControllers();
-                context.getFollower().setPose(Pose.zero());
-                selectedPhaseOrdinal = nextPhase;
-                selectPhase();
-            }
-        }
-
-        context.getFollower().stop();
-        resetPhaseSelection();
     }
 
     /** Supplies the robot configuration, allowing simulator-specific tuner OpModes. */
@@ -193,14 +197,14 @@ public class FollowerTuner extends LinearOpMode {
 
     private String phaseStatus(Phase phase) {
         if (!applicable(phase)) { return "[N/A]"; }
-        if (phase.tuned) { return "[DONE]"; }
+        if (phase.isTunedPredicate.test(context.constants)) { return "[DONE]"; }
         return phaseAvailable(phase) ? "[READY]" : "[LOCKED]";
     }
 
     private void selectFirstIncompletePhase() {
         selectedPhaseOrdinal = phases[0];
         for (int i = 0; i < phaseAmount; i++) {
-            if (!phases[i].tuned && phaseAvailable(phases[i]) && applicable(phases[i])) {
+            if (!phases[i].isTunedPredicate.test(context.constants) && phaseAvailable(phases[i]) && applicable(phases[i])) {
                 selectedPhaseOrdinal = phases[i];
                 return;
             }
@@ -218,7 +222,7 @@ public class FollowerTuner extends LinearOpMode {
                 if (drive.isHolonomic()) { drive.activateTractionState(); }
                 else { drive.activateHolonomicState(); }
                 context.getFollower().update(false);
-                for (Phase item : phases) { item.updateTunedStatus(context.constants); }
+
                 selectFirstIncompletePhase();
             }
             if (context.constants.hasUnassignedLegacy()) {
@@ -227,7 +231,7 @@ public class FollowerTuner extends LinearOpMode {
                     context.constants.assignLegacyToActiveProfile();
                     context.getFollower().reset();
                     context.saveConstants();
-                    for (Phase item : phases) { item.updateTunedStatus(context.constants); }
+
                     selectFirstIncompletePhase();
                 }
             }
@@ -268,6 +272,8 @@ public class FollowerTuner extends LinearOpMode {
         int nextOrdinal = current.ordinal() + 1;
         return nextOrdinal < phaseAmount ? phases[nextOrdinal] : null;
     }
+
+    private static boolean positive(double value) { return Double.isFinite(value) && value > 0; }
 
     private static boolean validFeedforward(double ks, double kv, double ka) {
         return Double.isFinite(ks) && Double.isFinite(kv) && Double.isFinite(ka)

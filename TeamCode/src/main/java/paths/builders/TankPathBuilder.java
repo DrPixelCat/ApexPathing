@@ -136,6 +136,7 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
 
     @Override
     public Path quickBuild() {
+        beginBuild();
         compileGeometry();
         path.setBuildMode(Path.BuildMode.ONLINE);
         return path;
@@ -143,6 +144,7 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
 
     @Override
     public Path buildToMemory() {
+        beginBuild();
         compileGeometry();
         path.setBuildMode(Path.BuildMode.MEMORY);
         path.precomputeTrajectory();

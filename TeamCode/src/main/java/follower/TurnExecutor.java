@@ -27,13 +27,16 @@ final class TurnExecutor {
     private double direction, totalDisplacement, progress;
     private long lastUpdateNanos;
     private double stalledSeconds;
+    private final java.util.function.LongSupplier monotonicClock;
 
     TurnExecutor(BaseDrivetrain<?> drivetrain, DriveController driveController,
                  TurnController turnController, HolonomicCommandAllocator allocator,
-                 FollowerConstants constants, double headingTolerance, double distanceTolerance) {
+                 FollowerConstants constants, double headingTolerance, double distanceTolerance,
+                 java.util.function.LongSupplier monotonicClock) {
         this.drivetrain = drivetrain; this.driveController = driveController; this.turnController = turnController;
         this.allocator = allocator; this.constants = constants;
         this.headingTolerance = headingTolerance; this.distanceTolerance = distanceTolerance;
+        this.monotonicClock=monotonicClock;
     }
 
     void start(Turn turn, long now) {
@@ -45,9 +48,9 @@ final class TurnExecutor {
         stalledSeconds = 0;
     }
 
-    boolean update(Turn turn, Pose current, BaseLocalizer<?> localizer,
-                   MovementCallbackRunner callbacks, FollowerPathState state, boolean driveControllerEnabled) {
-        long now = System.nanoTime();
+    Follower.MovementOutcome update(Turn turn, Pose current, BaseLocalizer<?> localizer,
+                   MovementCallbackRunner callbacks, FollowerPathState state, boolean driveControllerEnabled, boolean headingControllerEnabled) {
+        long now = monotonicClock.getAsLong();
         double dt = lastUpdateNanos == 0 ? .02 : Math.max(0, Math.min(.05, (now - lastUpdateNanos) * 1e-9));
         lastUpdateNanos = now;
         Angle heading = current.getHeading();
@@ -78,7 +81,7 @@ final class TurnExecutor {
                 totalDisplacement > 1e-9 ? boundedProgress / totalDisplacement : 1, referenceHeading,
                 targets.getAngularVel(), targets.getAngularAccel(), false, false, boundedProgress, Math.max(0, totalDisplacement - progress));
         state.trackingAngularVelocityTarget = targets.getAngularVel();
-        if (Math.abs(headingError) < tolerance && Math.abs(angularVelocity) < SETTLED_ANGULAR_VELOCITY) { return true; }
+        if (Math.abs(headingError) <= tolerance && Math.abs(angularVelocity) < SETTLED_ANGULAR_VELOCITY) { return Follower.MovementOutcome.COMPLETED; }
         double turnPower = stored
                 ? turnController.calculateProfiled(referenceError, direction, targets, angularVelocity, constants)
                 : turnController.calculateQuick(headingError, angularVelocity, tolerance);
@@ -92,6 +95,12 @@ final class TurnExecutor {
                         + Math.copySign(Math.min(.25, stalledSeconds * .25), headingError)));
             } else { stalledSeconds = 0; }
         }
+        if (!headingControllerEnabled) {
+            turnPower = stored ? constants.characterizedPower(feedforward.MotionCharacterization.Axis.ANGULAR,
+                    targets.getAngularVel(), targets.getAngularAccel(), constants.angularKV * targets.getAngularVel()
+                            + constants.angularKA * targets.getAngularAccel()
+                            + constants.angularFeedforwardKS * MotionFeedforward.motionSign(targets.getAngularVel(), targets.getAngularAccel())) : 0;
+        }
         Vector error = targetPosition.minus(current.getVec());
         if (driveControllerEnabled && drivetrain.isHolonomic() && error.getMag().getIn() > distanceTolerance) {
             Vector fieldFeedback = driveController.calculatePointToPoint(targetPosition, current.getVec());
@@ -99,7 +108,7 @@ final class TurnExecutor {
             Vector command = hold.getRobotCommand();
             drivetrain.drive(command.getX().getIn(), command.getY().getIn(), turnPower);
         } else { drivetrain.drive(0, 0, turnPower); }
-        return false;
+        return Follower.MovementOutcome.RUNNING;
     }
     void observeHeading(Angle heading) {
         if (previousHeading != null) {

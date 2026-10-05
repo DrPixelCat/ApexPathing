@@ -1,6 +1,10 @@
 # Apex Pathing
 Check out our site at https://www.apexpathing.com/ for info about the project!
 
+All localizers use a shared position, velocity and acceleration Kalman estimate by default,
+with bounded automatic noise tuning from their existing sensor readings.
+See [Kalman localization](doc/KalmanLocalization.md) for configuration and validation.
+
 ## Java package organization
 
 The library sources are in `TeamCode/src/main/java`, with matching unit-test packages in
@@ -36,6 +40,12 @@ profile with `setDriveProfile(...)`.
 
 `AutoTest.java` defines separate tank and holonomic routes. `TankAutoTest` selects the tank route
 and hardware, then runs the same `AutoTest` execution loop. There is no conditional factory path API.
+Both tests now stop after their initial curve. The holonomic test uses heading nodes at 30%
+(83 degrees) and 65% (-71 degrees), ending at 146 degrees, to exercise twisting in both directions.
+
+Holonomic velocity control uses proportional feedback from the current velocity error.
+Online execution uses a current-time reference with zero planner preview; stored
+execution uses its constrained spatial reference. See [velocity feedback](doc/VelocityFeedback.md).
 
 ## Run the OpModes in FTCodeSim
 

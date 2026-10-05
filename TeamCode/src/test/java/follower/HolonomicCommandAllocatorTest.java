@@ -11,6 +11,17 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class HolonomicCommandAllocatorTest {
+    @Test public void nativeWheelCompensationSurvivesAllocationIncludingFourthMode() {
+        Vector zero=Vector.zero(), tangent=Vector.of(1,0,DistUnit.IN);
+        double[] wheels={.3,.1,-.2,.4};
+        HolonomicCommandAllocator.Result result=allocator.allocateWheels(zero,tangent,Angle.zero(),0,0,wheels,0,0,zero);
+        org.junit.Assert.assertArrayEquals(wheels,result.wheelPowers,1e-12);
+        assertEquals(.4,result.demand.feedforwardTotal,1e-12);
+        double[] overloaded={1.2,.4,-.8,1.6};
+        result=allocator.allocateWheels(zero,tangent,Angle.zero(),0,.2,overloaded,0,0,zero);
+        assertEquals(.5,result.demand.feedforwardScale,1e-12);
+        org.junit.Assert.assertArrayEquals(new double[]{.4,.4,-.6,1},result.wheelPowers,1e-12);
+    }
     private final Motor unusedMotor = new Motor() {
         @Override public DcMotorEx build(HardwareMap hardwareMap) { return null; }
     };

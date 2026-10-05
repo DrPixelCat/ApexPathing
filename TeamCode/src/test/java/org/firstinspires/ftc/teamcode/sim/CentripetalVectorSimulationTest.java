@@ -32,7 +32,10 @@ public class CentripetalVectorSimulationTest {
             singleton.set(null, constants);
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+            constants = follower.getConstants();
             SimulatorTuning.apply(constants);
+            // This test isolates the legacy centripetal term; wheel characterization includes it.
+            constants.motionCharacterization = null;
             follower.setHeadingCoefficients(constants.angularCoeffs);
             follower.setDriveCoefficients(constants.translationalCoeffs);
             FollowerTuner opmode = new FollowerTuner();

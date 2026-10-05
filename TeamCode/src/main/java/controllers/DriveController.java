@@ -41,9 +41,15 @@ public class DriveController {
     public DriveController(Dist maxForwardVelocity, Dist maxStrafeVelocity,
                            FeedbackController.Coefficients coefficients,
                            boolean requireMecanumLimits) {
-        crossTrackController = new FeedbackController(coefficients);
-        endDistanceController = new FeedbackController(coefficients);
-        turnPositionController = new FeedbackController(coefficients);
+        this(maxForwardVelocity,maxStrafeVelocity,coefficients,requireMecanumLimits,System::nanoTime);
+    }
+
+    public DriveController(Dist maxForwardVelocity, Dist maxStrafeVelocity,
+                           FeedbackController.Coefficients coefficients, boolean requireMecanumLimits,
+                           java.util.function.LongSupplier clock) {
+        crossTrackController = new FeedbackController(coefficients,clock);
+        endDistanceController = new FeedbackController(coefficients,clock);
+        turnPositionController = new FeedbackController(coefficients,clock);
         setVelocityLimits(maxForwardVelocity, maxStrafeVelocity, requireMecanumLimits);
     }
 

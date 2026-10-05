@@ -29,10 +29,18 @@ public abstract class TuningPhase {
     protected TuningPhase(TunerContext context) { this.context = context; }
 
     public boolean run(LinearOpMode opMode) {
+        boolean driveEnabled = context.getFollower().isDriveControllerEnabled();
+        boolean headingEnabled = context.getFollower().isHeadingControllerEnabled();
         try { return runPhase(opMode); }
         finally {
             context.getFollower().stop();
-            onExit();
+            try { onExit(); }
+            finally {
+                if (driveEnabled) { context.getFollower().enableDriveController(); }
+                else { context.getFollower().disableDriveController(); }
+                if (headingEnabled) { context.getFollower().enableHeadingController(); }
+                else { context.getFollower().disableHeadingController(); }
+            }
         }
     }
 

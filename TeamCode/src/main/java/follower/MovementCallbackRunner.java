@@ -9,12 +9,14 @@ import paths.movements.Turn;
 /** Evaluates movement callbacks and tracks angular sweeps between follower ticks. */
 final class MovementCallbackRunner {
     private Angle lastHeading;
+    private final java.util.Set<Callback> fired = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
     void process(FollowerMovement movement, double progress, Angle currentHeading) {
         Callback[] callbacks = callbacksFor(movement);
         if (callbacks != null) {
             for (Callback callback : callbacks) {
-                if (!callback.isTriggered() && shouldTrigger(callback, progress, currentHeading)) {
+                if (!fired.contains(callback) && shouldTrigger(callback, progress, currentHeading)) {
+                    fired.add(callback);
                     callback.getAction().run();
                     callback.setTriggered(true);
                 }
@@ -25,6 +27,7 @@ final class MovementCallbackRunner {
 
     void reset() {
         lastHeading = null;
+        fired.clear();
     }
 
     private static Callback[] callbacksFor(FollowerMovement movement) {

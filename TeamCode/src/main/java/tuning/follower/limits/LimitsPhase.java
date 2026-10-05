@@ -78,6 +78,8 @@ public class LimitsPhase extends TuningPhase {
     private double lastSampleTime = 0.0;
     private double lastMeasuredVelocity = Double.NaN;
     private int stableWindows = 0;
+    private double originalMaxPower;
+    private boolean powerChanged;
 
     static final class TimedSample {
         final double timeSeconds;
@@ -91,7 +93,6 @@ public class LimitsPhase extends TuningPhase {
 
     public LimitsPhase(TunerContext context) {
         super(context);
-        this.context.getFollower().getDrivetrain().getConstants().maxPower = 1.0;
 
         for (double[] maximum : maxima) {
             maximum[0] = 0.0;
@@ -123,6 +124,10 @@ public class LimitsPhase extends TuningPhase {
 
     @Override
     protected void init() {
+        originalMaxPower = context.getFollower().getDrivetrain().getConstants().maxPower;
+        powerChanged = true;
+        context.getFollower().getDrivetrain().getConstants().setMaxPower(1);
+        for (double[] maximum : maxima) { Arrays.fill(maximum, 0); }
         headingHoldController = new FeedbackController(new FeedbackController.Coefficients()
                 .p(context.constants.angularCoeffs.kP)
                 .d(context.constants.angularCoeffs.kD)
@@ -188,6 +193,10 @@ public class LimitsPhase extends TuningPhase {
     }
 
     private double readVelocity() {
+        if (!context.getFollower().getLocalizer().isLastMeasurementValid()) {
+            context.getFollower().stop();
+            throw new IllegalStateException("Limit tuning requires valid localization");
+        }
         Pose velocity = context.getFollower().getVelocity();
         LimitTrial current = TRIALS[trial];
         double measuredVelocity = 0.0;
@@ -409,5 +418,11 @@ public class LimitsPhase extends TuningPhase {
         context.getTelemetry().addData("Angular Velocity", number(context.constants.angularVelLimitRad));
         context.getTelemetry()
                 .addData("Angular Acceleration", number(context.constants.angularAccelLimitRad));
+    }
+    @Override protected void onExit() {
+        if (powerChanged) {
+            context.getFollower().getDrivetrain().getConstants().setMaxPower(originalMaxPower);
+            powerChanged = false;
+        }
     }
 }

@@ -69,7 +69,12 @@ public class FollowerTunerTelemetryTest {
             pump(session, tuner, telemetry, hardware, 80);
             tuner.gamepad1.dpad_up = false;
             pump(session, tuner, telemetry, hardware, 80);
-            assertTrue("Manual edit should change the pending gain", constants.translationalCoeffs.kP > 0.0);
+            java.lang.reflect.Field contextField = FollowerTuner.class.getDeclaredField("context");
+            contextField.setAccessible(true);
+            tuning.follower.TunerContext pending = (tuning.follower.TunerContext) contextField.get(tuner);
+            assertTrue("Manual edit should change the pending gain", pending.constants.translationalCoeffs.kP > 0.0);
+            org.junit.Assert.assertEquals("Pending changes must not leak into shared settings",
+                    0.0, constants.translationalCoeffs.kP, 0.0);
             SimLinearOpModeBridge.stop(session);
             session = null;
             org.junit.Assert.assertArrayEquals("Stop must leave the saved calibration untouched", saved,
@@ -111,7 +116,7 @@ public class FollowerTunerTelemetryTest {
             assertTrue(latestFrame(frames).trim().endsWith("Robot can be driven with sticks"));
 
             tuner.gamepad1.left_stick_y = 0.0f;
-            pump(session, tuner, telemetry, hardware, 30);
+            pump(session, tuner, telemetry, hardware, 100);
             // Select heading SysId to exercise its idle and active motor ownership.
             tuner.gamepad1.dpad_down = true;
             pump(session, tuner, telemetry, hardware, 30);

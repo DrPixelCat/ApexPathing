@@ -44,6 +44,8 @@ final class ProfiledTrackingOptimizer {
     Settings candidate() { return candidate; }
     Settings best() { return best; }
     boolean complete() { return stage == Stage.COMPLETE; }
+    boolean isValidating() { return stage == Stage.VALIDATION; }
+    Settings original() { return original.copy(); }
     boolean canRejectCurrentCandidate() { return stage == Stage.CANDIDATE; }
     int candidateNumber() { return candidateNumber; }
     int candidateLimit() { return order.length; }

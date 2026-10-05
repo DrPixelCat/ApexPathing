@@ -15,6 +15,8 @@ public final class TrajectorySample {
     public final double angularProgressRad, remainingAngleRad;
     public final Angle heading;
     public final boolean overspeed, outsideGrid;
+    /** Normalized peak feedforward prediction, before feedback or allocation; NaN if unavailable. */
+    public final double expectedMotorPower;
 
     public TrajectorySample(Vector velocity, Vector acceleration, Vector toPath, Vector tangent,
                             Vector positionOnPath, double progressIn, double remainingIn, double pathT,
@@ -28,6 +30,17 @@ public final class TrajectorySample {
                             Vector positionOnPath, double progressIn, double remainingIn, double pathT,
                             Angle heading, double angularVelocity, double angularAcceleration,
                             boolean overspeed, boolean outsideGrid, double angularProgressRad, double remainingAngleRad) {
+        this(velocity, acceleration, toPath, tangent, positionOnPath, progressIn, remainingIn, pathT,
+                heading, angularVelocity, angularAcceleration, overspeed, outsideGrid,
+                angularProgressRad, remainingAngleRad, Double.NaN);
+    }
+
+    private TrajectorySample(Vector velocity, Vector acceleration, Vector toPath, Vector tangent,
+                            Vector positionOnPath, double progressIn, double remainingIn, double pathT,
+                            Angle heading, double angularVelocity, double angularAcceleration,
+                            boolean overspeed, boolean outsideGrid, double angularProgressRad,
+                            double remainingAngleRad, double expectedMotorPower) {
+        this.expectedMotorPower = expectedMotorPower;
         this.angularProgressRad = angularProgressRad; this.remainingAngleRad = remainingAngleRad;
         this.velocity = velocity; this.acceleration = acceleration; this.toPath = toPath;
         this.tangent = tangent; this.positionOnPath = positionOnPath;
@@ -44,7 +57,13 @@ public final class TrajectorySample {
     public TrajectorySample withAngularMotion(double omega, double alpha) {
         return new TrajectorySample(velocity, acceleration, toPath, tangent, positionOnPath,
                 progressIn, remainingIn, pathT, heading, omega, alpha, overspeed, outsideGrid,
-                angularProgressRad, remainingAngleRad);
+                angularProgressRad, remainingAngleRad, expectedMotorPower);
+    }
+
+    public TrajectorySample withExpectedMotorPower(double power) {
+        return new TrajectorySample(velocity, acceleration, toPath, tangent, positionOnPath,
+                progressIn, remainingIn, pathT, heading, angularVelocity, angularAcceleration,
+                overspeed, outsideGrid, angularProgressRad, remainingAngleRad, power);
     }
 
     public static TrajectorySample onPath(Path path, double distance, Vector robot,
@@ -64,7 +83,8 @@ public final class TrajectorySample {
                 point.getLocation().minus(robot), tangent, point.getLocation(),
                 segment.getLengthIn() - point.getDistanceToEndIn(), point.getDistanceToEndIn(), point.getT(),
                 path.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(), point.getFirstDerivative(), segment.getFirstDerivative(1)),
-                motion.getAngularVel(), motion.getAngularAccel(), overspeed, false);
+                motion.getAngularVel(), motion.getAngularAccel(), overspeed, false)
+                .withExpectedMotorPower(motion.getMotorPower());
     }
 
     public static Vector vector(double x, double y) { return Vector.of(x, y, DistUnit.IN); }

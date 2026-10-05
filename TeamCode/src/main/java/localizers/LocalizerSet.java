@@ -91,27 +91,33 @@ public final class LocalizerSet {
         requireDualProfile(profile);
         if (profile == activeProfile) { return; }
         Pose pose = getLocalizer().getPose();
+        if (!shared) {
+            if (!localizers.containsKey(profile)) { build(profile, pose, true, true); }
+            else { localizers.get(profile).setPose(pose); }
+        }
         activeProfile = profile;
-        if (!shared && !localizers.containsKey(profile)) { buildActive(pose, true, true); }
-        else { getLocalizer().setPose(pose); }
     }
 
     /** Reconstructs the active localizer after accepted geometry changed. */
     public void rebuildActive() {
         Pose pose = getLocalizer().getPose();
-        localizers.remove(storageProfile(activeProfile));
         buildActive(pose, true, false);
     }
 
     private void buildActive(Pose pose, boolean restorePose, boolean applySavedCalibration) {
-        FollowerConstants.Profile key = storageProfile(activeProfile);
+        build(activeProfile, pose, restorePose, applySavedCalibration);
+    }
+
+    private void build(FollowerConstants.Profile profile, Pose pose, boolean restorePose, boolean applySavedCalibration) {
+        FollowerConstants.Profile key = storageProfile(profile);
         BaseLocalizerConstants<?> config = configs.get(key);
         if (config == null) { throw new IllegalStateException("Missing localizer configuration for " + key); }
         if (applySavedCalibration) { calibration.applyGeometry(key.name(), config); }
         BaseLocalizer<?> localizer = config.build(hardwareMap);
-        savedFiltersApplied.put(key, calibration.applyFilter(key.name(), config, localizer));
+        boolean filterApplied = calibration.applyFilter(key.name(), config, localizer);
         if (restorePose) { localizer.setPose(pose); }
         localizers.put(key, localizer);
+        savedFiltersApplied.put(key, filterApplied);
     }
 
     private FollowerConstants.Profile storageProfile(FollowerConstants.Profile profile) {

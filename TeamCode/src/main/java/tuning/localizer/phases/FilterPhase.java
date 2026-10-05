@@ -11,7 +11,7 @@ import localizers.BaseLocalizer;
 import localizers.util.AdaptiveKalmanFilter;
 import tuning.TuningCsvWriter;
 
-/** Guides data collection and exposes either moving-average or adaptive-Kalman settings. */
+/** Guides data collection for the unified Kalman estimator or legacy moving-average mode. */
 public final class FilterPhase extends TuningPhase {
     private static final int STILL_SAMPLES = 75;
     private static final int STOP_SAMPLES = 75;
@@ -34,15 +34,22 @@ public final class FilterPhase extends TuningPhase {
     private double headingMovement;
     private Stage stage;
     private boolean requiresYMovement;
+    private boolean recordingStarted;
+    private boolean accepted;
+    private BaseLocalizer.VelocityFilterMode originalMode;
+    private int originalWindow;
+    private localizers.util.PoseEstimator.Tuning originalTuning;
+    private final boolean[] originalAutoTuning = new boolean[3];
 
     public FilterPhase(LocalizationTunerContext context) { super(context); }
-    @Override protected String getName() { return "Velocity and acceleration filter"; }
+    @Override protected String getName() { return "Position, velocity and acceleration filter"; }
 
     @Override protected void reset() {
         selected = BaseLocalizer.VelocityFilterMode.ADAPTIVE_KALMAN;
         window = context.getLocalizer().getFilterWindowSize();
         metrics = new FilterMetrics();
         stage = Stage.STILL;
+        recordingStarted = false;
     }
 
     @Override protected void showPrepare() {
@@ -66,6 +73,14 @@ public final class FilterPhase extends TuningPhase {
     }
 
     @Override protected void beginRecording() {
+        accepted = false;
+        originalMode = context.getLocalizer().getVelocityFilterMode();
+        originalWindow = context.getLocalizer().getFilterWindowSize();
+        originalTuning = context.getLocalizer().getPoseKalmanTuning();
+        for (int axis = 0; axis < 3; axis++) {
+            originalAutoTuning[axis] = context.getLocalizer().isPoseAutoTuning(axis);
+        }
+        recordingStarted = true;
         requiresYMovement = context.getDrivetrain().isHolonomic()
                 && context.getAdapter().supportsDistance(CalibrationAxis.STRAFE);
         context.getLocalizer().setVelocityFilterMode(selected);
@@ -124,14 +139,32 @@ public final class FilterPhase extends TuningPhase {
 
     @Override protected void finishRecording() {
         context.getLocalizer().setKalmanAutoTuning(false, false, false);
+        context.getLocalizer().setPoseAutoTuning(false);
         if (csv != null) { csv.close(); }
+    }
+
+    @Override protected void cleanup() {
+        if (!recordingStarted) { return; }
+        context.getLocalizer().setKalmanAutoTuning(false, false, false);
+        context.getLocalizer().setPoseAutoTuning(false);
+        if (csv != null) { csv.close(); }
+        if (!accepted) {
+            context.getLocalizer().setVelocityFilterMode(originalMode);
+            context.getLocalizer().setFilterWindow(originalWindow);
+            context.getLocalizer().setPoseKalmanTuning(originalTuning);
+        }
+        context.getLocalizer().setPoseAutoTuning(originalAutoTuning[0], originalAutoTuning[1], originalAutoTuning[2]);
+        recordingStarted = false;
     }
 
     @Override protected void showReview() {
         context.getTelemetry().addData("Estimator", display(selected));
-        context.getTelemetry().addData("Raw still RMS", context.formatNumber(metrics.rawStationaryRms()));
-        context.getTelemetry().addData("Filtered still RMS", context.formatNumber(metrics.filteredStationaryRms()));
-        context.getTelemetry().addData("Stop residual RMS", context.formatNumber(metrics.stopResidualRms()));
+        context.getTelemetry().addData("Raw still RMS (in/s)", context.formatNumber(metrics.rawStationaryRms()));
+        context.getTelemetry().addData("Filtered still RMS (in/s)", context.formatNumber(metrics.filteredStationaryRms()));
+        context.getTelemetry().addData("Stop residual RMS (in/s)", context.formatNumber(metrics.stopResidualRms()));
+        context.getTelemetry().addData("Raw angular RMS (rad/s)", context.formatNumber(metrics.rawAngularRms()));
+        context.getTelemetry().addData("Filtered angular RMS (rad/s)", context.formatNumber(metrics.filteredAngularRms()));
+        context.getTelemetry().addData("Stop angular RMS (rad/s)", context.formatNumber(metrics.stopAngularRms()));
         if (metrics.getInvalidSamples() > 0) {
             context.getTelemetry().addData("Invalid samples", metrics.getInvalidSamples());
         }
@@ -143,7 +176,10 @@ public final class FilterPhase extends TuningPhase {
         }
     }
 
-    @Override protected boolean accept() { return context.acceptFilter(); }
+    @Override protected boolean accept() {
+        accepted = context.acceptFilter();
+        return accepted;
+    }
 
     private void showKalman() {
         addTuning("X", context.getLocalizer().getXKalmanTuning());
@@ -153,14 +189,15 @@ public final class FilterPhase extends TuningPhase {
 
     private void addTuning(String axis, AdaptiveKalmanFilter.KalmanTuning tuning) {
         if (tuning == null) { return; }
-        context.getTelemetry().addData(axis + " R / Q",
+        context.getTelemetry().addData(axis + " velocity R / jerk Q",
                 context.formatNumber(tuning.measurementVariance) + " / "
                         + context.formatNumber(tuning.processVariance));
     }
 
     private void accumulateMovement(Pose velocity, double dt) {
-        xMovement += Math.abs(velocity.getX().getIn()) * dt;
-        yMovement += Math.abs(velocity.getY().getIn()) * dt;
+        geometry.Vector body = velocity.getVec().rotate(context.getLocalizer().getPose().getHeading().times(-1));
+        xMovement += Math.abs(body.getX().getIn()) * dt;
+        yMovement += Math.abs(body.getY().getIn()) * dt;
         headingMovement += Math.abs(velocity.getHeading().getRad()) * dt;
     }
 
@@ -197,6 +234,6 @@ public final class FilterPhase extends TuningPhase {
 
     private static String display(BaseLocalizer.VelocityFilterMode mode) {
         return mode == BaseLocalizer.VelocityFilterMode.ADAPTIVE_KALMAN
-                ? "Adaptive Kalman" : "Moving average";
+                ? "Unified adaptive Kalman" : "Moving average";
     }
 }

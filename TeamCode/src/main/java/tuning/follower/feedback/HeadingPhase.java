@@ -170,7 +170,9 @@ public class HeadingPhase extends TuningPhase {
             double start = manualHeadingOrigin.getShortestAngleTo(
                     context.getFollower().getPose().getHeading()).getRad();
             manualMetrics.begin("manual_heading_response", start,
-                    Math.toRadians(activeTestTarget), Math.toRadians(2.5), 0.10);
+                    Math.toRadians(activeTestTarget), Math.toRadians(2.5), 0.10,
+                    context.getFollower().getDrivetrain().getConstants().maxPower);
+            context.getFollower().clearFailure();
             context.getFollower().follow(testTurn);
             nextTestTarget = nextManualTestTarget(activeTestTarget);
             testTurnQueued = false;
@@ -233,4 +235,5 @@ public class HeadingPhase extends TuningPhase {
     static double nextManualTestTarget(double completedTargetDegrees) {
         return Math.abs(completedTargetDegrees) < 1e-9 ? 60.0 : 0.0;
     }
+    @Override protected void onExit() { manualMetrics.finish(); }
 }

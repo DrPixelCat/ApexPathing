@@ -180,7 +180,10 @@ public class CentripetalPhase extends TuningPhase {
         if (context.getFollower().isBusy()) {
             sampleError();
             if (readyForTurnaround()) {
-                return finishLeg();
+                if (context.getFollower().getMovementOutcome() == follower.Follower.MovementOutcome.FAILED) {
+            throw new IllegalStateException(context.getFollower().getTrajectoryFailure());
+        }
+        return finishLeg();
             }
             if (legTimer.seconds() > LEG_TIMEOUT_SECONDS) {
                 context.getFollower().stop();
@@ -238,14 +241,11 @@ public class CentripetalPhase extends TuningPhase {
             return false;
         }
 
+        if (search.hasConverged()) { return true; }
         search.advance(searchDirection(averageError));
         context.constants.kCentripetal = search.current();
         context.getFollower().setCentripetal(context.constants.kCentripetal);
-        if (!search.hasConverged()) {
-            startTrial();
-        } else {
-            return true;
-        }
+        startTrial(); // Measure the final narrowed candidate before accepting it.
 
         return false;
     }

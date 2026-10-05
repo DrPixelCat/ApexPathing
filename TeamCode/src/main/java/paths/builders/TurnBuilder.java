@@ -33,8 +33,16 @@ public class TurnBuilder {
      * @param startPose The Pose of the robot before the turn begins.
      */
     public TurnBuilder(Pose startPose) {
+        this(startPose, FollowerConstants.getInstance());
+    }
+
+    public TurnBuilder(Pose startPose, FollowerConstants constants) {
+        if (startPose == null || !startPose.getVec().isFinite() || startPose.getHeading().isNotFinite()) {
+            throw new IllegalArgumentException("Turn start pose must be finite");
+        }
         this.startPose = startPose;
-        this.constants = FollowerConstants.getInstance();
+        this.constants = java.util.Objects.requireNonNull(constants, "Planning settings").copy();
+        constants = this.constants;
         if (constants.drivetrainType == drivetrains.BaseDrivetrain.DrivetrainType.DUAL_ACTUATED) {
             if (constants.getActiveProfile() != null) {
                 this.constants = constants.forProfile(constants.getActiveProfile());
@@ -46,7 +54,7 @@ public class TurnBuilder {
 
     /** Select the mode for a dual-actuated turn before setting custom limits. */
     public TurnBuilder setDriveProfile(FollowerConstants.Profile profile) {
-        constants = FollowerConstants.getInstance().forProfile(profile);
+        constants = constants.forProfile(profile);
         angularVelLimitRad = constants.angularVelLimitRad;
         angularAccelLimitRad = constants.angularAccelLimitRad;
         return this;
@@ -59,6 +67,9 @@ public class TurnBuilder {
      * @return The current TurnBuilder instance.
      */
     public TurnBuilder turnTo(Angle targetHeading) {
+        if (targetHeading == null || targetHeading.isNotFinite()) {
+            throw new IllegalArgumentException("Turn heading must be finite");
+        }
         this.targetHeading = targetHeading;
         return this;
     }
@@ -104,7 +115,8 @@ public class TurnBuilder {
      * @return The current TurnBuilder instance for method chaining.
      */
     public TurnBuilder setAngularVelocityLimit(Angle limit) {
-        if (limit.getRad() > constants.angularVelLimitRad) {
+        if (limit == null || !Double.isFinite(limit.getRad()) || limit.getRad() <= 0
+                || limit.getRad() > constants.angularVelLimitRad) {
             // noinspection ConstantExpression
             throw new IllegalStateException("The angular velocity limit must be <= the " +
                     "drivetrain's max angular velocity constraint!");
@@ -121,7 +133,8 @@ public class TurnBuilder {
      * @return The current TurnBuilder instance for method chaining.
      */
     public TurnBuilder setAngularAccelerationLimit(Angle limit) {
-        if (limit.getRad() > constants.angularAccelLimitRad) {
+        if (limit == null || !Double.isFinite(limit.getRad()) || limit.getRad() <= 0
+                || limit.getRad() > constants.angularAccelLimitRad) {
             // noinspection ConstantExpression
             throw new IllegalStateException("The angular acceleration limit must be <= the " +
                     "drivetrain's max angular acceleration constraint!");
@@ -147,6 +160,7 @@ public class TurnBuilder {
             }
             turn.setDriveProfile(constants.getActiveProfile());
         }
+        turn.setPlanningConstants(constants);
         for (Consumer<Turn> task : buildTasks) { task.accept(turn); }
 
         return turn;

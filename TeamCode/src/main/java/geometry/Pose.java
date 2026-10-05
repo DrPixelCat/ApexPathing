@@ -118,6 +118,14 @@ public class Pose {
     /** @return a copy of this Pose. */
     public Pose copy() { return new Pose(this.position, this.heading); }
 
+    @Override public boolean equals(Object other) {
+        if (other == null || getClass() != other.getClass()) { return false; }
+        Pose pose = (Pose) other;
+        return position.equals(pose.position) && heading.equals(pose.heading);
+    }
+
+    @Override public int hashCode() { return 31 * position.hashCode() + heading.hashCode(); }
+
     @SuppressLint("DefaultLocale")
     @NonNull
     @Override

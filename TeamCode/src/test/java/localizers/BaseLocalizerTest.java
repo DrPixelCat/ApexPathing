@@ -15,6 +15,93 @@ import geometry.Vector;
 public class BaseLocalizerTest {
     private static final double EPSILON = 1e-9;
 
+    @Test public void poseOnlyLocalizerPublishesVelocityAndAccelerationFromJointState() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        for (int i = 0; i < 300; i++) {
+            double t = i * 0.02;
+            localizer.sample(pose(1.5 * t * t, 0, 0.1 * t * t), i * 20_000_000L);
+        }
+        assertEquals(3 * 5.98, localizer.getVel().getX().getIn(), 0.01);
+        assertEquals(3, localizer.getAccel().getX().getIn(), 0.02);
+        assertEquals(0.2, localizer.getAccel().getHeading().getRad(), 0.005);
+        // The raw finite difference is an interval average; the public velocity is instantaneous.
+        assertEquals(3 * 5.97, localizer.getRawVel().getX().getIn(), EPSILON);
+        assertTrue(Math.abs(localizer.getKinematicCovariance()[0][1]) > 0);
+    }
+
+    @Test public void nativeVelocityUpdatesThePositionStateAndInvalidSamplesAreAtomic() {
+        TimedLocalizer observed = new TimedLocalizer(), positionOnly = new TimedLocalizer();
+        for (int i = 0; i < 80; i++) {
+            Pose reading = pose(i * 0.2, 0, 0);
+            observed.sample(reading, pose(10, 0, 0), i * 20_000_000L);
+            positionOnly.sample(reading, i * 20_000_000L);
+        }
+        double before = observed.getPose().getX().getIn();
+        observed.sample(pose(16, 0, 0), pose(12, 0, 0), 1_600_000_000);
+        positionOnly.sample(pose(16, 0, 0), 1_600_000_000);
+        assertTrue(observed.getPose().getX().getIn() > positionOnly.getPose().getX().getIn());
+        assertTrue(observed.getVel().getX().getIn() > 10);
+        assertTrue(observed.getAccel().getX().getIn() > 0);
+        Pose acceptedPose = observed.getPose(), acceptedVelocity = observed.getVel();
+        observed.sample(pose(999, 0, 0), pose(Double.NaN, 0, 0), 1_620_000_000);
+        assertEquals(acceptedPose, observed.getPose());
+        assertEquals(acceptedVelocity, observed.getVel());
+        assertEquals(16, observed.getRawPose().getX().getIn(), 0);
+        assertTrue(observed.getPose().getX().getIn() > before);
+        observed.setPose(pose(100, 0, 0));
+        assertPoseIsZero(observed.getVel());
+        assertPoseIsZero(observed.getAccel());
+    }
+
+    @Test public void existingCalibrationControlsConfigureAndFreezeTheJointEstimator() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        localizer.setXKalmanTuning(new localizers.util.AdaptiveKalmanFilter.KalmanTuning(0.4, 900));
+        assertEquals(0.4, localizer.getPoseKalmanTuning().xVelocityVariance, 0);
+        assertEquals(900, localizer.getPoseKalmanTuning().x.processVariance, 0);
+        localizer.setKalmanAutoTuning(true, false, true);
+        assertTrue(localizer.isPoseAutoTuning(0));
+        assertTrue(!localizer.isPoseAutoTuning(1));
+        localizer.setIsTuning(false);
+        for (int i = 0; i < 300; i++) {
+            localizer.sample(pose(0.05 * Math.sin(i), 0, 0), i * 20_000_000L);
+        }
+        assertEquals(0.4, localizer.getXKalmanTuning().measurementVariance, 0);
+        assertEquals(900, localizer.getXKalmanTuning().processVariance, 0);
+        assertTrue(!localizer.isPoseAutoTuning());
+    }
+
+    @Test public void poseFilteringUsesNativeReadingsAndCanBeBypassed() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        localizer.sample(Pose.zero(), 0);
+        localizer.sample(pose(0.1, 0, 0), 20_000_000);
+        assertEquals(0.1, localizer.getRawPose().getX().getIn(), 0);
+        assertTrue(localizer.getPose().getX().getIn() > 0);
+        assertTrue(localizer.getPose().getX().getIn() < 0.1);
+        double filtered = localizer.getPose().getX().getIn();
+        localizer.setVelocityFilterMode(BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE);
+        assertEquals(filtered, localizer.getPose().getX().getIn(), 0);
+        localizer.setPoseFilteringEnabled(false);
+        assertEquals(localizer.getRawPose(), localizer.getPose());
+        localizer.sample(pose(0.2, 0, 0), 40_000_000);
+        assertEquals(0.2, localizer.getPose().getX().getIn(), 0);
+    }
+
+    @Test public void headingDerivativesWrapAndInvalidSamplesPreserveNativeHistory() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        localizer.setPose(pose(0, 0, Math.PI - 0.01));
+        localizer.sample(pose(0, 0, Math.PI - 0.01), 0);
+        localizer.sample(pose(0, 0, -Math.PI + 0.01), 20_000_000);
+        assertEquals(1, localizer.getRawVel().getHeading().getRad(), EPSILON);
+        localizer.sample(pose(Double.NaN, 0, 0), 40_000_000);
+        assertTrue(!localizer.isLastMeasurementValid());
+        assertEquals(20_000_000, localizer.getLastMeasurementTimeNanos());
+        localizer.sample(pose(1, 0, -Math.PI + 0.02), 60_000_000);
+        assertEquals(25, localizer.getRawVel().getX().getIn(), EPSILON);
+        localizer.sample(pose(999, 0, 0), 60_000_000);
+        assertTrue(!localizer.isLastMeasurementValid());
+        assertEquals(1, localizer.getRawPose().getX().getIn(), 0);
+    }
+
     @Test
     public void arcIntegrationFollowsExactQuarterCircle() {
         Pose result = BaseLocalizer.integrateArc(
@@ -186,5 +273,13 @@ public class BaseLocalizerTest {
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {
             return new NativeVelocityLocalizer();
         }
+    }
+
+    private static final class TimedLocalizer extends BaseLocalizer<TestConstants> {
+        TimedLocalizer() { super(new TestConstants()); }
+        void sample(Pose raw, long time) { pose = raw; calculate(UpdateType.BOTH, time); }
+        void sample(Pose raw, Pose nativeVelocity, long time) { pose = raw; calculate(nativeVelocity, time); }
+        @Override public void update() { calculate(UpdateType.BOTH); }
+        @Override public void setPose(Pose pose) { resetKinematicEstimate(pose); }
     }
 }

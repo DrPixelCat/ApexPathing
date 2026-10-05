@@ -19,59 +19,64 @@ public abstract class TuningPhase {
     public final boolean run(LinearOpMode opMode) {
         this.opMode = opMode;
         state = State.PREPARE;
-        reset();
-        while (opMode.opModeIsActive()) {
-            context.update();
-            context.beginFrame();
-            context.getTelemetry().addLine(getName());
+        try {
+            reset();
+            while (opMode.opModeIsActive()) {
+                context.update();
+                context.beginFrame();
+                context.getTelemetry().addLine(getName());
 
-            if (context.isDriveTransitioning()) {
-                context.stop();
-                context.getTelemetry().addLine("Waiting for drivetrain mode to settle...");
+                if (context.isDriveTransitioning()) {
+                    context.stop();
+                    context.getTelemetry().addLine("Waiting for drivetrain mode to settle...");
+                    context.getTelemetry().update();
+                    context.pauseLoop();
+                    continue;
+                }
+
+                if (state == State.PREPARE) {
+                    context.stop();
+                    showPrepare();
+                    if (opMode.gamepad1.aWasPressed()) {
+                        error = "";
+                        beginRecording();
+                        state = State.RECORD;
+                    }
+                } else if (state == State.RECORD) {
+                    try {
+                        if (record()) {
+                            context.stop();
+                            finishRecording();
+                            state = State.REVIEW;
+                        }
+                    } catch (RuntimeException failure) {
+                        context.stop();
+                        cleanup();
+                        error = failure.getMessage();
+                        state = State.ERROR;
+                    }
+                } else if (state == State.REVIEW) {
+                    context.stop();
+                    showReview();
+                    if (!error.isEmpty()) { context.getTelemetry().addData("Save error", error); }
+                    context.getTelemetry().addLine("A: save");
+                    if (opMode.gamepad1.aWasPressed()) {
+                        if (accept()) { return true; }
+                        error = context.getLastSaveError();
+                    }
+                } else {
+                    context.stop();
+                    context.getTelemetry().addData("Could not record", error);
+                    context.getTelemetry().addLine("Stop the OpMode and run the phase again.");
+                }
                 context.getTelemetry().update();
                 context.pauseLoop();
-                continue;
             }
-
-            if (state == State.PREPARE) {
-                context.stop();
-                showPrepare();
-                if (opMode.gamepad1.aWasPressed()) {
-                    error = "";
-                    beginRecording();
-                    state = State.RECORD;
-                }
-            } else if (state == State.RECORD) {
-                try {
-                    if (record()) {
-                        context.stop();
-                        finishRecording();
-                        state = State.REVIEW;
-                    }
-                } catch (RuntimeException failure) {
-                    context.stop();
-                    error = failure.getMessage();
-                    state = State.ERROR;
-                }
-            } else if (state == State.REVIEW) {
-                context.stop();
-                showReview();
-                if (!error.isEmpty()) { context.getTelemetry().addData("Save error", error); }
-                context.getTelemetry().addLine("A: save");
-                if (opMode.gamepad1.aWasPressed()) {
-                    if (accept()) { return true; }
-                    error = context.getLastSaveError();
-                }
-            } else {
-                context.stop();
-                context.getTelemetry().addData("Could not record", error);
-                context.getTelemetry().addLine("Stop the OpMode and run the phase again.");
-            }
-            context.getTelemetry().update();
-            context.pauseLoop();
+            return false;
+        } finally {
+            context.stop();
+            cleanup();
         }
-        context.stop();
-        return false;
     }
 
     protected abstract String getName();
@@ -80,6 +85,8 @@ public abstract class TuningPhase {
     protected abstract void beginRecording();
     protected abstract boolean record();
     protected void finishRecording() { }
+    /** Releases collection resources on acceptance, interruption or an unexpected sensor failure. */
+    protected void cleanup() { }
     protected abstract void showReview();
     protected abstract boolean accept();
 }

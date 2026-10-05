@@ -82,6 +82,7 @@ public class HolonomicInterpolator implements HeadingInterpolator {
     }
 
     private double getTerminalErrorRad(Vector finalTangent) {
+        if (endHeading == null || endHeading.isNotFinite()) { return 0; }
         Angle finalBaseHeading = getBaseHeadingAtEnd(finalTangent);
         return finalBaseHeading.getShortestAngleTo(endHeading).getRad();
     }

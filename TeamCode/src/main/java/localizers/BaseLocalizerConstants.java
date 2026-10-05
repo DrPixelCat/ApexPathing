@@ -3,6 +3,7 @@ package localizers;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.json.JSONObject;
+import localizers.util.PoseEstimator;
 
 /**
  * Abstract class implemented by all localizer configuration classes
@@ -21,6 +22,9 @@ public interface BaseLocalizerConstants<T extends BaseLocalizerConstants<T>> {
      * Builds and returns an instance of the corresponding localizer class using this configuration.
      */
     BaseLocalizer<?> build(HardwareMap hardwareMap);
+
+    /** Initial sensor-only pose filter parameters, overridden by saved calibration. */
+    default PoseEstimator.Tuning getPoseKalmanTuning() { return PoseEstimator.Tuning.defaults(); }
 
     /**
      * Returns the geometry values which may be overridden by saved localization calibration.

@@ -61,6 +61,23 @@ public class ProfilePowerLimitTest {
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING);
     }
 
+    @Test public void onlineAndStoredTargetsRetainIndependentPowerPrediction() {
+        Path online = builder().setProfilePowerLimit(.6).quickBuild();
+        trajectory.TrajectorySample target = new trajectory.OnlineTrajectoryPlanner(online, constants)
+                .sample(geometry.vector(20, 0), geometry.vector(15, 0), .02);
+        double expected = Math.abs(constants.translationalKV * target.tangentialVelocity()
+                + constants.translationalKA * target.tangentialAcceleration());
+        assertEquals(expected, target.expectedMotorPower, 1e-9);
+        assertTrue(target.expectedMotorPower > 0);
+        assertEquals(target.expectedMotorPower, target.withAngularMotion(2, 3).expectedMotorPower, 0);
+        Path stored = builder().setProfilePowerLimit(.6).buildToMemory();
+        for (double distance : new double[]{0, 20, 250, 499, 500}) {
+            trajectory.TrajectorySample sample = stored.getTrajectoryField().sample(geometry.vector(distance, 0));
+            assertTrue(Double.isFinite(sample.expectedMotorPower));
+            assertTrue(sample.expectedMotorPower >= 0 && sample.expectedMotorPower <= .6 + 1e-6);
+        }
+    }
+
     @Test public void builderCeilingChangesProfileAndSurvivesReversal() {
         Path lower = builder().setProfilePowerLimit(.6).buildToMemory();
         Path full = builder().setProfilePowerLimit(1).buildToMemory();

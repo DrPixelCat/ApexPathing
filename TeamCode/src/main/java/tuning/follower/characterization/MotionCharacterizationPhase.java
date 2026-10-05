@@ -42,6 +42,11 @@ public final class MotionCharacterizationPhase extends TuningPhase {
         context.getTelemetry().addLine("Clear 96 inches of travel, plus stopping room; allow four full turns.");
     }
     @Override protected void init() {
+        axis = Axis.FORWARD;
+        direction = run = 0;
+        running = complete = false;
+        failure = null;
+        for (MotorPowerModel[] row : models) { java.util.Arrays.fill(row, null); }
         regression = new MotorAuthorityRegression();
         csv = TuningCsvWriter.openBuffered("motion_characterization",
                 "record", "axis", "direction", "run", "held_out", "time_s",
@@ -98,6 +103,9 @@ public final class MotionCharacterizationPhase extends TuningPhase {
     }
     private void sample() {
         Follower f = context.getFollower();
+        if (!f.getLocalizer().isLastMeasurementValid()) {
+            reject("Invalid localization measurement"); return;
+        }
         double time = timer.seconds(), v = speed(), dt = time - previousTime;
         double heading = f.getPose().getHeading().getRad();
         rotation += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
