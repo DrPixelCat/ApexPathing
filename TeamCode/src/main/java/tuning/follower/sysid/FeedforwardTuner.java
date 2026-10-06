@@ -27,33 +27,211 @@ public final class FeedforwardTuner extends TuningPhase {
     private final double[] breakawayPower = {Double.NaN, Double.NaN};
     private String csvPath = "Not started";
     private TuningCsvWriter csv;
+    private int selectedGain, nextDirection = 1, manualDirection;
+    private ManualFeedforwardProfile manualProfile;
+    private String manualResult = "No trial yet";
+    private boolean manualSaturated;
+    private Runnable restoreSimulatorMotorModel = () -> { };
 
     public FeedforwardTuner(TunerContext context) { this(context, Axis.DRIVE); }
     public FeedforwardTuner(TunerContext context, Axis axis) { super(context); this.axis = axis; }
     @Override protected String getPhaseName() { return axis + " Feedforward SysId"; }
     @Override protected String getTuningConstants() { return axis + " feedforward kS, kV, kA"; }
-    @Override protected boolean manualTuneIsPossible() { return false; }
+    @Override protected boolean manualTuneIsPossible() { return true; }
     @Override protected boolean autoTuneIsPossible() { return true; }
-    @Override protected boolean manualTuned() { return false; }
+    @Override protected boolean manualTuned() {
+        // Poll edges during motion too, so an ignored press cannot become a queued idle action.
+        boolean left = opMode.gamepad1.leftBumperWasPressed();
+        boolean right = opMode.gamepad1.rightBumperWasPressed();
+        boolean test = opMode.gamepad1.xWasPressed();
+        boolean accept = opMode.gamepad1.aWasPressed();
+        double change = manualChange();
+        if (stage == Stage.RUNNING) {
+            sampleManual();
+        } else {
+            if (left) { selectedGain = (selectedGain + 2) % 3; }
+            if (right) { selectedGain = (selectedGain + 1) % 3; }
+            if (change != 0) { setManualGain(selectedGain, Math.max(0, manualGain(selectedGain) + change)); }
+            if (test) {
+                if (stationary()) { beginManual(); }
+                else { manualResult = "Release sticks and wait until stationary."; }
+            } else if (accept) {
+                if (validManualGains()) { applyManualGains(); return true; }
+                manualResult = "Use finite nonnegative kS/kA and positive kV before saving.";
+            }
+        }
+        addTunableValue("kS", manualGain(0), selectedGain == 0);
+        addTunableValue("kV", manualGain(1), selectedGain == 1);
+        addTunableValue("kA", manualGain(2), selectedGain == 2);
+        context.getTelemetry().addData("Increment", number(increment));
+        context.getTelemetry().addLine("LB/RB: select value; Dpad Up/Down: change value");
+        context.getTelemetry().addLine("Dpad Left/Right: change increment; X: run test; A: accept");
+        showManualPositioning();
+        reportManualErrors();
+        return false;
+    }
+
+    private double manualGain(int index) {
+        if (axis == Axis.DRIVE) {
+            return index == 0 ? context.constants.translationalFeedforwardKS
+                    : index == 1 ? context.constants.translationalKV : context.constants.translationalKA;
+        }
+        return index == 0 ? context.constants.angularFeedforwardKS
+                : index == 1 ? context.constants.angularKV : context.constants.angularKA;
+    }
+
+    private void setManualGain(int index, double value) {
+        if (axis == Axis.DRIVE) {
+            if (index == 0) { context.constants.translationalFeedforwardKS = value; }
+            else if (index == 1) { context.constants.translationalKV = value; }
+            else { context.constants.translationalKA = value; }
+        } else {
+            if (index == 0) { context.constants.angularFeedforwardKS = value; }
+            else if (index == 1) { context.constants.angularKV = value; }
+            else { context.constants.angularKA = value; }
+        }
+    }
+
+    private boolean validManualGains() {
+        return Double.isFinite(manualGain(0)) && manualGain(0) >= 0
+                && Double.isFinite(manualGain(1)) && manualGain(1) > 0
+                && Double.isFinite(manualGain(2)) && manualGain(2) >= 0;
+    }
+
+    private boolean stationary() {
+        Pose velocity = context.getFollower().getVelocity();
+        return context.getFollower().getLocalizer().isLastMeasurementValid()
+                && Double.isFinite(velocity.getVec().getMag().getIn())
+                && velocity.getVec().getMag().getIn() <= .5
+                && Double.isFinite(velocity.getHeading(AngleUnit.RAD))
+                && Math.abs(velocity.getHeading(AngleUnit.RAD)) <= .05;
+    }
+
+    private void showManualPositioning() {
+        int direction = stage == Stage.RUNNING ? manualDirection : nextDirection;
+        context.getTelemetry().addData(stage == Stage.RUNNING ? "Running" : "Next direction",
+                axis == Axis.DRIVE ? (direction > 0 ? "Forward" : "Backward")
+                        : (direction > 0 ? "CCW (positive heading)" : "CW (negative heading)"));
+        context.getTelemetry().addLine(axis == Axis.DRIVE
+                ? "Align robot with clear lane; allow 60 inches " + (direction > 0 ? "ahead" : "behind") + ", plus braking room."
+                : "Position robot with clear space to rotate 3 radians (~172 deg), plus braking room.");
+        context.getTelemetry().addLine("Release sticks; press X from rest. Stop cancels the test.");
+        context.getTelemetry().addLine(axis == Axis.DRIVE
+                ? "Profile: 24 in/s; 1s accelerate, 1s cruise, 1s brake (48 in)."
+                : "Profile: 1.5 rad/s; 1s accelerate, 1s cruise, 1s brake (3 rad).");
+    }
+
+    private void beginManual() {
+        Follower f = context.getFollower();
+        f.stop(); f.disableControllers();
+        manualDirection = nextDirection;
+        nextDirection = -nextDirection;
+        manualProfile = new ManualFeedforwardProfile(manualDirection * (axis == Axis.DRIVE ? 24 : 1.5));
+        manualProfile.begin(measuredVelocity());
+        startPose = f.getPose(); lastHeading = startPose.getHeading().getRad(); travel = 0;
+        manualSaturated = false; manualResult = "Running";
+        timer.reset(); stage = Stage.RUNNING;
+        commandManual(0);
+    }
+
+    private void sampleManual() {
+        Follower f = context.getFollower();
+        double time = timer.seconds(), measured = measuredVelocity();
+        double heading = f.getPose().getHeading().getRad();
+        travel += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
+        lastHeading = heading;
+        double distance = f.getPose().getVec().minus(startPose.getVec()).getMag().getIn();
+        if (!f.getLocalizer().isLastMeasurementValid() || !Double.isFinite(measured)
+                || !Double.isFinite(distance) || !Double.isFinite(travel)) {
+            finishManual("Aborted: invalid localization; results incomplete."); return;
+        }
+        manualProfile.sample(time, measured);
+        if (axis == Axis.DRIVE ? distance >= 60 : travel >= 4) {
+            finishManual("Aborted: travel limit reached; results incomplete."); return;
+        }
+        if (time >= ManualFeedforwardProfile.END_SECONDS) {
+            finishManual("Completed " + (axis == Axis.DRIVE ? (manualDirection > 0 ? "forward" : "backward")
+                    : (manualDirection > 0 ? "CCW" : "CW")) + " trial"); return;
+        }
+        commandManual(time);
+    }
+
+    private void commandManual(double time) {
+        double v = manualProfile.velocity(time), a = manualProfile.acceleration(time);
+        double ks = manualGain(0), kv = manualGain(1), ka = manualGain(2);
+        double command = ks * (v == 0 ? Math.signum(a) : Math.signum(v)) + kv * v + ka * a;
+        if (!Double.isFinite(command)) { finishManual("Aborted: invalid feedforward constants."); return; }
+        double limit = Math.min(.85, context.getFollower().getDrivetrain().getConstants().maxPower);
+        manualSaturated |= Math.abs(command) > limit;
+        command = Math.max(-limit, Math.min(limit, command));
+        context.getFollower().getDrivetrain().moveWithVectors(axis == Axis.DRIVE ? command : 0, 0,
+                axis == Axis.HEADING ? command : 0);
+    }
+
+    private void finishManual(String result) {
+        stopMotion(); stage = Stage.READY; manualResult = result;
+    }
+
+    private void reportManualErrors() {
+        context.getTelemetry().addData("Trial", manualResult);
+        if (manualProfile == null) { return; }
+        String units = axis == Axis.DRIVE ? " in/s" : " rad/s";
+        double acceleration = manualProfile.accelerationMeanError(), cruise = manualProfile.cruiseMeanError();
+        context.getTelemetry().addData("Acceleration velocity mean signed error",
+                Double.isFinite(acceleration) ? number(acceleration) + units : "N/A: no samples");
+        context.getTelemetry().addData("Cruise velocity mean signed error",
+                Double.isFinite(cruise) ? number(cruise) + units : "N/A: cruise target not reached or no cruise interval");
+        context.getTelemetry().addLine("Error = measured - target (time-weighted); braking excluded.");
+        context.getTelemetry().addLine("Too slow: negative error forward/CCW; positive error backward/CW.");
+        if (manualSaturated) { context.getTelemetry().addLine("Power clipped: profile exceeded available command; errors include saturation."); }
+    }
+
+    private void applyManualGains() {
+        context.constants.motionCharacterization = null;
+        updateFollowerGains();
+    }
     @Override protected boolean routineMotionActive() { return stage == Stage.RUNNING; }
     @Override protected void showPreRunInstructions() {
+        if (manualMode) { showManualPositioning(); return; }
         context.getTelemetry().addLine(axis == Axis.DRIVE
                 ? "Clear 96 inches in BOTH directions, plus braking room."
                 : "Clear room for two full turns in BOTH directions.");
     }
     @Override protected void init() {
         context.getFollower().stop(); context.getFollower().enableControllers();
+        enableSimulatorMotorOverride();
         regression = new SysIdRegression(); run = 0; stage = Stage.READY;
         breakawayPower[0] = breakawayPower[1] = Double.NaN;
         fit = null;
+        selectedGain = 0; nextDirection = 1; manualDirection = 1;
+        manualProfile = null; manualResult = "No trial yet";
     }
     @Override protected void onExit() {
-        context.getFollower().enableControllers();
-        closeCsv();
+        try {
+            context.getFollower().enableControllers();
+            closeCsv();
+        } finally {
+            restoreSimulatorMotorModel.run();
+            restoreSimulatorMotorModel = () -> { };
+        }
+    }
+
+    private void enableSimulatorMotorOverride() {
+        try {
+            // Desktop-only adapter; no simulator dependency is packaged on the robot.
+            Class<?> adapter = Class.forName("org.firstinspires.ftc.teamcode.sim.SimulatorSysIdMotorOverride");
+            restoreSimulatorMotorModel = (Runnable) adapter.getMethod("open",
+                    com.qualcomm.robotcore.hardware.HardwareMap.class).invoke(null, opMode.hardwareMap);
+        } catch (ClassNotFoundException robotRuntime) {
+            // Actual robot hardware retains its normal motor-controller behavior.
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("Could not configure simulator SysId motor model", failure);
+        }
     }
     @Override protected boolean autoTuned() {
         if (stage == Stage.READY) {
             showPreRunInstructions();
+            context.getTelemetry().addData("Next test", RUNS[run]);
             context.getTelemetry().addLine(axis == Axis.DRIVE
                     ? (run % 2 == 0 ? "Allow 96 inches in front of the robot."
                     : "Allow 96 inches behind the robot.") : "Allow two full turns in both directions.");
@@ -102,6 +280,7 @@ public final class FeedforwardTuner extends TuningPhase {
         windowTime = windowVelocity = windowPower = 0; windowStartVelocity = previousVelocity;
     }
     private void sample() {
+        context.getTelemetry().addData("Test", RUNS[run]);
         Follower f = context.getFollower();
         if (!f.getLocalizer().isLastMeasurementValid()) {
             stopMotion();
@@ -217,6 +396,9 @@ public final class FeedforwardTuner extends TuningPhase {
             context.constants.angularKV = fit.kV; context.constants.angularKA = fit.kA;
             context.constants.angularCoeffs.s(staticBreakawayPower());
         }
+        updateFollowerGains();
+    }
+    private void updateFollowerGains() {
         context.getFollower().setFeedforwardGains(context.constants.translationalKV, context.constants.translationalKA,
                 context.constants.angularKV, context.constants.angularKA);
         double previousDriveFeedback = context.constants.velocityFeedbackGain;
@@ -227,6 +409,10 @@ public final class FeedforwardTuner extends TuningPhase {
         context.getFollower().setVelocityFeedback(context.constants.velocityFeedbackGain, context.constants.angularVelocityFeedbackGain);
     }
     @Override protected void reportResults() {
+        if (manualMode) {
+            context.getTelemetry().addData("kS / kV / kA", number(manualGain(0)) + " / " + number(manualGain(1)) + " / " + number(manualGain(2)));
+            reportManualErrors(); return;
+        }
         if (fit == null) { return; }
         context.getTelemetry().addData("kS / kV / kA", number(fit.kS) + " / " + number(fit.kV) + " / " + number(fit.kA));
     }

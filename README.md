@@ -133,6 +133,18 @@ coefficients, nonnegative kS/kA, positive kV and R-squared >= 0.90. A saves the 
 axis from the results screen. Rejected measurements require Stop and a fresh run of the phase.
 No individual outliers are pruned.
 Each axis saves independently. The separate acceleration-search phase is no longer in the workflow.
+Both SysId phases also offer manual tuning: choose Manual with D-pad Left/Right, then press A.
+LB/RB selects kS, kV or kA; D-pad Up/Down adjusts the value and Left/Right changes the increment.
+X runs a fixed time-based trapezoidal velocity profile, alternating forward/backward for drive
+and CCW/CW for heading. Each trial accelerates for 1 second, cruises for 1 second, then brakes
+for 1 second. Drive targets 24 in/s (48 inches nominal travel); heading targets 1.5 rad/s
+(3 radians nominal rotation). Follow the next-direction positioning prompt, release the sticks,
+and start from rest. Stick positioning remains available between trials; Stop cancels.
+Telemetry reports time-weighted mean signed velocity error (measured minus target) during
+acceleration and during cruise from the first measured target-velocity crossing to cruise end.
+If cruise velocity is never reached, cruise error is unavailable. Braking is excluded from both
+scores. A power-clipping notice identifies trials whose requested feedforward exceeds the command
+limit. A accepts the edited gains; press A again on the results screen to save and continue.
 Position-controller breakaway settings remain separate. Velocity feedback is derived from the
 identified plant after acceptance. Units remain normalized motor power, inches (drive), radians
 (heading) and seconds; this is not WPILib voltage data and does not compensate battery voltage.

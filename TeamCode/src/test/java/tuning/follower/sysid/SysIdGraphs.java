@@ -9,26 +9,70 @@ import org.knowm.xchart.XYChart;
 import org.knowm.xchart.XYChartBuilder;
 import org.knowm.xchart.XYSeries;
 import org.knowm.xchart.style.Styler;
+import org.knowm.xchart.style.markers.SeriesMarkers;
 
 /** XChart PNGs using the same rendering and styling as PathProfileConvergenceTest. */
 public final class SysIdGraphs {
     private SysIdGraphs() { }
     public static void main(String[] args) throws Exception {
-        if (args.length != 2) { throw new IllegalArgumentException("Usage: SysIdGraphs <fit.csv> <DRIVE|HEADING>"); }
-        System.out.println(render(args[0], args[1]));
+        if (args.length != 2 && args.length != 3) { throw new IllegalArgumentException("Usage: SysIdGraphs <fit.csv> <DRIVE|HEADING> [KV]"); }
+        System.out.println(args.length == 3 && args[2].equals("KV")
+                ? renderQuasistaticKV(args[0], args[1]) : render(args[0], args[1]));
+    }
+
+    /** Diagnostic simple regressions of raw quasistatic power against velocity, one per direction. */
+    public static String renderQuasistaticKV(String csvPath, String axis) throws Exception {
+        List<double[]> rows = readRows(csvPath);
+        XYChart plot = new XYChartBuilder().width(1100).height(650)
+                .title(axis + " kV diagnostic: quasistatic samples only")
+                .xAxisTitle(axis.equals("DRIVE") ? "Signed velocity (in/s)" : "Signed velocity (rad/s)")
+                .yAxisTitle("Applied motor power (acceleration term not removed)").build();
+        plot.getStyler().setDefaultSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Scatter);
+        plot.getStyler().setMarkerSize(6);
+        plot.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
+        plot.getStyler().setChartPadding(16);
+        plot.getStyler().setXAxisDecimalPattern("0.##");
+        plot.getStyler().setYAxisDecimalPattern("0.##");
+        List<String> summary = new ArrayList<>();
+        summary.add("axis,direction,samples,intercept,kv_slope,r_squared");
+        for (int run = 0; run < 2; run++) {
+            List<double[]> selected = new ArrayList<>();
+            for (double[] row : rows) { if ((int) row[0] == run) { selected.add(row); } }
+            if (selected.size() < 2) { continue; }
+            double sumV = 0, sumP = 0, minV = Double.POSITIVE_INFINITY, maxV = Double.NEGATIVE_INFINITY;
+            for (double[] row : selected) {
+                sumV += row[2]; sumP += row[4];
+                minV = Math.min(minV, row[2]); maxV = Math.max(maxV, row[2]);
+            }
+            double meanV = sumV / selected.size(), meanP = sumP / selected.size();
+            double vv = 0, vp = 0, total = 0;
+            for (double[] row : selected) {
+                vv += (row[2] - meanV) * (row[2] - meanV);
+                vp += (row[2] - meanV) * (row[4] - meanP);
+                total += (row[4] - meanP) * (row[4] - meanP);
+            }
+            if (vv == 0) { continue; }
+            double slope = vp / vv, intercept = meanP - slope * meanV, squaredError = 0;
+            for (double[] row : selected) { squaredError += Math.pow(row[4] - intercept - slope * row[2], 2); }
+            double r2 = total > 0 ? 1 - squaredError / total : Double.NaN;
+            String direction = run == 0 ? "Forward" : "Reverse";
+            plot.addSeries(direction + " quasistatic samples", column(selected, 2), column(selected, 4));
+            plot.addSeries(String.format(java.util.Locale.US, "%s fit: kV = %.6f; R² = %.5f", direction, slope, r2),
+                    new double[] {minV, maxV}, new double[] {intercept + slope * minV, intercept + slope * maxV})
+                    .setXYSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Line).setMarker(SeriesMarkers.NONE).setLineWidth(2);
+            summary.add(axis + "," + direction + "," + selected.size() + "," + intercept + "," + slope + "," + r2);
+        }
+        String prefix = csvPath.substring(0, csvPath.length() - 4) + "_kv_quasistatic";
+        BitmapEncoder.saveBitmap(plot, prefix + "_regression", BitmapEncoder.BitmapFormat.PNG);
+        Files.write(new File(prefix + "_fits.csv").toPath(), summary);
+        return prefix + "_regression.png";
     }
     public static String render(String csvPath, String axis) throws Exception {
-        List<double[]> rows = new ArrayList<>();
-        List<String> lines = Files.readAllLines(new File(csvPath).toPath());
-        for (int i = 1; i < lines.size(); i++) {
-            String[] fields = lines.get(i).split(",");
-            double[] row = new double[11];
-            for (int j = 0; j < row.length; j++) { row[j] = Double.parseDouble(fields[j]); }
-            rows.add(row);
-        }
+        List<double[]> rows = readRows(csvPath);
         String prefix = csvPath.substring(0, csvPath.length() - 4);
+        renderRegressionScatter(rows, prefix, axis);
         String[] names = {"Quasistatic forward", "Quasistatic reverse", "Dynamic forward", "Dynamic reverse"};
-        for (int run = 0; run < 4; run++) {
+        for (int run = 0; run < names.length; run++) {
             List<double[]> selected = new ArrayList<>();
             for (double[] row : rows) { if ((int) row[0] == run) { selected.add(row); } }
             if (selected.isEmpty()) { continue; }
@@ -54,7 +98,77 @@ public final class SysIdGraphs {
                 BitmapEncoder.saveBitmap(error, prefix + "_" + run + "_residual", BitmapEncoder.BitmapFormat.PNG);
             }
         }
-        return prefix + "_*_power.png / *_motion.png / *_residual.png";
+        return prefix + "_*_power.png / *_motion.png / *_residual.png / _regression_scatter.png / _regression_parity.png";
+    }
+
+    private static List<double[]> readRows(String csvPath) throws Exception {
+        List<double[]> rows = new ArrayList<>();
+        List<String> lines = Files.readAllLines(new File(csvPath).toPath());
+        for (int i = 1; i < lines.size(); i++) {
+            String[] fields = lines.get(i).split(",");
+            double[] row = new double[11];
+            for (int j = 0; j < row.length; j++) { row[j] = Double.parseDouble(fields[j]); }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Project the three-term fit into velocity/power space by removing its acceleration term. */
+    private static void renderRegressionScatter(List<double[]> rows, String prefix, String axis) throws Exception {
+        if (rows.isEmpty()) { return; }
+        double[] first = rows.get(0);
+        double ks = first[7], kv = first[8], ka = first[9], r2 = first[10];
+        if (!finite(new double[] {ks, kv, ka, r2})) { return; }
+        String coefficients = String.format(java.util.Locale.US,
+                "kS = %.5f    kV = %.6f    kA = %.6f    Full-fit R² = %.5f", ks, kv, ka, r2);
+        XYChart scatter = new XYChartBuilder().width(1100).height(650)
+                .title(axis + " SysId regression | " + coefficients)
+                .xAxisTitle(axis.equals("DRIVE") ? "Signed velocity (in/s)" : "Signed velocity (rad/s)")
+                .yAxisTitle("Applied power - kA × acceleration").build();
+        XYChart parity = new XYChartBuilder().width(1100).height(650)
+                .title(axis + " SysId power fit | " + coefficients)
+                .xAxisTitle("Predicted power: kS × sign(v) + kV × v + kA × a")
+                .yAxisTitle("Measured applied power").build();
+        for (XYChart plot : new XYChart[] {scatter, parity}) {
+            plot.getStyler().setDefaultSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Scatter);
+            plot.getStyler().setMarkerSize(5);
+            plot.getStyler().setLegendPosition(Styler.LegendPosition.OutsideE);
+            plot.getStyler().setChartPadding(16);
+            plot.getStyler().setXAxisDecimalPattern("0.##");
+            plot.getStyler().setYAxisDecimalPattern("0.##");
+        }
+        double minV = Double.POSITIVE_INFINITY, maxV = Double.NEGATIVE_INFINITY;
+        double minP = Double.POSITIVE_INFINITY, maxP = Double.NEGATIVE_INFINITY;
+        String[] names = {"Quasistatic forward", "Quasistatic reverse", "Dynamic forward", "Dynamic reverse"};
+        for (int run = 0; run < names.length; run++) {
+            List<double[]> selected = new ArrayList<>();
+            for (double[] row : rows) { if ((int) row[0] == run) { selected.add(row); } }
+            if (selected.isEmpty()) { continue; }
+            double[] velocity = column(selected, 2), adjusted = new double[selected.size()];
+            for (int i = 0; i < selected.size(); i++) {
+                double[] row = selected.get(i);
+                adjusted[i] = row[4] - ka * row[3];
+                minV = Math.min(minV, row[2]); maxV = Math.max(maxV, row[2]);
+                minP = Math.min(minP, Math.min(row[4], row[5]));
+                maxP = Math.max(maxP, Math.max(row[4], row[5]));
+            }
+            scatter.addSeries(names[run], velocity, adjusted);
+            parity.addSeries(names[run], column(selected, 5), column(selected, 4));
+        }
+        if (maxV > 0) {
+            scatter.addSeries("Forward: kS + kV × v", new double[] {0, maxV},
+                    new double[] {ks, ks + kv * maxV}).setXYSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Line).setMarker(SeriesMarkers.NONE)
+                    .setLineWidth(2.0f);
+        }
+        if (minV < 0) {
+            scatter.addSeries("Reverse: -kS + kV × v", new double[] {minV, 0},
+                    new double[] {-ks + kv * minV, -ks}).setXYSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Line).setMarker(SeriesMarkers.NONE)
+                    .setLineWidth(2.0f);
+        }
+        parity.addSeries("Perfect agreement", new double[] {minP, maxP}, new double[] {minP, maxP})
+                .setXYSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Line).setMarker(SeriesMarkers.NONE);
+        BitmapEncoder.saveBitmap(scatter, prefix + "_regression_scatter", BitmapEncoder.BitmapFormat.PNG);
+        BitmapEncoder.saveBitmap(parity, prefix + "_regression_parity", BitmapEncoder.BitmapFormat.PNG);
     }
     private static boolean finite(double[] data) {
         for (double value : data) { if (!Double.isFinite(value)) { return false; } }

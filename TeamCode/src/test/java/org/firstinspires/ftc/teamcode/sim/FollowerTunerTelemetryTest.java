@@ -25,6 +25,134 @@ import localizers.LocalizationConstants;
 /** End-to-end coverage for the automatic follower-tuning workflow. */
 public class FollowerTunerTelemetryTest {
     @Test(timeout = 30_000L)
+    public void manualDriveSysIdRunsAlternatingProfilesAndReportsVelocityErrors() throws Exception {
+        verifyManualSysId(false);
+    }
+
+    @Test(timeout = 30_000L)
+    public void manualHeadingSysIdRunsAlternatingProfilesAndReportsVelocityErrors() throws Exception {
+        verifyManualSysId(true);
+    }
+
+    private static void verifyManualSysId(boolean heading) throws Exception {
+        String previousDirectory = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
+        System.setProperty(ApexStorage.DIRECTORY_PROPERTY,
+                java.nio.file.Files.createTempDirectory("apex-manual-sysid-").toString());
+        SimLinearOpModeBridge.Session session = null;
+        try {
+            resetFollowerConstants();
+            ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
+            org.codeblooded.fit.MotorModel.Term[] originalTerms = java.util.Arrays.stream(
+                    StockSimTestSupport.motors(hardware)).map(m -> m.config.motorModel.terms[1])
+                    .toArray(org.codeblooded.fit.MotorModel.Term[]::new);
+            seedAcceptedLocalization(hardware);
+            ApexStorage.saveConstants(FollowerConstants.getInstance().toJson().toString(4));
+            byte[] saved = java.nio.file.Files.readAllBytes(ApexStorage.getConstantsFile().toPath());
+            List<String> frames = Collections.synchronizedList(new ArrayList<>());
+            ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
+            telemetry.setMsTransmissionInterval(0);
+            FollowerTuner tuner = new FollowerTuner();
+            tuner.hardwareMap = hardware.hardwareMap;
+            tuner.telemetry = telemetry;
+            tuner.gamepad1 = new Gamepad(); tuner.gamepad2 = new Gamepad();
+            session = SimLinearOpModeBridge.initialize(tuner, () -> { });
+            pump(session, tuner, telemetry, hardware, 80);
+            SimLinearOpModeBridge.start(session);
+            awaitManualFrame(session, tuner, telemetry, hardware, frames, "Select a tuning phase");
+            if (heading) {
+                tuner.gamepad1.dpad_down = true;
+                pump(session, tuner, telemetry, hardware, 60);
+                tuner.gamepad1.dpad_down = false;
+                pump(session, tuner, telemetry, hardware, 60);
+            }
+            pressManualA(session, tuner, telemetry, hardware, frames, "Mode Automatic");
+            tuner.gamepad1.dpad_right = true;
+            pump(session, tuner, telemetry, hardware, 60);
+            tuner.gamepad1.dpad_right = false;
+            pump(session, tuner, telemetry, hardware, 60);
+            awaitManualFrame(session, tuner, telemetry, hardware, frames, "Mode Manual");
+            pressManualA(session, tuner, telemetry, hardware, frames, "LB/RB: select value");
+            for (org.codeblooded.ftcodesim.hardware.devices.SimMotor motor : StockSimTestSupport.motors(hardware)) {
+                org.junit.Assert.assertEquals(-12, motor.config.motorModel.terms[1].calculate(12, .3, 13), 0);
+            }
+            java.lang.reflect.Field field = FollowerTuner.class.getDeclaredField("context");
+            field.setAccessible(true);
+            tuning.follower.TunerContext context = (tuning.follower.TunerContext) field.get(tuner);
+            context.constants.translationalFeedforwardKS = .06;
+            context.constants.translationalKV = .94 / 75;
+            context.constants.translationalKA = .94 / 150;
+            context.constants.angularFeedforwardKS = .06;
+            // Conservative trial gains keep this UI test inside the angular travel guard.
+            context.constants.angularKV = .02;
+            context.constants.angularKA = .01;
+            tuner.gamepad1.dpad_up = true;
+            pump(session, tuner, telemetry, hardware, 60);
+            tuner.gamepad1.dpad_up = false;
+            pump(session, tuner, telemetry, hardware, 60);
+            org.junit.Assert.assertEquals(.061, heading ? context.constants.angularFeedforwardKS
+                    : context.constants.translationalFeedforwardKS, 1e-12);
+            org.junit.Assert.assertEquals(.06, heading ? context.constants.translationalFeedforwardKS
+                    : context.constants.angularFeedforwardKS, 1e-12);
+            for (int trial = 0; trial < 2; trial++) {
+                pump(session, tuner, telemetry, hardware, 400);
+                tuner.gamepad1.x = true;
+                pump(session, tuner, telemetry, hardware, 60);
+                tuner.gamepad1.x = false;
+                tuner.gamepad1.left_stick_y = -1;
+                pump(session, tuner, telemetry, hardware, 180);
+                assertTrue(latestFrame(frames), !latestFrame(frames).contains("Robot can be driven with sticks"));
+                double[] powers = frontMotorPowers(hardware);
+                if (heading) { assertTrue(powers[0] * powers[1] < 0); }
+                else { assertTrue(trial == 0 ? powers[0] > 0 && powers[1] > 0 : powers[0] < 0 && powers[1] < 0); }
+                tuner.gamepad1.left_stick_y = 0;
+                // A cannot accept or stop an active profile.
+                tuner.gamepad1.a = true;
+                pump(session, tuner, telemetry, hardware, 60);
+                tuner.gamepad1.a = false;
+                pump(session, tuner, telemetry, hardware, 3100);
+                String result = latestFrame(frames);
+                assertTrue(result, result.contains("Completed"));
+                assertTrue(result, result.contains("Acceleration velocity mean signed error"));
+                assertTrue(result, result.contains("Cruise velocity mean signed error"));
+                assertTrue(result, !result.contains("Braking velocity mean signed error"));
+                assertTrue(result, result.contains("Next direction " + (heading
+                        ? (trial == 0 ? "CW" : "CCW") : (trial == 0 ? "Backward" : "Forward"))));
+                assertTrue(result, result.contains("Robot can be driven with sticks"));
+            }
+            pressManualA(session, tuner, telemetry, hardware, frames, "Feedforward SysId constants:");
+            SimLinearOpModeBridge.stop(session); session = null;
+            org.codeblooded.ftcodesim.hardware.devices.SimMotor[] motors = StockSimTestSupport.motors(hardware);
+            for (int i = 0; i < motors.length; i++) {
+                org.junit.Assert.assertSame("Stop must restore the upstream motor term", originalTerms[i], motors[i].config.motorModel.terms[1]);
+            }
+            org.junit.Assert.assertArrayEquals(saved,
+                    java.nio.file.Files.readAllBytes(ApexStorage.getConstantsFile().toPath()));
+            for (double power : frontMotorPowers(hardware)) { org.junit.Assert.assertEquals(0, power, 0); }
+        } finally {
+            if (session != null) { SimLinearOpModeBridge.stop(session); }
+            if (previousDirectory == null) { System.clearProperty(ApexStorage.DIRECTORY_PROPERTY); }
+            else { System.setProperty(ApexStorage.DIRECTORY_PROPERTY, previousDirectory); }
+        }
+    }
+
+    private static void awaitManualFrame(SimLinearOpModeBridge.Session session, FollowerTuner tuner,
+            ApexSimTelemetry telemetry, ApexSimulation.Hardware hardware, List<String> frames, String expected) throws Exception {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (!latestFrame(frames).contains(expected) && System.nanoTime() < deadline) {
+            pump(session, tuner, telemetry, hardware, 20);
+        }
+        assertTrue("Expected " + expected + ": " + latestFrame(frames), latestFrame(frames).contains(expected));
+    }
+
+    private static void pressManualA(SimLinearOpModeBridge.Session session, FollowerTuner tuner,
+            ApexSimTelemetry telemetry, ApexSimulation.Hardware hardware, List<String> frames, String expected) throws Exception {
+        tuner.gamepad1.a = true;
+        try { awaitManualFrame(session, tuner, telemetry, hardware, frames, expected); }
+        finally { tuner.gamepad1.a = false; }
+        pump(session, tuner, telemetry, hardware, 80);
+    }
+
+    @Test(timeout = 30_000L)
     public void stopDiscardsUnacceptedManualEdits() throws Exception {
         String previousDirectory = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
         File directory = java.nio.file.Files.createTempDirectory("apex-tuner-stop-").toFile();
