@@ -44,7 +44,6 @@ public class ProfiledTrackingPhaseSimulationTest {
             FollowerConstants values = FollowerConstants.getInstance();
             SimulatorTuning.apply(values);
             values.profiledTrackingTuned = true;
-            double oldGain = values.velocityFeedbackGain;
             List<String> frames = Collections.synchronizedList(new ArrayList<>());
             ApexSimTelemetry telemetry = new ApexSimTelemetry(frames::add);
             telemetry.setMsTransmissionInterval(0);
@@ -74,6 +73,9 @@ public class ProfiledTrackingPhaseSimulationTest {
             pressA(session, opMode, telemetry, hardware);
             waitForFrame(session, opMode, telemetry, hardware, frames,
                     "LB/RB select", 2_000L);
+            // Followers own a copy; edits must be checked on the running instance.
+            values = follower[0].getConstants();
+            double oldGain = values.velocityFeedbackGain;
             opMode.gamepad1.dpad_up = true;
             pump(session, opMode, telemetry, hardware, 40);
             opMode.gamepad1.dpad_up = false;
@@ -167,7 +169,10 @@ public class ProfiledTrackingPhaseSimulationTest {
                     StandardCharsets.UTF_8);
             assertTrue("Single-corner profile was not sampled",
                     trace.contains(",SINGLE_CORNER,"));
-            assertTrue("Active profile was not marked reviewed", values.profiledTrackingTuned);
+            FollowerConstants saved = FollowerConstants.fromJson(new org.json.JSONObject(
+                    new String(Files.readAllBytes(ApexStorage.getConstantsFile().toPath()),
+                            StandardCharsets.UTF_8)));
+            assertTrue("Active profile was not marked reviewed", saved.profiledTrackingTuned);
         } finally {
             if (session != null) { SimLinearOpModeBridge.stop(session); }
             if (previousDirectory == null) { System.clearProperty(ApexStorage.DIRECTORY_PROPERTY); }

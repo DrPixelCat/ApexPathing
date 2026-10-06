@@ -318,8 +318,29 @@ public class FollowerTunerTelemetryTest {
         SimLinearOpModeBridge.Session session = SimLinearOpModeBridge.initialize(tuner, () -> { });
         try {
             pump(session, tuner, telemetry, hardware, 100);
+            // Keep plant stepping and localization on the OpMode thread. Advancing physics
+            // concurrently from the gamepad pump can expose partially updated sensor poses.
+            java.lang.reflect.Field contextField = FollowerTuner.class.getDeclaredField("context");
+            contextField.setAccessible(true);
+            tuning.follower.TunerContext original = (tuning.follower.TunerContext) contextField.get(tuner);
+            tuning.follower.TunerContext synchronizedContext = new tuning.follower.TunerContext(tuner) {
+                private long previousPhysics = System.nanoTime();
+                @Override public void beginFrame() {
+                    long now = System.nanoTime();
+                    double remaining = (now - previousPhysics) * 1e-9;
+                    previousPhysics = now;
+                    while (remaining > 1e-9) {
+                        double dt = Math.min(.005, remaining);
+                        ApexSimulation.stepPhysics(hardware, dt);
+                        remaining -= dt;
+                    }
+                    super.beginFrame();
+                }
+            };
+            synchronizedContext.setFollower(original.getFollower());
+            contextField.set(tuner, synchronizedContext);
             tuner.gamepad1.a = true;
-            pump(session, tuner, telemetry, hardware, 30);
+            pump(session, tuner, telemetry, hardware, 30, false);
             tuner.gamepad1.a = false;
             SimLinearOpModeBridge.start(session);
 
@@ -334,19 +355,19 @@ public class FollowerTunerTelemetryTest {
                             frame.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     lastProgressNanos = System.nanoTime();
                 }
-                assertTrue("Automatic feedforward validation failed:\n" + frame,
+                assertTrue("Automatic follower tuning validation failed:\n" + frame,
                         !frame.contains("validation failed"));
                 String controller = frame.contains("Tuning Heading kP, kD") ? "heading" : "drive";
                 if (frame.contains("Press X to run a verification step") && verifiedControllers.add(controller)) {
                     tuner.gamepad1.x = true;
-                    pump(session, tuner, telemetry, hardware, 40);
+                    pump(session, tuner, telemetry, hardware, 40, false);
                     tuner.gamepad1.x = false;
                 } else if (frame.contains("Press A")) {
                     tuner.gamepad1.a = true;
-                    pump(session, tuner, telemetry, hardware, 30);
+                    pump(session, tuner, telemetry, hardware, 30, false);
                     tuner.gamepad1.a = false;
                 }
-                pump(session, tuner, telemetry, hardware, 20);
+                pump(session, tuner, telemetry, hardware, 20, false);
             }
 
             assertTrue("Automatic follower tuning did not finish. Latest telemetry:\n" +
@@ -372,11 +393,17 @@ public class FollowerTunerTelemetryTest {
     private static void pump(SimLinearOpModeBridge.Session session, FollowerTuner tuner,
                              ApexSimTelemetry telemetry, ApexSimulation.Hardware hardware,
                              long milliseconds) throws Exception {
+        pump(session, tuner, telemetry, hardware, milliseconds, true);
+    }
+
+    private static void pump(SimLinearOpModeBridge.Session session, FollowerTuner tuner,
+                             ApexSimTelemetry telemetry, ApexSimulation.Hardware hardware,
+                             long milliseconds, boolean advancePhysics) throws Exception {
         long deadline = System.nanoTime() + milliseconds * 1_000_000L;
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
-            double remaining = Math.max(0, Math.min(0.25,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+            double remaining = advancePhysics ? Math.max(0, Math.min(0.25,
+                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9)) : 0;
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double step = Math.min(0.005, remaining);
