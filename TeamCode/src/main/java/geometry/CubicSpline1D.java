@@ -6,8 +6,6 @@ package geometry;
  * <p>This class constructs a cubic spline based on given x and y data points. It provides methods
  * to evaluate the spline and its first/second derivatives at any point within the range of the
  * input data.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class CubicSpline1D {
     private final double[] x;

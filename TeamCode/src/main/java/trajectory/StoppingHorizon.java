@@ -7,7 +7,11 @@ import drivetrains.Mecanum;
 import trajectory.profile.DynamicMotionProfile;
 import paths.movements.Path;
 
-/** Fixed lookahead selected once from power-limited braking, with distance and reaction headroom. */
+/**
+ * Fixed lookahead selected once from power-limited braking, with distance and reaction headroom.
+ *
+ * @author Joel H
+ */
 public final class StoppingHorizon {
     private StoppingHorizon() { }
 

@@ -3,7 +3,6 @@ package geometry;
 /**
  * A generic class for matrix mathematics.
  *
- * @author DrPixelCat - 7842 alum
  * @author Sohum Arora - 22985 Paraducks
  */
 public class Matrix {

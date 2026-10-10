@@ -7,7 +7,6 @@ package geometry;
  * entire path. Because they are evaluated using a sliding 4-point window, calculating a point on
  * the curve runs in O(1) constant time, regardless of how many control points are in the path.
  *
- * @author DrPixelCat - 7842 alum
  * @author Sohum Arora - 22895 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
  */

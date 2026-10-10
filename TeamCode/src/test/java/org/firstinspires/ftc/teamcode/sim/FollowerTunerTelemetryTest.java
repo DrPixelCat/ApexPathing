@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertTrue;
 
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
@@ -71,7 +73,13 @@ public class FollowerTunerTelemetryTest {
             tuner.gamepad1.dpad_right = false;
             pump(session, tuner, telemetry, hardware, 60);
             awaitManualFrame(session, tuner, telemetry, hardware, frames, "Mode Manual");
-            pressManualA(session, tuner, telemetry, hardware, frames, "LB/RB: select value");
+            pressManualA(session, tuner, telemetry, hardware, frames, "LB/RB select");
+            String idleFrame = latestFrame(frames);
+            assertTrue(idleFrame, idleFrame.contains("-> kS:"));
+            assertTrue(idleFrame, idleFrame.contains("Increment "));
+            assertTrue(idleFrame, idleFrame.contains(heading ? "Clear rotation:" : "Clear lane:"));
+            assertTrue(idleFrame, !idleFrame.contains("Profile:"));
+            assertTrue(idleFrame, idleFrame.trim().split("\\R").length <= 10);
             for (org.codeblooded.ftcodesim.hardware.devices.SimMotor motor : StockSimTestSupport.motors(hardware)) {
                 org.junit.Assert.assertEquals(-12, motor.config.motorModel.terms[1].calculate(12, .3, 13), 0);
             }
@@ -101,6 +109,11 @@ public class FollowerTunerTelemetryTest {
                 tuner.gamepad1.left_stick_y = -1;
                 pump(session, tuner, telemetry, hardware, 180);
                 assertTrue(latestFrame(frames), !latestFrame(frames).contains("Robot can be driven with sticks"));
+                String runningFrame = latestFrame(frames);
+                assertTrue(runningFrame, runningFrame.contains("Stop: cancel test"));
+                assertTrue(runningFrame, !runningFrame.contains("LB/RB") && !runningFrame.contains("X:"));
+                assertTrue(runningFrame, !runningFrame.contains("Clear lane:") && !runningFrame.contains("Clear rotation:"));
+                assertTrue(runningFrame, runningFrame.trim().split("\\R").length <= 10);
                 double[] powers = frontMotorPowers(hardware);
                 if (heading) { assertTrue(powers[0] * powers[1] < 0); }
                 else { assertTrue(trial == 0 ? powers[0] > 0 && powers[1] > 0 : powers[0] < 0 && powers[1] < 0); }
@@ -112,12 +125,14 @@ public class FollowerTunerTelemetryTest {
                 pump(session, tuner, telemetry, hardware, 3100);
                 String result = latestFrame(frames);
                 assertTrue(result, result.contains("Completed"));
-                assertTrue(result, result.contains("Acceleration velocity mean signed error"));
-                assertTrue(result, result.contains("Cruise velocity mean signed error"));
+                assertTrue(result, result.contains("Accel mean error"));
+                assertTrue(result, result.contains("Cruise mean error"));
+                assertTrue(result, result.contains(heading ? " rad/s" : " in/s"));
+                assertTrue(result, result.trim().split("\\R").length <= 12);
                 assertTrue(result, !result.contains("Braking velocity mean signed error"));
                 assertTrue(result, result.contains("Next direction " + (heading
                         ? (trial == 0 ? "CW" : "CCW") : (trial == 0 ? "Backward" : "Forward"))));
-                assertTrue(result, result.contains("Robot can be driven with sticks"));
+                assertTrue(result, result.trim().endsWith("Robot can be driven with sticks"));
             }
             pressManualA(session, tuner, telemetry, hardware, frames, "Feedforward SysId constants:");
             SimLinearOpModeBridge.stop(session); session = null;
@@ -327,7 +342,7 @@ public class FollowerTunerTelemetryTest {
                 private long previousPhysics = System.nanoTime();
                 @Override public void beginFrame() {
                     long now = System.nanoTime();
-                    double remaining = (now - previousPhysics) * 1e-9;
+                    double remaining = DeltaTime.seconds(now - previousPhysics);
                     previousPhysics = now;
                     while (remaining > 1e-9) {
                         double dt = Math.min(.005, remaining);
@@ -356,7 +371,7 @@ public class FollowerTunerTelemetryTest {
                     lastProgressNanos = System.nanoTime();
                 }
                 assertTrue("Automatic follower tuning validation failed:\n" + frame,
-                        !frame.contains("validation failed"));
+                        !frame.contains("validation failed") && !frame.contains("acquisition failed"));
                 String controller = frame.contains("Tuning Heading kP, kD") ? "heading" : "drive";
                 if (frame.contains("Press X to run a verification step") && verifiedControllers.add(controller)) {
                     tuner.gamepad1.x = true;
@@ -403,7 +418,7 @@ public class FollowerTunerTelemetryTest {
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
             double remaining = advancePhysics ? Math.max(0, Math.min(0.25,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9)) : 0;
+                    DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos))) : 0;
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double step = Math.min(0.005, remaining);

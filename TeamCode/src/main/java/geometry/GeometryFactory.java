@@ -12,7 +12,6 @@ import paths.movements.Turn;
  * {@link Vector}, {@link Dist}, and {@link Angle} objects with specified units.
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author DrPixelCat - 7842 alum
  */
 @SuppressWarnings("ClassNamePrefixedWithPackageName")
 public class GeometryFactory {

@@ -18,7 +18,7 @@ import paths.movements.Path;
  * Because tank drives cannot strafe, heading interpolation is automatically locked to the path
  * tangent.
  *
- * @author DrPixelCat
+ * @author Joel H
  */
 public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
     /**

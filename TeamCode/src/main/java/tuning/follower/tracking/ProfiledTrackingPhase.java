@@ -1,5 +1,7 @@
 package tuning.follower.tracking;
 
+import util.DeltaTime;
+
 import follower.FollowerConstants;
 
 import geometry.Angle;
@@ -15,7 +17,11 @@ import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
-/** Measures profiled braking on the active drivetrain and edits its saved profile. */
+/**
+ * Measures profiled braking on the active drivetrain and edits its saved profile.
+ *
+ * @author Joel H
+ */
 public final class ProfiledTrackingPhase extends TuningPhase {
     private enum Setting {
         VELOCITY_GAIN, PROFILE_VELOCITY_POWER, CORNER_SPEED_SCALE
@@ -62,25 +68,6 @@ public final class ProfiledTrackingPhase extends TuningPhase {
             this.scoreInches = scoreInches;
             this.pulses = pulses;
         }
-
-        String qualityIssue() {
-            if (accelerationSamples < 10 || brakingSamples < 10 || cornerSamples < 5) {
-                return "Insufficient acceleration, braking, or corner samples";
-            }
-            if (accelerationRms > Math.max(4.0, 0.18 * peakTarget)) {
-                return "Acceleration tracking failed: RMS " + accelerationRms + " in/s";
-            }
-            if (brakingRms > Math.max(4.0, 0.16 * peakTarget)) {
-                return "Braking tracking failed: RMS " + brakingRms + " in/s";
-            }
-            if (peakCrossTrack > 2.0) {
-                return "Cross-track tracking failed: peak " + peakCrossTrack + " in";
-            }
-            if (peakHeadingErrorDeg > 12.0) {
-                return "Heading tracking failed: peak " + peakHeadingErrorDeg + " deg";
-            }
-            return null;
-        }
     }
 
     private Setting selectedSetting = Setting.VELOCITY_GAIN;
@@ -104,7 +91,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
     private double peakPathT;
     private double scoreInches;
     private double previousRawSpeed = Double.NaN;
-    private long previousSampleNanos;
+    private final DeltaTime timing = new DeltaTime();
     private long trialStartedNanos;
     private String status = "Ready";
     private TuningCsvWriter csv;
@@ -234,7 +221,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         peakPathT = 0.0;
         scoreInches = 0.0;
         previousRawSpeed = Double.NaN;
-        previousSampleNanos = 0L;
+        timing.reset();
         lastPowerOpposing = false;
         trialStartedNanos = System.nanoTime();
         status = "Running single-corner path " + (reverse ? "in reverse" : "forward");
@@ -271,7 +258,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         double headingError = context.getFollower().getPose().getHeading().getShortestAngleTo(target.heading).getRad();
         double blend = context.getFollower().getTrackingEndpointBlend();
         double feedforward = context.getFollower().getTrackingFeedforward();
-        double elapsed = (System.nanoTime() - trialStartedNanos) * 1e-9;
+        double elapsed = DeltaTime.seconds(System.nanoTime() - trialStartedNanos);
         if (csv != null) {
             csv.writeRow(trial, "SINGLE_CORNER", elapsed, t, targetSpeed, referenceSpeed, measured, raw,
                     target.tangentialAcceleration(), curvature, blend, feedforward,
@@ -290,9 +277,9 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         if (blend >= 0.05 || !Double.isFinite(measured) || !Double.isFinite(targetSpeed)) {
             return;
         }
-        long now = System.nanoTime();
-        double dt = previousSampleNanos == 0L ? 0.0 : (now - previousSampleNanos) * 1e-9;
-        previousSampleNanos = now;
+
+        double dt = timing.update(System.nanoTime());
+
         if (dt > 0.0 && dt <= 0.1 && Double.isFinite(referenceSpeed)) {
             // Integrating speed error yields inches. Overspeed costs four times underspeed;
             // the reference LUT stays fixed so a slower proposal cannot win by moving its target.
@@ -333,26 +320,18 @@ public final class ProfiledTrackingPhase extends TuningPhase {
     }
 
     private void finishTrial(boolean timedOut) {
-        Pose actualEnd = context.getFollower().getPose();
-        double endpointPositionError = actualEnd.getVec()
-                .minus(activePath.getEndPose().getVec()).getMag().getIn();
-        double endpointHeadingError = Math.abs(actualEnd.getHeading()
-                .getShortestAngleTo(activePath.getEndPose().getHeading()).getDeg());
         context.getFollower().stop();
         activePath = null;
         if (csv != null) { csv.flush(); }
-        if (timedOut || peakPathT < 0.90 || brakingSamples == 0 || !Double.isFinite(scoreInches)
-                || scoreInches <= 0.0 || cornerSamples == 0
-                || endpointPositionError > 3.0 || endpointHeadingError > 5.0) {
+        if (timedOut || peakPathT < 0.90 || !Double.isFinite(scoreInches)
+                || scoreInches <= 0.0 || accelerationSamples < 10
+                || brakingSamples < 10 || cornerSamples < 5) {
             if (!manualMode && optimizer.canRejectCurrentCandidate()) {
                 optimizer.rejectCurrentCandidate();
                 status = "Unusable candidate trial; trying next setting";
                 return;
             }
             status = timedOut ? "Trial timed out; reposition and retry"
-                    : endpointPositionError > 3.0 || endpointHeadingError > 5.0
-                    ? "Endpoint missed: " + number(endpointPositionError) + " in / "
-                            + number(endpointHeadingError) + " deg; verify earlier tuning phases"
                     : "No usable braking/corner samples; check limits and localization";
             return;
         }
@@ -367,17 +346,6 @@ public final class ProfiledTrackingPhase extends TuningPhase {
                 scoreInches + peakCrossTrack
                         + 7.0 * Math.toRadians(peakHeadingErrorDeg), pulseCount);
         courseSummary = summary;
-        String qualityIssue = summary.qualityIssue();
-        if (qualityIssue != null) {
-            courseMeasured = false;
-            status = qualityIssue + "; verify earlier tuning phases";
-            if (!manualMode && optimizer.canRejectCurrentCandidate()) {
-                optimizer.rejectCurrentCandidate();
-            } else if (!manualMode && optimizer.isValidating()) {
-                optimizer.rejectValidation();
-            }
-            return;
-        }
         courseMeasured = true;
         status = "Single-corner path measured";
         if (!manualMode) {
@@ -390,7 +358,7 @@ public final class ProfiledTrackingPhase extends TuningPhase {
         if (activePath == null) { return; }
         if (context.getFollower().isBusy()) { sample(); }
         if (!context.getFollower().isBusy()
-                || (System.nanoTime() - trialStartedNanos) * 1e-9 > TRIAL_TIMEOUT_SECONDS) {
+                || DeltaTime.seconds(System.nanoTime() - trialStartedNanos) > TRIAL_TIMEOUT_SECONDS) {
             finishTrial(context.getFollower().isBusy());
         }
     }

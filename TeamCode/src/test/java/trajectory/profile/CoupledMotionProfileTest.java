@@ -4,6 +4,37 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CoupledMotionProfileTest {
+    @Test public void kinematicBoundsPreserveRandomizedNonuniformProfilesAndReduceSearches() {
+        java.util.Random random = new java.util.Random(4071);
+        int[] unboundedCalls = {0}, boundedCalls = {0};
+        for (int trial = 0; trial < 100; trial++) {
+            double[] positions = new double[30], ceilings = new double[30], accelerations = new double[29];
+            for (int i = 0; i < positions.length; i++) {
+                ceilings[i] = 10 + random.nextDouble() * 50;
+                if (i > 0) { positions[i] = positions[i - 1] + .1 + random.nextDouble() * 3; }
+                if (i < accelerations.length) { accelerations[i] = 2 + random.nextDouble() * 98; }
+            }
+            CoupledMotionProfile.Transitions original = (i, q, ceiling) -> {
+                unboundedCalls[0]++;
+                double change = 2 * (positions[i + 1] - positions[i]) * accelerations[i];
+                return q - change > ceiling + 1e-9 ? Double.NaN : Math.min(ceiling, q + change);
+            };
+            CoupledMotionProfile.Transitions bounded = new CoupledMotionProfile.Transitions() {
+                @Override public double maximumNextSquared(int i, double q, double ceiling) {
+                    boundedCalls[0]++;
+                    double change = 2 * (positions[i + 1] - positions[i]) * accelerations[i];
+                    return q - change > ceiling + 1e-9 ? Double.NaN : Math.min(ceiling, q + change);
+                }
+                @Override public double previousSquaredUpperBound(int i, double ceiling) {
+                    return Math.nextUp(ceiling + 2 * (positions[i + 1] - positions[i]) * accelerations[i]);
+                }
+            };
+            assertArrayEquals(CoupledMotionProfile.solve(positions, ceilings, 0.0, 0, original),
+                    CoupledMotionProfile.solve(positions, ceilings, 0.0, 0, bounded), 1e-6);
+        }
+        assertTrue("Physical bounds should eliminate unnecessary root searches", boundedCalls[0] * 5 < unboundedCalls[0]);
+    }
+
     @Test public void onlineWorkspaceMatchesFullSolveAndStillRejectsInvalidFutureTransitions() {
         CoupledMotionProfile.Workspace workspace = new CoupledMotionProfile.Workspace();
         double[] positions = new double[40], ceilings = new double[40];

@@ -122,7 +122,7 @@ public class TrajectoryTest {
         assertTrue(longPath.getLastSampleCount() <= 12);
         assertTrue(Math.abs(longPath.getLastSampleCount() - shortPath.getLastSampleCount()) <= 2);
     }
-    @Test public void onlineWindowUsesCoarserReusableGeometryAndExactConstraintTransitions() {
+    @Test public void onlineWindowRetainsFullGeometryAndExactConstraintTransitions() {
         class CountingSegment extends PathSegment {
             int reconstructedPoints;
             boolean reconstructedConstraint;
@@ -140,15 +140,21 @@ public class TrajectoryTest {
         CountingSegment segment = new CountingSegment();
         path.setParametricPath(segment);
         OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
-        for (double progress : new double[]{20, 20.1, 28}) {
+        for (double progress : new double[]{20, 20.1, 30}) {
             segment.reconstructedPoints = 0;
             segment.reconstructedConstraint = false;
             TrajectorySample target = planner.sample(vec(progress, 0), vec(20, 0), .02);
-            assertTrue("20-inch window should use about ten nodes, including the constraint", planner.getLastSampleCount() <= 12);
-            assertTrue("Only boundaries, midpoint, constraint and published target need reconstruction", segment.reconstructedPoints <= 5);
+            int expected = 4; // Exact start, midpoint, end, and the authored transition at 31 inches.
+            for (geometry.PathPoint point : segment.getPointLUT()) {
+                double distance = segment.getLengthIn() - point.getDistanceToEndIn();
+                if (distance > progress + 1e-6 && distance < progress + 20 - 1e-6
+                        && Math.abs(distance - (progress + 10)) > 1e-9 && Math.abs(distance - 31) > 1e-9) { expected++; }
+            }
+            assertEquals("Every interior LUT node must be retained", expected, planner.getLastSampleCount());
+            assertTrue("Only boundaries, midpoint and the first constraint need reconstruction", segment.reconstructedPoints <= 4);
             if (progress == 20) { assertTrue("The authored transition must be sampled at its exact distance", segment.reconstructedConstraint); }
             else { assertFalse("The authored transition geometry should be reused", segment.reconstructedConstraint); }
-            if (progress == 28) { assertTrue(target.tangentialAcceleration() < 0); }
+            if (progress == 30) { assertTrue(target.tangentialAcceleration() < 0); }
         }
     }
     @Test public void onlineCachesRefreshAfterConstraintHeadingAndPhysicalLimitChanges() {

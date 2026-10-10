@@ -38,7 +38,8 @@ public class AnalyticPowerBoundsTest {
                 }
                 c.motionCharacterization = new MotionCharacterization(models, true);
             }
-            for (BaseProfileGenerator generator : new BaseProfileGenerator[]{new MecanumProfileGenerator(c, path), new TankProfileGenerator(c, path)}) {
+            for (BaseProfileGenerator generator : new BaseProfileGenerator[]{new MecanumProfileGenerator(c, path),
+                    new TankProfileGenerator(c, path), new SwerveProfileGenerator(c, path)}) {
                 for (int i = 0; i < 250; i++) {
                     PathPoint point = path.getParametricPath().getPointAtDistance(random.nextDouble() * path.getParametricPath().getLengthIn());
                     BaseProfileGenerator.PowerEvaluator evaluator = generator.powerEvaluator(path, point);

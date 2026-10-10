@@ -4,6 +4,8 @@ package localizers.util;
  * Reusable linear Kalman mathematics. The caller supplies the motion model, process covariance,
  * observation model and measurement variance. Timing, units, robust weighting and noise learning
  * belong to the estimator using this core. Scalar corrections can assimilate any linear observation.
+ *
+ * @author Joel H
  */
 public final class KalmanFilter {
     private final int size;

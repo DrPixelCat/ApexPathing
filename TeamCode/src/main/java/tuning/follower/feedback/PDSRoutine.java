@@ -1,16 +1,21 @@
 package tuning.follower.feedback;
 
+import util.DeltaTime;
+
 import tuning.follower.TunerContext;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
-import controllers.PDSController;
-import controllers.PDSController.PDSCoefficients;
+import controllers.FeedbackController;
 import controllers.FeedbackController.Coefficients;
 import geometry.Angle;
 
-/** Non-blocking coordinate-descent tuner shared by linear and angular PDS controllers. */
+/**
+ * Non-blocking coordinate-descent tuner for linear and angular PD/static feedback gains.
+ *
+ * @author Joel H
+ */
 public final class PDSRoutine {
     // region Configuration
 
@@ -80,7 +85,7 @@ public final class PDSRoutine {
     private static final double MINIMUM_RELATIVE_IMPROVEMENT = 0.02;
     private static final double MINIMUM_ABSOLUTE_IMPROVEMENT = 0.05;
     private final Config config;
-    private final PDSController controller;
+    private final FeedbackController controller;
     private final ElapsedTime clock = new ElapsedTime();
     private final double[] gains = new double[2];
     private final double[] bestGains = new double[2];
@@ -89,7 +94,8 @@ public final class PDSRoutine {
     private Evaluation evaluation = Evaluation.BASELINE;
     private boolean started;
     private double origin = Double.NaN, position, target, error, direction, nextDirection = 1.0;
-    private double validTime, settledTime, errorIntegral, overshoot, saturatedTime, lastTime;
+    private double validTime, settledTime, errorIntegral, overshoot, saturatedTime;
+    private final DeltaTime timing = new DeltaTime();
     private double candidateCost, bestCost = Double.POSITIVE_INFINITY;
     private int candidateTrials, coordinate, coordinateSteps;
 
@@ -102,7 +108,7 @@ public final class PDSRoutine {
                 staticPower < 0.0 || staticPower >= COMMAND_LIMIT) {
             throw new IllegalArgumentException("Invalid PDS tuning seed");
         }
-        controller = new PDSController(new PDSCoefficients(0.0, 0.0, staticPower));
+        controller = new FeedbackController(new Coefficients().p(0.0).d(0.0).s(staticPower));
         if (config.angular) { controller.setAngularController(); }
         gains[0] = Range.clip(initialP, config.minP, config.maxP);
         gains[1] = Range.clip(initialD, config.minD, config.maxD);
@@ -177,7 +183,7 @@ public final class PDSRoutine {
 
     /** Returns active PD/static gains in the follower's current coefficient format. */
     public Coefficients getCoefficients() {
-        PDSCoefficients c = controller.getCoefficients();
+        Coefficients c = controller.getCoefficients();
         return new Coefficients().p(c.kP).d(c.kD).s(c.kS);
     }
 
@@ -238,7 +244,8 @@ public final class PDSRoutine {
         // measured stopping position accumulates residual error over dozens of trials and can
         // walk an otherwise stable out-and-back test beyond its original safety envelope.
         target = anchoredTarget(direction, config.step);
-        validTime = settledTime = errorIntegral = overshoot = saturatedTime = lastTime = 0.0;
+        validTime = settledTime = errorIntegral = overshoot = saturatedTime = 0.0;
+        timing.reset(0L);
         controller.reset();
         state = candidateTrials < 0 ? PDSState.TEST_RUNNING : PDSState.TUNING;
         clock.reset();
@@ -247,9 +254,9 @@ public final class PDSRoutine {
 
     /** Measures one response while rejecting lag-spike time intervals. */
     private double measure(double velocity) {
-        double now = clock.seconds();
-        double rawDt = now - lastTime;
-        lastTime = now;
+
+        double rawDt = timing.update((long) clock.nanoseconds());
+
         if (rawDt > 0.15) {
             // Physics and localization may have advanced discontinuously. Retry this direction;
             // ignoring only dt would still leave its jumped position embedded in the response.
@@ -271,7 +278,7 @@ public final class PDSRoutine {
         boolean inside = Math.abs(error) <= config.tolerance &&
                 Math.abs(velocity) <= config.velocityTolerance;
         settledTime = inside ? settledTime + dt : 0.0;
-        double raw = controller.calculate(error, -velocity);
+        double raw = controller.p().d(-velocity).s().calculate(error).get();
         double command = Range.clip(raw, -COMMAND_LIMIT, COMMAND_LIMIT);
         if (dt > 0.0 && Math.abs(raw) >= COMMAND_LIMIT) { saturatedTime += dt; }
         if (settledTime >= SETTLED_TIME || validTime >= TRIAL_TIMEOUT) {
@@ -376,8 +383,8 @@ public final class PDSRoutine {
 
     /** Applies the current candidate. */
     private void applyGains() {
-        controller.setCoefficients(new PDSCoefficients(
-                gains[0], gains[1], controller.getCoefficients().kS));
+        controller.setCoefficients(new Coefficients()
+                .p(gains[0]).d(gains[1]).s(controller.getCoefficients().kS));
     }
 
     private double clip(int index, double value) {

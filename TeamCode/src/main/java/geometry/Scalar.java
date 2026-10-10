@@ -7,7 +7,7 @@ import androidx.annotation.NonNull;
 /**
  * An immutable, unitless scalar value.
  *
- * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Joel H
  */
 public class Scalar {
     private final double value;

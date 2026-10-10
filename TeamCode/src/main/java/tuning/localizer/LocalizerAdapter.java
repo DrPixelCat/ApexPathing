@@ -4,7 +4,7 @@ import java.util.List;
 
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.calibration.CalibrationSnapshot;
 import tuning.localizer.calibration.DirectionTrial;
@@ -19,7 +19,7 @@ public interface LocalizerAdapter {
     String getName();
 
     /** Returns whether a measured-distance trial can identify this axis. */
-    boolean supportsDistance(CalibrationAxis axis);
+    boolean supportsDistance(TranslationAxis axis);
 
     /** Returns whether rotation can identify offsets or heading scale. */
     boolean supportsSpinCalibration();
@@ -32,7 +32,7 @@ public interface LocalizerAdapter {
                                        List<DirectionTrial> trials);
 
     /** Fits geometry from measured translation without mutating the active configuration. */
-    CalibrationCandidate fitDistance(BaseLocalizerConstants<?> config, CalibrationAxis axis,
+    CalibrationCandidate fitDistance(BaseLocalizerConstants<?> config, TranslationAxis axis,
                                      CalibrationSnapshot start, CalibrationSnapshot end,
                                      double measuredInches);
 

@@ -32,7 +32,7 @@ import paths.movements.Turn;
  * while this class retains lifecycle, hardware, tuning, and diagnostic APIs.
  *
  * @author Sohum Arora - 22985 Paraducks
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  * @author Dylan B. - 18597 RoboClovers - Delta
  * @author Xander Haemel - 31616 404 Not Found
  */

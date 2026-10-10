@@ -1,5 +1,7 @@
 package tuning.localizer.phases;
 
+import util.DeltaTime;
+
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.calibration.CalibrationSnapshot;
 import tuning.localizer.calibration.SpinTrial;
@@ -41,7 +43,7 @@ public final class SpinPhase extends TuningPhase {
     private double measuredAngularVelocity;
     private final LowPassFilter angularVelocityFilter = new LowPassFilter();
     private boolean turnVelocityReached;
-    private long controlLastUpdateNanos;
+    private final DeltaTime timing = new DeltaTime();
     private long stageStarted;
     private long spinStarted;
     private Stage stage;
@@ -87,7 +89,7 @@ public final class SpinPhase extends TuningPhase {
         if (useImu) { imuAngle.resetMeasurement(readQuaternion()); }
         stageStarted = System.nanoTime();
         spinStarted = stageStarted;
-        controlLastUpdateNanos = stageStarted;
+        timing.reset(stageStarted);
         angularVelocityFilter.reset();
     }
 
@@ -115,9 +117,8 @@ public final class SpinPhase extends TuningPhase {
                 return false;
             }
 
-            long now = System.nanoTime();
             double dt = Math.min(0.10, Math.max(1e-3,
-                    (now - controlLastUpdateNanos) * 1e-9));
+                    timing.update(System.nanoTime())));
             measuredAngularVelocity = angularVelocityFilter.update(measuredAngle).rate();
             if (!turnVelocityReached) {
                 if (Math.abs(measuredAngularVelocity) >= TURN_VELOCITY_RAD_PER_SECOND) {
@@ -127,7 +128,7 @@ public final class SpinPhase extends TuningPhase {
                 }
             }
             context.getDrivetrain().moveWithVectors(0.0, 0.0, turnPower);
-            controlLastUpdateNanos = now;
+
             context.getTelemetry().addData("Turn velocity",
                     context.formatNumber(Math.toDegrees(measuredAngularVelocity))
                             + " / 45 deg/s");

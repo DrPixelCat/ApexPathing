@@ -19,7 +19,7 @@ import localizers.BaseLocalizerConstants;
 import localizers.TankDriveEncoders;
 import localizers.ThreeWheel;
 import localizers.TwoWheel;
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.calibration.CalibrationSnapshot;
 import tuning.localizer.calibration.DirectionTrial;
@@ -33,7 +33,7 @@ public class LocalizerAdaptersTest {
     @Test public void distanceScaleUsesPhysicalOverReportedRatio() {
         TwoWheel.Constants config = new TwoWheel.Constants().setTicksPerInch(100.0);
         LocalizerAdapter adapter = LocalizerAdapters.create(config);
-        CalibrationCandidate result = adapter.fitDistance(config, CalibrationAxis.FORWARD,
+        CalibrationCandidate result = adapter.fitDistance(config, TranslationAxis.FORWARD,
                 snapshot(0, 0, 0, 0, 0), snapshot(10, 0, 0, 1000, 0), 20.0);
         assertEquals(50.0, result.getValues().optDouble("ticksPerInch"), EPS);
     }
@@ -55,7 +55,7 @@ public class LocalizerAdaptersTest {
         Pinpoint.Constants config = new Pinpoint.Constants()
                 .setEncoderResolution(Pinpoint.GoBildaPods.goBILDA_4_BAR_POD);
         LocalizerAdapter adapter = LocalizerAdapters.create(config);
-        JSONObject result = adapter.fitDistance(config, CalibrationAxis.FORWARD,
+        JSONObject result = adapter.fitDistance(config, TranslationAxis.FORWARD,
                 snapshot(0, 0, 0), snapshot(10, 0, 0), 20).getValues();
         assertEquals(19.89436789 / 25.4 * 0.5,
                 result.optDouble("customEncoderResolutionIn"), EPS);
@@ -90,7 +90,7 @@ public class LocalizerAdaptersTest {
                 .addRightEncoder("rightFront", 100, true)
                 .addRightEncoder("rightBack", 200, true);
         JSONObject values = LocalizerAdapters.create(config).fitDistance(config,
-                CalibrationAxis.FORWARD, snapshot(0, 0, 0, 0, 0, 0, 0),
+                TranslationAxis.FORWARD, snapshot(0, 0, 0, 0, 0, 0, 0),
                 snapshot(10, 0, 0, 1000, 2000, -1000, -2000), 20).getValues();
         assertEquals(50.0, values.optJSONArray("left").optJSONObject(0)
                 .optDouble("ticksPerInch"), EPS);
@@ -108,7 +108,7 @@ public class LocalizerAdaptersTest {
                 .setBackLeftName("bl").setBackRightName("br")
                 .setEncoderDirections(false, false, false, false);
         JSONObject mecanumValues = LocalizerAdapters.create(mecanum).fitDirections(mecanum,
-                Arrays.asList(direction(CalibrationAxis.FORWARD,
+                Arrays.asList(direction(TranslationAxis.FORWARD,
                         new int[] {0, 0, 0, 0}, new int[] {-100, 100, -100, 100})))
                 .getValues();
         assertEquals(true, mecanumValues.optBoolean("frontLeftReversed"));
@@ -120,7 +120,7 @@ public class LocalizerAdaptersTest {
                 .addLeftEncoder("left", 100, false)
                 .addRightEncoder("right", 100, true);
         JSONObject tankValues = LocalizerAdapters.create(tank).fitDirections(tank,
-                Arrays.asList(direction(CalibrationAxis.FORWARD,
+                Arrays.asList(direction(TranslationAxis.FORWARD,
                         new int[] {0, 0}, new int[] {-100, -100}))).getValues();
         assertEquals(true, tankValues.optJSONArray("left").optJSONObject(0)
                 .optBoolean("reversed"));
@@ -131,9 +131,9 @@ public class LocalizerAdaptersTest {
                 Pinpoint.EncoderDirection.FORWARD, Pinpoint.EncoderDirection.FORWARD);
         JSONObject pinpointValues = LocalizerAdapters.create(pinpoint).fitDirections(pinpoint,
                 Arrays.asList(
-                        direction(CalibrationAxis.FORWARD,
+                        direction(TranslationAxis.FORWARD,
                                 new int[] {0, 0}, new int[] {-100, 0}),
-                        direction(CalibrationAxis.STRAFE,
+                        direction(TranslationAxis.STRAFE,
                                 new int[] {-100, 0}, new int[] {-100, -100})))
                 .getValues();
         assertEquals("REVERSED", pinpointValues.optString("xPodDirection"));
@@ -144,7 +144,7 @@ public class LocalizerAdaptersTest {
         MecanumDriveEncoders.Constants mecanum = new MecanumDriveEncoders.Constants()
                 .setTicksPerInch(100.0);
         JSONObject mecanumValues = LocalizerAdapters.create(mecanum).fitDistance(mecanum,
-                CalibrationAxis.STRAFE, snapshot(0, 0, 0), snapshot(0, 10, 0), 20)
+                TranslationAxis.STRAFE, snapshot(0, 0, 0), snapshot(0, 10, 0), 20)
                 .getValues();
         assertEquals(50.0, mecanumValues.optDouble("ticksPerInch"), EPS);
 
@@ -153,7 +153,7 @@ public class LocalizerAdaptersTest {
                 .setOffsets(1.0, 2.0, DistUnit.IN)
                 .setYawScalar(0.8);
         JSONObject octoDistance = LocalizerAdapters.create(octoquad).fitDistance(octoquad,
-                CalibrationAxis.FORWARD, snapshot(0, 0, 0), snapshot(10, 0, 0), 20)
+                TranslationAxis.FORWARD, snapshot(0, 0, 0), snapshot(10, 0, 0), 20)
                 .getValues();
         assertEquals(octoquad.encoderResolution.getIn() / 2.0,
                 octoDistance.optDouble("encoderResolutionIn"), EPS);
@@ -175,7 +175,7 @@ public class LocalizerAdaptersTest {
 
         OTOS.Constants otos = new OTOS.Constants();
         JSONObject otosDistance = LocalizerAdapters.create(otos).fitDistance(otos,
-                CalibrationAxis.FORWARD, snapshot(0, 0, 0), snapshot(10, 0, 0), 11)
+                TranslationAxis.FORWARD, snapshot(0, 0, 0), snapshot(10, 0, 0), 11)
                 .getValues();
         assertEquals(1.1, otosDistance.optDouble("linearScalar"), EPS);
         JSONObject otosSpin = LocalizerAdapters.create(otos).fitSpin(otos, Arrays.asList(
@@ -196,8 +196,8 @@ public class LocalizerAdaptersTest {
     private static void assertCapabilities(BaseLocalizerConstants<?> config, boolean forward,
                                            boolean strafe, boolean spin) {
         LocalizerAdapter adapter = LocalizerAdapters.create(config);
-        assertEquals(forward, adapter.supportsDistance(CalibrationAxis.FORWARD));
-        assertEquals(strafe, adapter.supportsDistance(CalibrationAxis.STRAFE));
+        assertEquals(forward, adapter.supportsDistance(TranslationAxis.FORWARD));
+        assertEquals(strafe, adapter.supportsDistance(TranslationAxis.STRAFE));
         assertEquals(spin, adapter.supportsSpinCalibration());
     }
 
@@ -213,7 +213,7 @@ public class LocalizerAdaptersTest {
                 Angle.fromRad(heading)), ticks);
     }
 
-    private static DirectionTrial direction(CalibrationAxis axis, int[] start, int[] end) {
+    private static DirectionTrial direction(TranslationAxis axis, int[] start, int[] end) {
         return new DirectionTrial(axis, snapshot(0, 0, 0, start),
                 snapshot(1, 0, 0, end));
     }

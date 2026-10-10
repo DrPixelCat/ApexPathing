@@ -3,8 +3,6 @@ package localizers.util;
 
 /**
  * A simple class to store the current state of a filter.
- *
- * @author Joel H - 7842a
  */
 public class FilterState {
     private final double value;

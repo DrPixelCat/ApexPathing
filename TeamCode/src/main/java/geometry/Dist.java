@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
  * A class representing a distance that can be easily converted between {@link DistUnit}s.
  *
  * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Joel H
  */
 public class Dist {
     private final Scalar inches;

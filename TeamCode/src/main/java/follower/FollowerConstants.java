@@ -18,7 +18,6 @@ import controllers.FeedbackController.Coefficients;
  *
  * @author Sohum Arora - 22985 Paraducks
  * @author Dylan B. - 18597 RoboClovers - Delta
- * @author DrPixelCat - 7842 alum
  */
 public class FollowerConstants {
     /** Optional measured speed-dependent authority, scoped to the active drivetrain profile. */

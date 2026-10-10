@@ -8,7 +8,11 @@ import geometry.Vector;
 import trajectory.profile.MotionParameters;
 import paths.movements.Path;
 
-/** Immutable physical target shared by online and stored trajectories. Units: inches, radians, seconds. */
+/**
+ * Immutable physical target shared by online and stored trajectories. Units: inches, radians, seconds.
+ *
+ * @author Joel H
+ */
 public final class TrajectorySample {
     public final Vector velocity, acceleration, toPath, tangent, positionOnPath;
     public final double progressIn, remainingIn, pathT, angularVelocity, angularAcceleration;
@@ -73,8 +77,13 @@ public final class TrajectorySample {
 
     public static TrajectorySample onPath(Path path, double distance, Vector robot,
                                            MotionParameters motion, boolean overspeed, double normalVelocity) {
+        return onPath(path, path.getParametricPath().getPointAtDistance(distance), robot, motion, overspeed, normalVelocity);
+    }
+
+    /** Uses geometry already evaluated at the command's measured progress. */
+    public static TrajectorySample onPath(Path path, PathPoint point, Vector robot,
+                                           MotionParameters motion, boolean overspeed, double normalVelocity) {
         PathSegment segment = path.getParametricPath();
-        PathPoint point = segment.getPointAtDistance(distance);
         Vector tangent = point.getFirstDerivative().normalize();
         Vector normal = PathSegment.calculateLeftNormal(tangent);
         double v = motion.getTangentialVel();

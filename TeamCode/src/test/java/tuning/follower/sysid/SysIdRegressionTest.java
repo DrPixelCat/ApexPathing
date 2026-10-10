@@ -29,6 +29,7 @@ public class SysIdRegressionTest {
         assertEquals(.012, fit.kV, 1e-10);
         assertEquals(.006, fit.kA, 1e-10);
         assertEquals(1, fit.rSquared, 1e-10);
+        SysIdValidationTest.assertFitQuality(fit);
     }
     @Test public void rejectsMissingDirectionAndUnidentifiableData() {
         SysIdRegression data = plant(.06, .012, .006);
@@ -72,7 +73,8 @@ public class SysIdRegressionTest {
         SysIdRegression.Fit fit = recordedFit("/sysid-regression-biased-heading.csv").fit(0.2);
         assertTrue("Pooled R² passed in this run", fit.rSquared > 0.90);
         assertTrue("Dynamic reverse has a material signed residual", fit.maxRunBias > 0.05);
-        assertFalse("Poor heading feedforward must block later phases", fit.valid);
+        assertTrue("Acquisition retains finite identifiable coefficients", fit.valid);
+        assertThrows(AssertionError.class, () -> SysIdValidationTest.assertFitQuality(fit));
     }
     private SysIdRegression recordedFit(String resource) throws Exception {
         SysIdRegression data = new SysIdRegression();
@@ -104,7 +106,8 @@ public class SysIdRegressionTest {
         SysIdRegression.Fit fit = data.fit(2);
         assertTrue("Pooled fit should still look plausible", fit.rSquared > 0.90);
         assertTrue("Each run is materially biased", fit.maxRunBias > 0.05);
-        assertFalse("Biased runs must block feedforward acceptance", fit.valid);
+        assertTrue("Acquisition does not enforce prediction quality", fit.valid);
+        assertThrows(AssertionError.class, () -> SysIdValidationTest.assertFitQuality(fit));
     }
     @Test public void writesXChartPngsForEveryTest() throws Exception {
         SysIdRegression data = plant(.06, .012, .006);

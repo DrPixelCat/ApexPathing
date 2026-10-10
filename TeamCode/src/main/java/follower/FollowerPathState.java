@@ -1,12 +1,14 @@
 package follower;
 
+import util.DeltaTime;
+
 import geometry.Vector;
 
 /** Mutable path-execution state shared by the path executors and Follower diagnostics. */
 final class FollowerPathState {
     trajectory.TrajectorySample trajectorySample;
     trajectory.OnlineTrajectoryPlanner onlinePlanner;
-    private long targetSampleNanos;
+    private final DeltaTime timing = new DeltaTime(.02);
     private trajectory.profile.FFLut independentReference;
     private double referenceElapsed;
     boolean independentReferenceFinished() {
@@ -19,7 +21,7 @@ final class FollowerPathState {
         velocityReference.reset();
         onlinePlanner = path.getBuildMode() == paths.movements.Path.BuildMode.ONLINE
                 ? new trajectory.OnlineTrajectoryPlanner(path, planningConstants) : null;
-        targetSampleNanos = 0;
+        timing.reset();
         independentReference = null; referenceElapsed = 0;
     }
     trajectory.TrajectorySample target(paths.movements.Path path, Vector position, Vector velocity, double omega, long now) {
@@ -27,9 +29,9 @@ final class FollowerPathState {
     }
     trajectory.TrajectorySample target(paths.movements.Path path, Vector position, Vector velocity, double omega, long now,
                                        boolean independent) {
-        double dt = targetSampleNanos == 0 ? .02 : Math.max(0, (now - targetSampleNanos) * 1e-9);
-        boolean first=targetSampleNanos==0;
-        targetSampleNanos = now;
+
+        boolean first = !timing.isInitialized();
+        double dt = Math.max(0, timing.update(now));
         if (independent) {
             if (independentReference == null) independentReference = path.getFeedforwardLut() != null
                     ? path.getFeedforwardLut() : new trajectory.profile.FFLut(path.createGenerator(planningConstants).generateRestToRest());
@@ -87,7 +89,7 @@ final class FollowerPathState {
         lastCommandDemand = Follower.CommandDemand.ZERO;
         trackingVelocityTarget = trackingMeasuredVelocity = trackingProgressVelocity = 0;
         trackingFeedforward = trackingVelocityFeedback = trackingAngularVelocityTarget = trackingEndpointBlend = 0;
-        trajectorySample = null; onlinePlanner = null; targetSampleNanos = 0;
+        trajectorySample = null; onlinePlanner = null; timing.reset();
         independentReference=null; referenceElapsed=0;
         completion.reset();
         progressEstimator.reset();
@@ -100,7 +102,7 @@ final class FollowerPathState {
 
     void pause() {
         if(onlinePlanner!=null) onlinePlanner.resetVelocityPursuit();
-        trajectorySample = null; targetSampleNanos = 0; progressEstimator.reset(); completion.reset();
+        trajectorySample = null; timing.reset(); progressEstimator.reset(); completion.reset();
         velocitySampleAvailable = false;
         centeredBrakingActive = false; centeredBrakingMeanPower = 0;
         wheelFeedforwardActive = false; trackingHeadingFeedforward = 0;

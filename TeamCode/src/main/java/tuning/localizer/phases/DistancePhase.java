@@ -1,11 +1,10 @@
 package tuning.localizer.phases;
 
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.calibration.CalibrationSnapshot;
 
 import tuning.localizer.LocalizationTunerContext;
-import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.TuningPhase;
 
 import org.json.JSONArray;
@@ -20,7 +19,7 @@ public final class DistancePhase extends TuningPhase {
     private static final long DRIVE_NANOS = 1_000_000_000L;
     private static final long SETTLE_NANOS = 400_000_000L;
 
-    private final CalibrationAxis axis;
+    private final TranslationAxis axis;
     private final List<CalibrationCandidate> trials = new ArrayList<>();
     private CalibrationSnapshot start;
     private CalibrationSnapshot pendingEnd;
@@ -33,13 +32,13 @@ public final class DistancePhase extends TuningPhase {
 
     private enum Stage { DRIVE, SETTLE, ENTER_DISTANCE }
 
-    public DistancePhase(LocalizationTunerContext context, CalibrationAxis axis) {
+    public DistancePhase(LocalizationTunerContext context, TranslationAxis axis) {
         super(context);
         this.axis = axis;
     }
 
     @Override protected String getName() {
-        return (axis == CalibrationAxis.FORWARD ? "Forward" : "Strafe") + " distance";
+        return (axis == TranslationAxis.FORWARD ? "Forward" : "Strafe") + " distance";
     }
 
     @Override protected void reset() {
@@ -64,8 +63,8 @@ public final class DistancePhase extends TuningPhase {
 
     @Override protected boolean record() {
         if (stage == Stage.DRIVE) {
-            double forward = axis == CalibrationAxis.FORWARD ? POWER * direction : 0.0;
-            double strafe = axis == CalibrationAxis.STRAFE ? POWER * direction : 0.0;
+            double forward = axis == TranslationAxis.FORWARD ? POWER * direction : 0.0;
+            double strafe = axis == TranslationAxis.STRAFE ? POWER * direction : 0.0;
             context.getDrivetrain().moveWithVectors(forward, strafe, 0.0);
             context.getTelemetry().addData("Trial direction", direction > 0 ? "positive" : "negative");
             if (System.nanoTime() - stageStarted >= DRIVE_NANOS) {
@@ -126,7 +125,7 @@ public final class DistancePhase extends TuningPhase {
     private double reportedDistance(CalibrationSnapshot from, CalibrationSnapshot to) {
         geometry.Vector delta = to.pose.getVec().minus(from.pose.getVec())
                 .rotate(from.pose.getHeading().times(-1.0));
-        return axis == CalibrationAxis.FORWARD
+        return axis == TranslationAxis.FORWARD
                 ? delta.getX().getIn() : delta.getY().getIn();
     }
 

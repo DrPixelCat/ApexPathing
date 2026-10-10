@@ -17,13 +17,15 @@ import paths.constraint.PathConstraint;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 
-/** Shared sampled path solver with signed, coupled power and acceleration constraints. */
+/**
+ * Shared sampled path solver with signed, coupled power and acceleration constraints.
+ *
+ * @author Joel H
+ */
 public abstract class BaseProfileGenerator {
     protected static final double EPSILON = 1e-6;
     private static final double UTILIZATION_TOLERANCE = 1e-6;
     private static final int SEARCH_ITERATIONS = 32;
-    // Keep a fixed subset of the geometry LUT so overlapping online windows reuse nodes.
-    private static final int ONLINE_GEOMETRY_STRIDE = 2;
     private final Double requestedPowerLimit;
     protected final FollowerConstants constants;
     protected final FollowerMovement path;
@@ -46,8 +48,35 @@ public abstract class BaseProfileGenerator {
     private int windowSize;
     private final double[] accelerationBreaks = new double[4];
     private final CoupledMotionProfile.Workspace windowSolver = new CoupledMotionProfile.Workspace();
-    private final CoupledMotionProfile.Transitions windowTransitions = (i, squared, nextCeiling) ->
-            maximumNextSquared(windowSamples[i], windowSamples[i+1], squared, nextCeiling, windowPositions[i + 1] - windowPositions[i]);
+    private final CoupledMotionProfile.Transitions windowTransitions = transitionsForWindow();
+    private CoupledMotionProfile.Transitions transitionsForWindow() {
+        return new CoupledMotionProfile.Transitions() {
+            @Override public double maximumNextSquared(int i, double squared, double nextCeiling) {
+                return BaseProfileGenerator.this.maximumNextSquared(windowSamples[i], windowSamples[i + 1],
+                        squared, nextCeiling, windowPositions[i + 1] - windowPositions[i]);
+            }
+            @Override public double previousSquaredUpperBound(int i, double nextCeiling) {
+                return predecessorBound(nextCeiling, windowSamples[i], windowPositions[i + 1] - windowPositions[i]);
+            }
+        };
+    }
+    private static double predecessorBound(double nextCeiling, Sample sample, double distance) {
+        // qNext = q + 2*a*ds and a >= -maxAccel, regardless of path shape or power model.
+        double upper = nextCeiling + 2 * distance * sample.maxAccel;
+        // |headingSecond*q + headingPrime*a| <= maxAlpha also gives a necessary
+        // bound without assuming that braking and heading acceleration have the same sign.
+        if (Math.abs(sample.headingSecond) > 1e-12) {
+            upper = Math.min(upper, (sample.maxAlpha + Math.abs(sample.headingPrime) * sample.maxAccel)
+                    / Math.abs(sample.headingSecond));
+        }
+        double b = sample.headingPrime / (2 * distance), a = sample.headingSecond - b;
+        if (Math.abs(a) > 1e-12) {
+            // alpha = a*q + b*qNext, with 0 <= qNext <= nextCeiling. Choose
+            // the most favorable next-speed endpoint to obtain an outer feasibility bound.
+            upper = Math.min(upper, (sample.maxAlpha + Math.max(0, -Math.signum(a) * b * nextCeiling)) / Math.abs(a));
+        }
+        return Math.nextUp(upper);
+    }
     public int getLastWindowSampleCount() { return lastWindowSampleCount; }
     private final VelocityPursuit velocityPursuit = new VelocityPursuit();
     private FFLut pursuitReference;
@@ -159,8 +188,15 @@ public abstract class BaseProfileGenerator {
             ceilings[0] = maximumSteadyVelocity(actualPath, points[0], samples[0]);
         }
         double[] velocities = CoupledMotionProfile.solve(positions, ceilings, boosted, endVelocity,
-                (i, squared, nextCeiling) -> maximumNextSquared(samples[i], samples[i+1], squared,
-                        nextCeiling, positions[i + 1] - positions[i]));
+                new CoupledMotionProfile.Transitions() {
+                    @Override public double maximumNextSquared(int i, double squared, double nextCeiling) {
+                        return BaseProfileGenerator.this.maximumNextSquared(samples[i], samples[i + 1], squared,
+                                nextCeiling, positions[i + 1] - positions[i]);
+                    }
+                    @Override public double previousSquaredUpperBound(int i, double nextCeiling) {
+                        return predecessorBound(nextCeiling, samples[i], positions[i + 1] - positions[i]);
+                    }
+                });
         lastReport = new DebugReport();
         lastReport.powerLimit = utilizationLimit(); lastReport.iterationsRun = 1;
         lastReport.powerFeasible = true; lastReport.kinematicsFeasible = true;
@@ -209,12 +245,7 @@ public abstract class BaseProfileGenerator {
                                        double dt, double previewSeconds) {
         if(!Double.isFinite(previewSeconds) || previewSeconds<0 || previewSeconds>.05)
             throw new IllegalArgumentException("Reference preview must be in [0, .05] seconds");
-        return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, previewSeconds, ONLINE_GEOMETRY_STRIDE);
-    }
-
-    private WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
-                                        double previewSeconds, int geometryStride) {
-        return generateWindow(startIn,horizonIn,measuredVelocity,measuredOmega,dt,previewSeconds,geometryStride,0);
+        return generateWindowInternal(startIn, horizonIn, measuredVelocity, measuredOmega, dt, previewSeconds, 0);
     }
 
     /** Converge to the independently solved stopping envelope ahead, without an integrated speed reference. */
@@ -222,11 +253,11 @@ public abstract class BaseProfileGenerator {
                                              double measuredOmega,double dt,double convergenceSeconds) {
         if (!Double.isFinite(convergenceSeconds) || convergenceSeconds<=0 || convergenceSeconds>1)
             throw new IllegalArgumentException("Velocity convergence time must be in (0, 1] seconds");
-        return generateWindow(startIn,horizonIn,measuredVelocity,measuredOmega,dt,0,ONLINE_GEOMETRY_STRIDE,convergenceSeconds);
+        return generateWindowInternal(startIn,horizonIn,measuredVelocity,measuredOmega,dt,0,convergenceSeconds);
     }
 
-    private WindowTarget generateWindow(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
-                                        double previewSeconds, int geometryStride,double pursuitSeconds) {
+    private WindowTarget generateWindowInternal(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
+                                                double previewSeconds, double pursuitSeconds) {
         Path actualPath = (Path) path;
         geometry.PathSegment segment = actualPath.getParametricPath();
         ConstraintSchedule schedule = constraints(actualPath);
@@ -256,21 +287,21 @@ public abstract class BaseProfileGenerator {
             if (segment.getLengthIn() - geometry[mid].getDistanceToEndIn() <= start) { low = mid + 1; }
             else { high = mid; }
         }
-        int g = low + (geometryStride - low % geometryStride) % geometryStride;
+        int g = low;
         int c = ConstraintSchedule.upperBound(schedule.transitions, start + 1e-6);
         int boundary = 0;
         windowSize = 0;
         // Merge three sorted streams directly into reusable arrays, without boxed tree nodes.
         while (boundary < 3) {
             double gs = g < geometry.length ? segment.getLengthIn() - geometry[g].getDistanceToEndIn() : Double.POSITIVE_INFINITY;
-            if (gs - start <= 1e-6) { g += geometryStride; continue; }
+            if (gs - start <= 1e-6) { g++; continue; }
             if (end - gs <= 1e-6) { gs = Double.POSITIVE_INFINITY; }
             double cs = c < schedule.transitions.length ? schedule.transitions[c] : Double.POSITIVE_INFINITY;
             if (!(end - cs > 1e-6)) { cs = Double.POSITIVE_INFINITY; }
             double bs = boundary == 0 ? start : boundary == 1 ? (start + end) / 2 : end;
             double distance = Math.min(bs, Math.min(gs, cs));
             PathPoint point = distance == gs ? geometry[g] : distance == cs ? schedule.pointAt(c, segment) : null;
-            if (distance == gs) { g += geometryStride; }
+            if (distance == gs) { g++; }
             if (distance == cs) { c++; }
             if (distance == bs) { boundary++; }
             appendWindow(distance, point != null ? point : segment.getPointAtDistance(distance));
@@ -297,13 +328,6 @@ public abstract class BaseProfileGenerator {
             acceleration = recovery.getTangentialAccel();
             recoveryOmega = recovery.getAngularVel(); recoveryAlpha = recovery.getAngularAccel();
             normalVelocity = Math.min(Math.abs(recovery.getTangentialVel()), limits[0].maxVelocity);
-        } catch (IllegalStateException exception) {
-            // A coarse interval can miss a reachable transition across changing curvature.
-            // Retry the original resolution before treating the window as infeasible.
-            if (geometryStride > 1) {
-                return generateWindow(startIn, horizonIn, measuredVelocity, measuredOmega, dt, previewSeconds, 1,pursuitSeconds);
-            }
-            throw exception;
         }
         double goalDistance = Double.NaN, goalVelocity = Double.NaN, currentCeiling = Double.NaN;
         if (pursuitSeconds > 0 && !overspeed) {
@@ -361,7 +385,8 @@ public abstract class BaseProfileGenerator {
         double commandedNormalVelocity = Double.isFinite(normalVelocity) ? normalVelocity : commandedVelocity;
         motion.setMotorPower(initial.power.utilization(commandedVelocity, acceleration,
                 motion.getAngularVel(), motion.getAngularAccel(), commandedNormalVelocity));
-        return new WindowTarget(motion, overspeed, commandedNormalVelocity,goalDistance,goalVelocity,currentCeiling);
+        return new WindowTarget(motion, overspeed, commandedNormalVelocity,goalDistance,goalVelocity,currentCeiling,
+                windowGeometry[0]);
     }
 
     /** Mandatory braking wins over damping; extra braking must fit current alpha and wheel authority. */
@@ -421,14 +446,21 @@ public abstract class BaseProfileGenerator {
         public final boolean overspeed;
         public final double normalVelocity;
         public final double goalDistanceIn,goalVelocity,currentSpeedCeiling;
+        /** Geometry already evaluated at the measured progress; absent for endpoint recovery. */
+        public final PathPoint point;
         public WindowTarget(MotionParameters motion, boolean overspeed) { this(motion, overspeed, motion.getTangentialVel()); }
         public WindowTarget(MotionParameters motion, boolean overspeed, double normalVelocity) {
             this(motion,overspeed,normalVelocity,Double.NaN,Double.NaN,Double.NaN);
         }
         public WindowTarget(MotionParameters motion, boolean overspeed, double normalVelocity,
                             double goalDistanceIn,double goalVelocity,double currentSpeedCeiling) {
+            this(motion, overspeed, normalVelocity, goalDistanceIn, goalVelocity, currentSpeedCeiling, null);
+        }
+        private WindowTarget(MotionParameters motion, boolean overspeed, double normalVelocity,
+                             double goalDistanceIn,double goalVelocity,double currentSpeedCeiling, PathPoint point) {
             this.motion = motion; this.overspeed = overspeed; this.normalVelocity = normalVelocity;
             this.goalDistanceIn=goalDistanceIn;this.goalVelocity=goalVelocity;this.currentSpeedCeiling=currentSpeedCeiling;
+            this.point = point;
         }
     }
 
@@ -517,16 +549,20 @@ public abstract class BaseProfileGenerator {
         if (min > max + 1e-9) { return Double.NaN; }
         if (min > max) { min = max; }
         double v = Math.sqrt(Math.max(0, squared));
-        // Characterized response switches at translation/heading acceleration zero.
-        double headingZero = Math.abs(sample.headingPrime) > 1e-12 ? -baseAlpha / sample.headingPrime : 0;
-        double[] breaks = accelerationBreaks;
-        breaks[0] = min; breaks[1] = max; breaks[2] = Math.max(min, Math.min(max, 0));
-        breaks[3] = Math.max(min, Math.min(max, headingZero));
-        Arrays.sort(breaks);
-        double best = Double.NaN;
-        for (int j = breaks.length - 2; j >= 0; j--) {
-            double candidate = maximumPowerFeasibleAcceleration(sample, v, breaks[j], breaks[j + 1]);
-            if (Double.isFinite(candidate)) { best = candidate; break; }
+        double best = max;
+        if (!(power(sample, v, max) <= utilizationLimit())) {
+            // Only split model branches when the greatest kinematically allowed acceleration
+            // fails power feasibility. This shortcut applies to every drivetrain and curvature.
+            double headingZero = Math.abs(sample.headingPrime) > 1e-12 ? -baseAlpha / sample.headingPrime : 0;
+            double[] breaks = accelerationBreaks;
+            breaks[0] = min; breaks[1] = max; breaks[2] = Math.max(min, Math.min(max, 0));
+            breaks[3] = Math.max(min, Math.min(max, headingZero));
+            Arrays.sort(breaks);
+            best = Double.NaN;
+            for (int j = breaks.length - 2; j >= 0; j--) {
+                double candidate = maximumPowerFeasibleAcceleration(sample, v, breaks[j], breaks[j + 1]);
+                if (Double.isFinite(candidate)) { best = candidate; break; }
+            }
         }
         if(Double.isFinite(best) && enforceIntervalPowerBounds()) {
             // A held acceleration must also fit the wheel authority later in the
@@ -578,7 +614,9 @@ public abstract class BaseProfileGenerator {
         return low;
     }
 
-    /** Intersects all sign combinations of |o1+s1*a|+|o2+s2*a|+|o3+s3*a| <= limit. */
+    /**
+     * Intersects all sign combinations of {@code |o1+s1*a|+|o2+s2*a|+|o3+s3*a| <= limit}.
+     */
     protected static final class AccelerationInterval {
         double low, high;
         void reset(double min, double max) { low = min; high = max; }
@@ -592,6 +630,58 @@ public abstract class BaseProfileGenerator {
             }
         }
         double maximum() { return low <= high ? high : Double.NaN; }
+    }
+
+    /** Boundary roots of ||offset + slope*a|| + |turnOffset + turnSlope*a| <= limit.
+     * The signed turn branches yield quadratics. Every candidate is checked against
+     * the unsquared inequality; ambiguous floating-point cases use the generic search. */
+    protected static double maximumNormPowerAcceleration(double[] coefficients, double min, double max, double limit) {
+        double ox = coefficients[0], sx = coefficients[1], oy = coefficients[2], sy = coefficients[3];
+        double ot = coefficients[4], st = coefficients[5];
+        if (Math.hypot(ox + sx * max, oy + sy * max) + Math.abs(ot + st * max) <= limit) { return max; }
+        double best = Double.NEGATIVE_INFINITY;
+        boolean ambiguous = false;
+        double margin = 1e-10 * Math.max(1, Math.max(Math.abs(min), Math.abs(max)));
+        for (int sign = -1; sign <= 1; sign += 2) {
+            double r = limit - sign * ot, rs = -sign * st;
+            double a = sx * sx + sy * sy - rs * rs;
+            double b = 2 * (ox * sx + oy * sy - r * rs);
+            double c = ox * ox + oy * oy - r * r;
+            double scale = Math.max(Math.abs(a), Math.max(Math.abs(b), Math.abs(c)));
+            if (!Double.isFinite(scale) || scale == 0) { ambiguous = true; continue; }
+            a /= scale; b /= scale; c /= scale;
+            double first, second;
+            if (a == 0) {
+                if (b == 0) { if (c == 0) { ambiguous = true; } continue; }
+                first = second = -c / b;
+            } else {
+                double discriminant = b * b - 4 * a * c;
+                if (discriminant < 0) { if (discriminant > -1e-14) { ambiguous = true; } continue; }
+                double q = -.5 * (b + Math.copySign(Math.sqrt(discriminant), b));
+                first = q == 0 ? 0 : q / a;
+                second = q == 0 ? 0 : c / q;
+            }
+            for (int root = 0; root < 2; root++) {
+                double candidate = root == 0 ? first : second;
+                if (!Double.isFinite(candidate)) { ambiguous = true; continue; }
+                if (candidate < min || candidate > max) {
+                    if (candidate >= min - margin && candidate <= max + margin) { ambiguous = true; }
+                    continue;
+                }
+                double turn = ot + st * candidate;
+                // Squaring also produces roots on the wrong signed turn or negative RHS.
+                if (sign * turn < -1e-12 || limit - sign * turn < -1e-12) { continue; }
+                // Move one ulp into the branch before verifying the original physical demand.
+                candidate = Math.nextAfter(candidate, min);
+                double demand = Math.hypot(ox + sx * candidate, oy + sy * candidate) + Math.abs(ot + st * candidate);
+                if (demand <= limit + 1e-12) { best = Math.max(best, candidate); }
+                else { ambiguous = true; }
+            }
+        }
+        if (Double.isFinite(best)) { return best; }
+        // With an infeasible max, any nonempty convex feasible interval must have an
+        // upper boundary root in range. Only certify emptiness when no root was ambiguous.
+        return ambiguous ? Double.NEGATIVE_INFINITY : Double.NaN;
     }
 
     /** Resolve one calibrated axis into offset+slope*a only when the entire interval stays

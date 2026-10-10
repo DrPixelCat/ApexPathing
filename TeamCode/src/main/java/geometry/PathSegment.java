@@ -7,7 +7,7 @@ package geometry;
  * distances, enabling blisteringly fast O(1) distance lookups and highly efficient closest-point
  * projection using Newton-Raphson refinement. Internally, all units are inches and radians.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class PathSegment {
     private static final double POINTS_PER_INCH = 0.75;

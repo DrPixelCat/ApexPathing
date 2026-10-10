@@ -1,5 +1,7 @@
 package tuning.follower.sysid;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.util.ElapsedTime;
 import follower.Follower;
 import geometry.AngleUnit;
@@ -10,7 +12,11 @@ import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
-/** Independent axis characterization using quasistatic and dynamic tests in both directions. */
+/**
+ * Independent axis characterization using quasistatic and dynamic tests in both directions.
+ *
+ * @author Joel H
+ */
 public final class FeedforwardTuner extends TuningPhase {
     public enum Axis { DRIVE, HEADING }
     private enum Stage { READY, RUNNING, REVIEW }
@@ -22,7 +28,8 @@ public final class FeedforwardTuner extends TuningPhase {
     private SysIdRegression.Fit fit;
     private int run;
     private Pose startPose;
-    private double lastHeading, travel, previousPower, previousTime, previousVelocity;
+    private double lastHeading, travel, previousPower, previousVelocity;
+    private final DeltaTime timing = new DeltaTime();
     private double windowTime, windowVelocity, windowPower, windowStartVelocity;
     private final double[] breakawayPower = {Double.NaN, Double.NaN};
     private String csvPath = "Not started";
@@ -64,10 +71,14 @@ public final class FeedforwardTuner extends TuningPhase {
         addTunableValue("kV", manualGain(1), selectedGain == 1);
         addTunableValue("kA", manualGain(2), selectedGain == 2);
         context.getTelemetry().addData("Increment", number(increment));
-        context.getTelemetry().addLine("LB/RB: select value; Dpad Up/Down: change value");
-        context.getTelemetry().addLine("Dpad Left/Right: change increment; X: run test; A: accept");
         showManualPositioning();
         reportManualErrors();
+        if (stage == Stage.RUNNING) {
+            context.getTelemetry().addLine("Stop: cancel test");
+        } else {
+            context.getTelemetry().addLine("LB/RB select; Dpad Up/Down edit; Left/Right increment");
+            context.getTelemetry().addLine("X: run from rest; A: accept; Stop: cancel");
+        }
         return false;
     }
 
@@ -111,14 +122,11 @@ public final class FeedforwardTuner extends TuningPhase {
         int direction = stage == Stage.RUNNING ? manualDirection : nextDirection;
         context.getTelemetry().addData(stage == Stage.RUNNING ? "Running" : "Next direction",
                 axis == Axis.DRIVE ? (direction > 0 ? "Forward" : "Backward")
-                        : (direction > 0 ? "CCW (positive heading)" : "CW (negative heading)"));
+                        : (direction > 0 ? "CCW (+)" : "CW (-)"));
+        if (stage == Stage.RUNNING) { return; }
         context.getTelemetry().addLine(axis == Axis.DRIVE
-                ? "Align robot with clear lane; allow 60 inches " + (direction > 0 ? "ahead" : "behind") + ", plus braking room."
-                : "Position robot with clear space to rotate 3 radians (~172 deg), plus braking room.");
-        context.getTelemetry().addLine("Release sticks; press X from rest. Stop cancels the test.");
-        context.getTelemetry().addLine(axis == Axis.DRIVE
-                ? "Profile: 24 in/s; 1s accelerate, 1s cruise, 1s brake (48 in)."
-                : "Profile: 1.5 rad/s; 1s accelerate, 1s cruise, 1s brake (3 rad).");
+                ? "Clear lane: 60 in " + (direction > 0 ? "ahead" : "behind") + " + braking room."
+                : "Clear rotation: 3 rad (~172 deg) + braking room.");
     }
 
     private void beginManual() {
@@ -177,13 +185,11 @@ public final class FeedforwardTuner extends TuningPhase {
         if (manualProfile == null) { return; }
         String units = axis == Axis.DRIVE ? " in/s" : " rad/s";
         double acceleration = manualProfile.accelerationMeanError(), cruise = manualProfile.cruiseMeanError();
-        context.getTelemetry().addData("Acceleration velocity mean signed error",
+        context.getTelemetry().addData("Accel mean error",
                 Double.isFinite(acceleration) ? number(acceleration) + units : "N/A: no samples");
-        context.getTelemetry().addData("Cruise velocity mean signed error",
-                Double.isFinite(cruise) ? number(cruise) + units : "N/A: cruise target not reached or no cruise interval");
-        context.getTelemetry().addLine("Error = measured - target (time-weighted); braking excluded.");
-        context.getTelemetry().addLine("Too slow: negative error forward/CCW; positive error backward/CW.");
-        if (manualSaturated) { context.getTelemetry().addLine("Power clipped: profile exceeded available command; errors include saturation."); }
+        context.getTelemetry().addData("Cruise mean error",
+                Double.isFinite(cruise) ? number(cruise) + units : "N/A: target not reached / no samples");
+        if (manualSaturated) { context.getTelemetry().addLine("Power clipped: errors include saturation."); }
     }
 
     private void applyManualGains() {
@@ -192,7 +198,15 @@ public final class FeedforwardTuner extends TuningPhase {
     }
     @Override protected boolean routineMotionActive() { return stage == Stage.RUNNING; }
     @Override protected void showPreRunInstructions() {
-        if (manualMode) { showManualPositioning(); return; }
+        if (manualMode) {
+            showManualPositioning();
+            context.getTelemetry().addLine(axis == Axis.DRIVE
+                    ? "Profile: 24 in/s, 48 in; 1s accel/cruise/brake each."
+                    : "Profile: 1.5 rad/s, 3 rad; 1s accel/cruise/brake each.");
+            context.getTelemetry().addLine("Mean error = measured - target; braking excluded.");
+            context.getTelemetry().addLine("Release sticks; X runs from rest; Stop cancels.");
+            return;
+        }
         context.getTelemetry().addLine(axis == Axis.DRIVE
                 ? "Clear 96 inches in BOTH directions, plus braking room."
                 : "Clear room for two full turns in BOTH directions.");
@@ -246,7 +260,7 @@ public final class FeedforwardTuner extends TuningPhase {
         } else if (stage == Stage.RUNNING) { sample(); }
         else {
             if (fit != null && fit.valid && breakawayValid()) { applyFit(); return true; }
-            context.getTelemetry().addLine("Feedforward validation failed. Stop and rerun this phase.");
+            context.getTelemetry().addLine("Feedforward acquisition failed. Stop and rerun this phase.");
         }
         return false;
     }
@@ -261,7 +275,8 @@ public final class FeedforwardTuner extends TuningPhase {
                     : staging.pose(0.0, 0.0, 0.0));
         }
         f.stop(); f.disableControllers(); startPose = f.getPose();
-        lastHeading = startPose.getHeading().getRad(); travel = previousPower = previousTime = 0;
+        lastHeading = startPose.getHeading().getRad(); travel = previousPower = 0;
+        timing.reset(0L);
         previousVelocity = measuredVelocity();
         resetWindow();
         if (csv == null) {
@@ -286,7 +301,9 @@ public final class FeedforwardTuner extends TuningPhase {
             stopMotion();
             throw new IllegalStateException("Feedforward tuning requires valid localization");
         }
-        double time = timer.seconds(), v = measuredVelocity(), dt = time - previousTime;
+        long timeNanos = (long) timer.nanoseconds();
+        double time = DeltaTime.seconds(timeNanos), v = measuredVelocity();
+        double dt = timing.update(timeNanos);
         double heading = f.getPose().getHeading().getRad();
         travel += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
         lastHeading = heading;
@@ -320,7 +337,7 @@ public final class FeedforwardTuner extends TuningPhase {
                 previousVelocity = v; resetWindow();
             }
         } else { previousVelocity = v; resetWindow(); }
-        previousVelocity = v; previousTime = time;
+        previousVelocity = v;
         boolean limit = axis == Axis.DRIVE ? distance >= 96 : travel >= 4 * Math.PI;
         if (limit || time >= (run < 2 ? 9 : 2)) {
             stopMotion(); csv.flush();

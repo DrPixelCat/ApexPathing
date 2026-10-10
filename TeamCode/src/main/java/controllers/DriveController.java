@@ -12,7 +12,7 @@ import geometry.Vector;
  * demand {@code |forward| + |strafe|}. Isotropic allocation is used by swerve and other holonomic
  * drives.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class DriveController {
     private static final double EPSILON = 1e-9;

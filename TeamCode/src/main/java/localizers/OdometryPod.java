@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * @author Topher F. - 23571 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Joel H
  */
 public class OdometryPod {
     private final String name;

@@ -1,9 +1,9 @@
 package localizers.util;
 
+import util.DeltaTime;
+
 /**
  * A boxcar moving average of measurements and timestamped first differences.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class LowPassFilter implements DataFilter {
     private final int DEFAULT_SAMPLE_SIZE = 5;
@@ -16,7 +16,7 @@ public class LowPassFilter implements DataFilter {
     private double sum = 0;
     private double rateSum = 0;
 
-    private long lastUpdateTimeNanos = -1;
+    private final DeltaTime timing = new DeltaTime();
     private double lastRawValue = 0;
 
     public LowPassFilter() {
@@ -32,7 +32,7 @@ public class LowPassFilter implements DataFilter {
         sum = 0;
         rateSum = 0;
         isWindowFull = false;
-        lastUpdateTimeNanos = -1;
+        timing.reset();
         lastRawValue = 0;
     }
 
@@ -54,22 +54,10 @@ public class LowPassFilter implements DataFilter {
     @Override
     public FilterState update(double measurement, long currentNanos) {
         if (!Double.isFinite(measurement)) { throw new IllegalArgumentException("Measurement must be finite"); }
-        if (lastUpdateTimeNanos != -1 && currentNanos <= lastUpdateTimeNanos) {
-            throw new IllegalArgumentException("Measurement timestamps must increase");
-        }
-        double dt = 0.02; // Default starting assumption
-        double rawRate = 0.0;
-
-        // Calculate the raw rate of change using system time
-        if (lastUpdateTimeNanos != -1) {
-            dt = (currentNanos - lastUpdateTimeNanos) / 1.0e9;
-            if (dt <= 1e-4) {
-                dt = 1e-4; // Prevent division by zero on double-calls
-            }
-            rawRate = (measurement - lastRawValue) / dt;
-        }
-
-        lastUpdateTimeNanos = currentNanos;
+        timing.requireIncreasing(currentNanos);
+        boolean first = !timing.isInitialized();
+        double dt = timing.update(currentNanos);
+        double rawRate = first ? 0.0 : (measurement - lastRawValue) / dt;
         lastRawValue = measurement;
 
         // Advance the circular buffer

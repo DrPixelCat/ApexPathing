@@ -8,28 +8,28 @@ import java.util.function.Function;
 import config.ApexConstants;
 import localizers.LocalizationConstants;
 import drivetrains.DualActuated;
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.phases.DistancePhase;
 import tuning.localizer.phases.DirectionsPhase;
 import tuning.localizer.phases.FilterPhase;
 import tuning.localizer.LocalizationTunerContext;
 import tuning.localizer.phases.SpinPhase;
 import tuning.localizer.TuningPhase;
-import tuning.localizer.phases.TestPhase;
 
 /**
  * Tunes localizer geometry and derivative filtering independently from follower control gains.
  * Built-in localizer differences are isolated behind calibration adapters.
+ *
+ * @author Joel H
  */
 @TeleOp(name = "Localization Tuner", group = "Apex Pathing")
 public class LocalizationTuner extends LinearOpMode {
     private enum Phase {
         DIRECTIONS(DirectionsPhase::new),
-        FORWARD(context -> new DistancePhase(context, CalibrationAxis.FORWARD)),
-        STRAFE(context -> new DistancePhase(context, CalibrationAxis.STRAFE)),
+        FORWARD(context -> new DistancePhase(context, TranslationAxis.FORWARD)),
+        STRAFE(context -> new DistancePhase(context, TranslationAxis.STRAFE)),
         ROTATION(SpinPhase::new),
-        FILTER(FilterPhase::new),
-        TEST(TestPhase::new);
+        FILTER(FilterPhase::new);
 
         final Function<LocalizationTunerContext, TuningPhase> factory;
         Phase(Function<LocalizationTunerContext, TuningPhase> factory) { this.factory = factory; }
@@ -111,11 +111,11 @@ public class LocalizationTuner extends LinearOpMode {
 
     private boolean applicable(Phase phase) {
         if (phase == Phase.FORWARD) {
-            return context.getAdapter().supportsDistance(CalibrationAxis.FORWARD);
+            return context.getAdapter().supportsDistance(TranslationAxis.FORWARD);
         }
         if (phase == Phase.STRAFE) {
             return context.getDrivetrain().isHolonomic()
-                    && context.getAdapter().supportsDistance(CalibrationAxis.STRAFE);
+                    && context.getAdapter().supportsDistance(TranslationAxis.STRAFE);
         }
         if (phase == Phase.ROTATION) { return context.getAdapter().supportsSpinCalibration(); }
         return true;

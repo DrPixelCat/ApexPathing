@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.hardware.HardwareDevice;
 
 import org.codeblooded.ftcodesim.hardware.SimHardwareMap;
@@ -63,7 +65,7 @@ final class StableSimHardwareMap extends SimHardwareMap {
     @Override
     public void update() {
         long now = clock.getAsLong();
-        double elapsedSeconds = (now - previousTimeNanos) * 1e-9;
+        double elapsedSeconds = DeltaTime.seconds(now - previousTimeNanos);
         previousTimeNanos = now;
         if (!Double.isFinite(elapsedSeconds) || elapsedSeconds <= 0.0) { return; }
 

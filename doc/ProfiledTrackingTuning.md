@@ -3,10 +3,9 @@
 Run `TRAJECTORY TRACKING` only after accepting drive and heading feedforward,
 [motion characterization](MotionCharacterization.md), heading
 and drive feedback, motion limits, and (for holonomic drives) centripetal tuning.
-The drive and heading SysId phases now reject a fit when any of their four runs
-has more than 0.05 motor power of signed mean residual, even if pooled R² passes.
-The test that exposed this gate had R² 0.934 but saved almost zero translation kA,
-which also produced zero derived velocity feedback.
+Drive and heading SysId acquisition requires identifiable, finite physical gains and
+adequate excitation. JUnit checks pooled R squared and the 0.05 motor-power
+per-run residual limit independently; fit quality does not gate the tuner.
 In FTCodeSim, each SysId run is now staged with its full travel available;
 the recorded bad drive runs included a reversal while power was still applied,
 consistent with reaching the simulated field boundary. Windows moving against
@@ -32,7 +31,7 @@ Use the OpMode Stop button to cancel a trial or discard unsaved
 changes. X starts a trial only while idle.
 
 Automatic mode measures the original settings twice, tries bounded changes to
-one setting at a time, and repeats the selected settings before saving them.
+one setting at a time, and saves the best measured settings without a confirmation run.
 With a saved motion characterization, the active settings are velocity tracking gain
 and corner speed scale. The measured power model replaces the arbitrary profile velocity
 power adjustment; legacy profiles without characterization retain that adjustment.
@@ -41,17 +40,16 @@ acceleration and deceleration. Pulse/coast settings remain in saved JSON for
 compatibility but no longer affect trajectory following or appear in the editor.
 Manual mode uses X to run the course, LB/RB to select a setting, dpad Left/Right
 to change the step, and dpad Up/Down to edit. Every edit invalidates the prior
-measurement. A saves only after a passing course.
+measurement. A saves after a complete, usable measurement.
 
-Every complete trial needs acceleration, braking, and curved braking samples.
-Before the phase accepts a baseline, candidate, or manual measurement, it checks
-acceleration RMS against 18% and braking RMS against 16% of peak target speed
-(with a 4 in/s minimum allowance), cross-track peak below 2 inches, heading
-peak below 12 degrees, and the actual endpoint within 3 inches and 5 degrees.
-A poor baseline remains unaccepted and directs the operator to
-verify the earlier phases. A poor candidate is rejected; an unstable selected
-candidate restores the twice-measured baseline. The saved completion marker
-belongs to the active follower profile.
+Every complete trial needs sufficient acceleration, braking, and curved braking
+samples for selection. The tuner rejects incomplete or unusable acquisition.
+JUnit independently checks acceleration RMS against 18% and braking RMS against
+16% of peak target speed (with a 4 in/s minimum allowance), cross-track peak
+below 2 inches, heading peak below 12 degrees, and endpoint accuracy within
+3 inches and 5 degrees. These quality checks do not block calibration or add
+validation motion to the tuner. The saved completion marker belongs to the
+active follower profile. The optional PD tuner X verification remains available.
 
 The candidate score integrates speed error against the first trial's fixed
 profile for the current direction, charging overspeed more heavily, then adds peak cross-track and heading

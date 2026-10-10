@@ -122,4 +122,20 @@ public class PDSRoutineTest {
 
         assertTrue(!routine.isComplete());
     }
+    @Test public void operatorCanStillRequestVerificationAfterSelection() throws Exception {
+        PDSRoutine routine = new PDSRoutine(PDSRoutine.Config.linear(
+                "drive", .01, .75, 0, .3, 24, .75, 1, 36), .02, .004, .2);
+        routine.start();
+        java.lang.reflect.Method evaluate = PDSRoutine.class.getDeclaredMethod("evaluate", double.class);
+        evaluate.setAccessible(true);
+        for (int i = 0; i < 100 && !routine.isTestReady(); i++) { evaluate.invoke(routine, 1.0); }
+        assertTrue("Selection must retain the operator verification state", routine.isTestReady());
+        controllers.FeedbackController.Coefficients selected = routine.getCoefficients();
+        routine.requestTest();
+        assertEquals(PDSRoutine.PDSState.SETTLING, routine.getState());
+        assertEquals(selected.kP, routine.getCoefficients().kP, 0);
+        assertEquals(selected.kD, routine.getCoefficients().kD, 0);
+        assertTrue("Requesting verification must not accept the gains", !routine.isComplete());
+    }
+
 }

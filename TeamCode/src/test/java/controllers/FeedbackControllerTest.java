@@ -69,6 +69,15 @@ public class FeedbackControllerTest {
         assertEquals(0.3, angular.s().calculate(Math.toRadians(0.76)).get(), EPSILON);
         assertEquals(0.0, angular.s().calculate(Math.toRadians(0.75)).get(), EPSILON);
         assertEquals(-0.3, angular.s().calculate(Math.toRadians(-0.76)).get(), EPSILON);
+        assertEquals(0.0, angular.s().calculate(Math.toRadians(-0.75)).get(), EPSILON);
+    }
+
+    @Test
+    public void proportionalFeedbackStillWorksInsideStaticDeadband() {
+        FeedbackController controller = controller(
+                new FeedbackController.Coefficients().p(2.0).d(0.0).s(0.3));
+
+        assertEquals(0.2, controller.p().d().s().calculate(0.1).get(), EPSILON);
     }
 
     @Test

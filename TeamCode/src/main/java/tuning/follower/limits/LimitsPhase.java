@@ -1,5 +1,7 @@
 package tuning.follower.limits;
 
+import util.DeltaTime;
+
 import tuning.follower.TuningMeasurements;
 
 import tuning.follower.TunerContext;
@@ -75,7 +77,7 @@ public class LimitsPhase extends TuningPhase {
     private int trial = 0;
     private double heldHeading = 0;
     private double travelled = 0.0;
-    private double lastSampleTime = 0.0;
+    private final DeltaTime timing = new DeltaTime();
     private double lastMeasuredVelocity = Double.NaN;
     private int stableWindows = 0;
     private double originalMaxPower;
@@ -165,7 +167,7 @@ public class LimitsPhase extends TuningPhase {
         velocitySamples.clear();
         accelerationSamples.clear();
         travelled = 0.0;
-        lastSampleTime = 0.0;
+        timing.reset();
         lastMeasuredVelocity = Double.NaN;
         stableWindows = 0;
         timer.reset();
@@ -219,13 +221,15 @@ public class LimitsPhase extends TuningPhase {
     }
 
     private boolean recordAndCheckTrial() {
-        double elapsedSeconds = timer.milliseconds() / 1000.0;
+        long elapsedNanos = (long) timer.nanoseconds();
+        double elapsedSeconds = DeltaTime.seconds(elapsedNanos);
         double velocity = readVelocity();
 
         if (Double.isFinite(velocity)) {
             velocitySamples.add(velocity);
-            if (lastSampleTime > 0.0) {
-                double deltaTime = elapsedSeconds - lastSampleTime;
+            boolean first = !timing.isInitialized();
+            double deltaTime = timing.update(elapsedNanos);
+            if (!first) {
                 travelled += velocity * Math.max(0.0, deltaTime);
 
                 // Derive acceleration from the same timestamped velocity stream used to detect
@@ -243,7 +247,7 @@ public class LimitsPhase extends TuningPhase {
             while (velocityWindow.size() > VELOCITY_WINDOW_SIZE) {
                 velocityWindow.removeFirst();
             }
-            lastSampleTime = elapsedSeconds;
+
             lastMeasuredVelocity = velocity;
         }
 

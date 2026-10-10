@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import follower.*;
 import geometry.*;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
@@ -86,7 +88,7 @@ public class VelocityFeedbackSimulationTest {
                                     sensor.update();
                                     long stamp=clock.getAsLong();
                                     if(scenario==3) {
-                                        Pose sensed=sensor.getVelocity();double seconds=(stamp-1_000_000_000L)*1e-9;
+                                        Pose sensed=sensor.getVelocity();double seconds=DeltaTime.seconds(stamp-1_000_000_000L);
                                         sensed=new Pose(sensed.getVec().plus(TrajectorySample.vector(.3*Math.sin(2*Math.PI*7*seconds),
                                                 .3*Math.cos(2*Math.PI*9*seconds))),sensed.getHeading());
                                         history.add(new SensorPacket(sensor.getPosition(),sensed,stamp));

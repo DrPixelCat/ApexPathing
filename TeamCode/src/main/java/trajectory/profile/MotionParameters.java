@@ -7,7 +7,7 @@ package trajectory.profile;
  * tangential velocity, tangential acceleration, angular velocity, and angular acceleration,
  * plus bookkeeping values used by the follower and generator.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class MotionParameters {
     /** Distance units per second. */

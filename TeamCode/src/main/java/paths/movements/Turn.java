@@ -11,7 +11,7 @@ import paths.Callback;
  * Represents a stationary point-turn movement. The robot will remain at its starting (x, y)
  * coordinates and rotate to the specified target heading.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  * @author Sohum Arora - 22985 Paraducks
  */
 public class Turn extends FollowerMovement {

@@ -10,8 +10,6 @@ import androidx.annotation.NonNull;
  * for the row at its current path progression; this class linearly interpolates between the two
  * neighboring samples so the target does not jump from row to row.
  * </p>
- *
- * @author DrPixelCat - 7842 alum
  */
 public class FFLut {
     /** Ordered samples of the path-relative state [v, a, omega, alpha]. */

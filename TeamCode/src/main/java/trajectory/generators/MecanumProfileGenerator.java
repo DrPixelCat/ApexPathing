@@ -11,7 +11,11 @@ import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
-/** Mecanum physical limits with the same signed body-axis powers as the follower. */
+/**
+ * Mecanum physical limits with the same signed body-axis powers as the follower.
+ *
+ * @author Joel H
+ */
 public class MecanumProfileGenerator extends BaseProfileGenerator {
     private Mecanum.DirectionalLut limitCalculator;
     private double cachedForwardVelocity, cachedForwardAcceleration, cachedStrafeVelocity, cachedStrafeAcceleration;

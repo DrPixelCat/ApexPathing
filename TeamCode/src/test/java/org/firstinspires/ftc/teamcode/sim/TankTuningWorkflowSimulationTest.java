@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -71,7 +73,7 @@ public class TankTuningWorkflowSimulationTest {
             String frame = "";
             while (output.get() == null && System.nanoTime() < deadline) {
                 long now = System.nanoTime();
-                double remaining = Math.min(.05, (now-previous)*1e-9); previous = now;
+                double remaining = Math.min(.05, DeltaTime.seconds(now-previous)); previous = now;
                 while (remaining > 1e-9) {
                     double dt = Math.min(.005, remaining);
                     TankAutoAccuracySimulationTest.stepPhysics(hardware, dt); remaining -= dt;

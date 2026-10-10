@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
@@ -691,7 +693,7 @@ public class ApexSimulationTest {
                 Follower.CommandDemand demand = follower.getLastCommandDemand();
                 trace.printf(java.util.Locale.ROOT,
                         "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
-                        (now.getAsLong() - started) * 1e-9, target.pathT,
+                        DeltaTime.seconds(now.getAsLong() - started), target.pathT,
                         pose.getX().getIn(), pose.getY().getIn(), pose.getHeading().getRad(),
                         follower.getCrossTrackErrorIn(), target.tangentialVelocity(),
                         follower.getTrackingMeasuredVelocity(),

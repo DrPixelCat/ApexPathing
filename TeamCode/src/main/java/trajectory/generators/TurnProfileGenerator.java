@@ -13,7 +13,7 @@ import paths.movements.Turn;
  * {@code alpha}-related limits. The same LUT type is used so the follower can query turns and
  * paths through the same feedforward interface.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class TurnProfileGenerator {
 

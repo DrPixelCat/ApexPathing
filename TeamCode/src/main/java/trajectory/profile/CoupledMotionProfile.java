@@ -1,6 +1,10 @@
 package trajectory.profile;
 
-/** Backward controllability and forward reachability over squared path speeds. */
+/**
+ * Backward controllability and forward reachability over squared path speeds.
+ *
+ * @author Joel H
+ */
 public final class CoupledMotionProfile {
     private static final int SEARCH_ITERATIONS = 32;
     private static final java.util.concurrent.atomic.AtomicLong solveCount = new java.util.concurrent.atomic.AtomicLong();
@@ -10,6 +14,11 @@ public final class CoupledMotionProfile {
     public interface Transitions {
         /** Greatest feasible successor in [0, ceilingSquared], or NaN if none exists. */
         double maximumNextSquared(int interval, double velocitySquared, double ceilingSquared);
+        /** Necessary predecessor bound, independent of power feasibility. Custom rules may
+         * leave it unbounded; returning a smaller value must not exclude any feasible state. */
+        default double previousSquaredUpperBound(int interval, double ceilingSquared) {
+            return Double.POSITIVE_INFINITY;
+        }
     }
 
     private CoupledMotionProfile() { }
@@ -61,7 +70,7 @@ public final class CoupledMotionProfile {
     }
 
     /** Returns the first successor without allocating full speed arrays. Future transitions
-     * are still validated so coarse-window fallback retains the same failure detection. */
+     * are still validated before publishing the first command. */
     public static double solveNextSquared(double[] positions, double[] ceilings, int count, double startVelocity,
                                           double endVelocity, Transitions transitions, Workspace workspace) {
         if (!Double.isFinite(startVelocity) || startVelocity < 0 || workspace == null || positions == null
@@ -131,7 +140,13 @@ public final class CoupledMotionProfile {
             double upper = ceilings[i] * ceilings[i];
             if (positions[i + 1] - positions[i] <= 1e-9) {
                 controllable[i] = Math.min(upper, controllable[i + 1]);
-            } else if (Double.isFinite(transitions.maximumNextSquared(i, upper, controllable[i + 1]))) {
+                continue;
+            }
+            upper = Math.min(upper, transitions.previousSquaredUpperBound(i, controllable[i + 1]));
+            if (!Double.isFinite(upper) || upper < 0) {
+                throw new IllegalStateException("Invalid predecessor speed bound at path interval " + i);
+            }
+            if (Double.isFinite(transitions.maximumNextSquared(i, upper, controllable[i + 1]))) {
                 controllable[i] = upper;
             } else {
                 double low = 0, high = upper;

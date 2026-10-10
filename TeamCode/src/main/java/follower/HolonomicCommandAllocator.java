@@ -8,7 +8,11 @@ import drivetrains.Mecanum;
 import geometry.Angle;
 import geometry.Vector;
 
-/** Allocates holonomic correction, propulsion, and velocity commands into one motor-power budget. */
+/**
+ * Allocates holonomic correction, propulsion, and velocity commands into one motor-power budget.
+ *
+ * @author Joel H
+ */
 final class HolonomicCommandAllocator {
     enum DriveModel { ANISOTROPIC, ISOTROPIC }
 

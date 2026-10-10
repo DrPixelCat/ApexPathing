@@ -1,12 +1,11 @@
 package tuning.localizer.phases;
 
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.calibration.CalibrationCandidate;
 import tuning.localizer.calibration.CalibrationSnapshot;
 import tuning.localizer.calibration.DirectionTrial;
 
 import tuning.localizer.LocalizationTunerContext;
-import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.TuningPhase;
 
 import com.qualcomm.robotcore.hardware.IMU;
@@ -102,9 +101,9 @@ public final class DirectionsPhase extends TuningPhase {
         CalibrationSnapshot end = context.getAdapter().snapshot(context.getLocalizer());
         responses.add(response(motion, start, end));
         if (motion == Motion.FORWARD) {
-            trials.add(new DirectionTrial(CalibrationAxis.FORWARD, start, end));
+            trials.add(new DirectionTrial(TranslationAxis.FORWARD, start, end));
         } else if (motion == Motion.STRAFE) {
-            trials.add(new DirectionTrial(CalibrationAxis.STRAFE, start, end));
+            trials.add(new DirectionTrial(TranslationAxis.STRAFE, start, end));
         }
         motionIndex++;
         if (motionIndex >= motions.size()) {

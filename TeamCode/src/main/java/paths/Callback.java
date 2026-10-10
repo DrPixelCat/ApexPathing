@@ -8,7 +8,6 @@ import geometry.Angle;
  * A unified callback container capable of handling either distance-based progress triggers
  * or angular-based orientation triggers during robot movement execution.
  *
- * @author DrPixelCat - 7842 alum
  * @author Sohum Arora - 22985 Paraducks
  */
 public class Callback {

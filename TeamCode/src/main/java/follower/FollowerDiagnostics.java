@@ -8,6 +8,8 @@ import paths.movements.Path;
  *
  * <p>The production default is a no-op, allowing desktop tools to observe the follower without
  * adding their logging libraries to the Robot Controller APK.</p>
+ *
+ * @author Joel H
  */
 public interface FollowerDiagnostics {
     /** Physical target used by either trajectory source during this update. */

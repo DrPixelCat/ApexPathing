@@ -1,6 +1,10 @@
 package follower;
 
-/** Tracks how long an active path has continuously remained at a stuck speed. */
+/**
+ * Tracks how long an active path has continuously remained at a stuck speed.
+ *
+ * @author Joel H
+ */
 final class FollowerStuckWatchdog {
     private static final double TIMEOUT_SECONDS = 0.5;
     private long stuckSinceNanos = -1L;

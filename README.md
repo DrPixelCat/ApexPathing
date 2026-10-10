@@ -1,6 +1,10 @@
 # Apex Pathing
 Check out our site at https://www.apexpathing.com/ for info about the project!
 
+Class JavaDoc lists credited authors.
+See the [main-source authorship audit](reviews/authorship/AUTHORSHIP.md) for Git evidence,
+recorded AI involvement, and unresolved historical credits.
+
 All localizers use a shared position, velocity and acceleration Kalman estimate by default,
 with bounded automatic noise tuning from their existing sensor readings.
 See [Kalman localization](doc/KalmanLocalization.md) for configuration and validation.
@@ -106,6 +110,8 @@ motion takes exclusive control until its test finishes. All phases remain select
 Use Stop to cancel tuning or discard unsaved changes. The last accepted phase remains saved.
 Automatic telemetry shows the constants being tuned and positioning instructions. The bottom
 line says `Robot can be driven with sticks` only while stick driving is available.
+See [tuner telemetry conventions](doc/TunerTelemetryConventions.md) for layout,
+formatting, state-specific controls, and manual SysId error definitions.
 After a phase's results are accepted, Follower Tuner saves them and advances through every
 remaining phase in order: drive feedforward SysId, heading feedforward SysId,
 [motion characterization](doc/MotionCharacterization.md), heading feedback,
@@ -178,14 +184,17 @@ the gains. The model result is only a seed, not an assumed final
 answer. A response that has not settled after 2.5 seconds is scored as a poor candidate; successful
 responses need only remain inside the position and velocity tolerances for 0.15 seconds. Between
 responses, low-level velocity-estimator noise is tolerated after a short re-arm delay. PDS CSVs
-record gains, cost, target, position, error, velocity and power.
+record gains, cost, target, position, error, velocity and power. Automatic tuning saves
+its measured winner without an extra validation run. Fit residual, tracking-quality,
+and localization checks live under `TeamCode/src/test/java`; the PD tuner retains
+the optional user-triggered X verification step.
 
 ## Localization tuner
 
 Run `Localization Tuner` before follower tuning. It follows the same phase-picker pattern as the
 follower tuner with compact prompts for the Driver Station. The available procedures
 are a direction check, forward and strafe distance scale, rotation geometry, velocity/acceleration
-filtering, and a live pose test. Phases that do not apply to the configured drivetrain
+filtering. Localization validation runs in JUnit. Phases that do not apply to the configured drivetrain
 or localizer are shown as `N/A`.
 
 The direction check saves the required encoder/pod reversals into localization calibration.

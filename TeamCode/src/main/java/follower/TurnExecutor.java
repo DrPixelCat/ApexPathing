@@ -1,5 +1,7 @@
 package follower;
 
+import util.DeltaTime;
+
 import controllers.DriveController;
 import controllers.DriveController.AllocatedCommand;
 import controllers.TurnController;
@@ -13,7 +15,11 @@ import paths.movements.Path;
 import paths.movements.Turn;
 import trajectory.TrajectorySample;
 
-/** Executes PID quick turns and stored profiles, with continuous heading progress. */
+/**
+ * Executes PID quick turns and stored profiles, with continuous heading progress.
+ *
+ * @author Joel H
+ */
 final class TurnExecutor {
     private static final double SETTLED_ANGULAR_VELOCITY = .10;
     private final BaseDrivetrain<?> drivetrain;
@@ -25,7 +31,7 @@ final class TurnExecutor {
     private Angle targetHeading, previousHeading;
     private Vector targetPosition;
     private double direction, totalDisplacement, progress;
-    private long lastUpdateNanos;
+    private final DeltaTime timing = new DeltaTime(.02);
     private double stalledSeconds;
     private final java.util.function.LongSupplier monotonicClock;
 
@@ -44,15 +50,15 @@ final class TurnExecutor {
         previousHeading = turn.getStartPose().getHeading();
         double signedTurn = previousHeading.getShortestAngleTo(targetHeading).getRad();
         direction = Math.signum(signedTurn); totalDisplacement = Math.abs(signedTurn); progress = 0;
-        lastUpdateNanos = 0;
+        timing.reset();
         stalledSeconds = 0;
     }
 
     Follower.MovementOutcome update(Turn turn, Pose current, BaseLocalizer<?> localizer,
                    MovementCallbackRunner callbacks, FollowerPathState state, boolean driveControllerEnabled, boolean headingControllerEnabled) {
         long now = monotonicClock.getAsLong();
-        double dt = lastUpdateNanos == 0 ? .02 : Math.max(0, Math.min(.05, (now - lastUpdateNanos) * 1e-9));
-        lastUpdateNanos = now;
+        double dt = Math.max(0, Math.min(.05, timing.update(now)));
+
         Angle heading = current.getHeading();
         observeHeading(heading);
         double headingError = heading.getShortestAngleTo(targetHeading).getRad();
@@ -116,8 +122,8 @@ final class TurnExecutor {
             previousHeading = heading;
         }
     }
-    void pause() { lastUpdateNanos = 0; stalledSeconds = 0; }
-    void resume(long now) { lastUpdateNanos = 0; }
-    void markTransitionTick(long now) { lastUpdateNanos = 0; }
-    void reset() { targetHeading = null; targetPosition = null; previousHeading = null; stalledSeconds = 0; lastUpdateNanos = 0; progress = 0; }
+    void pause() { timing.reset(); stalledSeconds = 0; }
+    void resume(long now) { timing.reset(); }
+    void markTransitionTick(long now) { timing.reset(); }
+    void reset() { targetHeading = null; targetPosition = null; previousHeading = null; stalledSeconds = 0; timing.reset(); progress = 0; }
 }

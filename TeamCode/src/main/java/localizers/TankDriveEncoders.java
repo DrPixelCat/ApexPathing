@@ -23,6 +23,8 @@ import geometry.Pose;
  * X is forward at zero heading; Y is left. Heading is continuous across IMU wraparound.
  * Assumes rolling without lateral slip and approximately constant curvature per update.
  * Motor directions and run modes are never changed, including during pose resets.
+ *
+ * @author Joel H
  */
 public class TankDriveEncoders extends BaseLocalizer<TankDriveEncoders.Constants> {
     private final IntSupplier[] encoders;

@@ -6,8 +6,6 @@ import geometry.Vector;
 /**
  * Defines the contract for calculating target heading profiles across different drivetrain
  * kinematics.
- *
- * @author DrPixelCat - 7842 alum
  */
 @SuppressWarnings("ClassNamePrefixedWithPackageName")
 public interface HeadingInterpolator {

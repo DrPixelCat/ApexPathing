@@ -15,7 +15,7 @@ import paths.movements.Path;
 /**
  * Provides shared functionality and structure for building paths for all drivetrain types.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public abstract class PathBuilder<T extends PathBuilder<T>> {

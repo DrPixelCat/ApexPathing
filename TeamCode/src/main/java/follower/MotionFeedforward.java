@@ -2,7 +2,11 @@ package follower;
 
 import com.qualcomm.robotcore.util.Range;
 
-/** Pure feedforward calculations shared by holonomic and tank path execution. */
+/**
+ * Pure feedforward calculations shared by holonomic and tank path execution.
+ *
+ * @author Joel H
+ */
 final class MotionFeedforward {
     private MotionFeedforward() { }
 

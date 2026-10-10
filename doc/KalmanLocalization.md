@@ -134,8 +134,9 @@ checking stopped motors, frozen learning, flushed CSV data and no accepted calib
 
 The workflow fixtures acknowledge button consumption before sending another press, give the
 required five rotations enough simulated travel time, expect the actual 45-degree/second spin
-label, and allow the plant to settle before spin geometry calibration. The live pose test remains
-open until the OpMode stops; its test does not expect an automatic return to the menu.
+label, and allow the plant to settle before spin geometry calibration. Localization pose
+validation runs directly in JUnit against simulator motion; the tuner returns to the
+calibration menu after filter acquisition and has no live pose test phase.
 
 A seeded sinusoidal-motion test with 0.05-inch position noise compared the unified estimate with
 the earlier finite-difference plus separate Kalman velocity estimator, using its default R=0.25

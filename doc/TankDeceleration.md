@@ -46,7 +46,8 @@ come from running the actual tuner state machines. Whole-path interpolation was 
    drives retain the existing ramp. Both tank axes recovered the known simulated coefficients.
 2. **kA tuner:** scores the central 12–90% of both ramps in both directions. Braking error is
    sign-aligned for binary-search decisions. Each direction must supply enough acceleration
-   and braking samples. Confirmation still measures the worse direction's time-weighted RMS.
+   and braking samples. Selection measures the worse direction's time-weighted RMS;
+   independent confirmation belongs to JUnit.
 3. **Tank terminal distance lookup:** uses `v² = v0² + 2*a*distance` in the final interval ending at rest, with consistent heading rates. Interior curve interpolation is retained. Previously velocity and acceleration were blended independently: near the
    final stop one speed transition implied -217 in/s² while the logged target was -116 in/s².
    Time-based turn lookup and existing holonomic lookup behavior remain unchanged.

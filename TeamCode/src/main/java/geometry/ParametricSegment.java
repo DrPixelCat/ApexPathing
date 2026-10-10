@@ -3,8 +3,6 @@ package geometry;
 /**
  * Represents a purely mathematical, stateless 2D parametric curve.
  * Evaluated strictly using the parameter 't' in the domain [0.0, 1.0].
- *
- * @author DrPixelCat - 7842 alum
  */
 public interface ParametricSegment {
     /** @return The (x, y) coordinate at parameter t */

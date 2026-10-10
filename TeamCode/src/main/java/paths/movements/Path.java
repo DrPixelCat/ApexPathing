@@ -33,7 +33,7 @@ import paths.heading.ReversedHeadingInterpolator;
  * <p>A {@code Path} encapsulates a continuous parametric curve (e.g., a B-Spline), its associated
  * heading interpolation strategy, and any scheduled mechanical callbacks triggered along the route.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  * @author Sohum Arora - 22985 Paraducks
  */
 public class Path extends FollowerMovement {

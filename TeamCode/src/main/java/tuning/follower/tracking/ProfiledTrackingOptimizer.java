@@ -9,7 +9,7 @@ final class ProfiledTrackingOptimizer {
     enum Parameter {
         PROFILE_VELOCITY_POWER, CORNER_SPEED_SCALE, VELOCITY_GAIN
     }
-    private enum Stage { BASELINE_FIRST, BASELINE_REPEAT, CANDIDATE, VALIDATION, COMPLETE }
+    private enum Stage { BASELINE_FIRST, BASELINE_REPEAT, CANDIDATE, COMPLETE }
 
     private final Parameter[] order;
     private final boolean tank;
@@ -44,7 +44,6 @@ final class ProfiledTrackingOptimizer {
     Settings candidate() { return candidate; }
     Settings best() { return best; }
     boolean complete() { return stage == Stage.COMPLETE; }
-    boolean isValidating() { return stage == Stage.VALIDATION; }
     Settings original() { return original.copy(); }
     boolean canRejectCurrentCandidate() { return stage == Stage.CANDIDATE; }
     int candidateNumber() { return candidateNumber; }
@@ -58,8 +57,7 @@ final class ProfiledTrackingOptimizer {
                     + " " + order[parameterIndex] + " "
                     + (directionFor(order[parameterIndex]) < 0 ? "lower" : "higher");
         }
-        return stage == Stage.VALIDATION ? "Validating selected values"
-                : completionNote;
+        return completionNote;
     }
 
     void record(double score, double bias) {
@@ -80,15 +78,6 @@ final class ProfiledTrackingOptimizer {
             stage = Stage.CANDIDATE;
             parameterIndex = candidateNumber = 0;
             advanceCandidate();
-            return;
-        }
-        if (stage == Stage.VALIDATION) {
-            if (score > bestScore + improvementMargin(bestScore)) {
-                best = original.copy();
-                candidate = original.copy();
-                completionNote = "Candidate not repeatable; saved measured baseline";
-            }
-            stage = Stage.COMPLETE;
             return;
         }
         if (score < bestScore - improvementMargin(bestScore)) {
@@ -112,16 +101,6 @@ final class ProfiledTrackingOptimizer {
         advanceCandidate();
     }
 
-    void rejectValidation() {
-        if (stage != Stage.VALIDATION) {
-            throw new IllegalStateException("Only the selected candidate can fail validation");
-        }
-        best = original.copy();
-        candidate = original.copy();
-        completionNote = "Validation failed; saved measured baseline";
-        stage = Stage.COMPLETE;
-    }
-
     private void advanceCandidate() {
         while (parameterIndex < order.length) {
             Settings proposal = best.copy();
@@ -134,13 +113,8 @@ final class ProfiledTrackingOptimizer {
             }
             parameterIndex++;
         }
-        if (best.sameAs(original)) {
-            // The original settings already have two independent measurements.
-            stage = Stage.COMPLETE;
-            return;
-        }
-        stage = Stage.VALIDATION;
         candidate = best.copy();
+        stage = Stage.COMPLETE;
     }
 
     private double directionFor(Parameter parameter) {

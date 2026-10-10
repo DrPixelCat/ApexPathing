@@ -1,5 +1,7 @@
 package tuning.follower.characterization;
 
+import util.DeltaTime;
+
 import tuning.follower.TuningMeasurements;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -15,21 +17,26 @@ import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
 import tuning.follower.TuningPhase;
 
-/** Measures speed-dependent holding power and acceleration authority before controller tuning. */
+/**
+ * Measures speed-dependent holding power and acceleration authority before controller tuning.
+ *
+ * @author Joel H
+ */
 public final class MotionCharacterizationPhase extends TuningPhase {
+    private static final int RUNS_PER_DIRECTION = 4;
     private final ElapsedTime timer = new ElapsedTime();
     private final MotorPowerModel[][] models = new MotorPowerModel[3][2];
     private Axis axis = Axis.FORWARD;
     private int direction, run;
     private boolean running, complete;
     private String failure;
-    private MotorAuthorityRegression regression;
+    private final MotorAuthorityRegression[] regressions = new MotorAuthorityRegression[2];
     private TuningCsvWriter csv;
     private Pose start;
-    private double previousVelocity, previousTime, previousPower, lastHeading, rotation;
+    private double previousVelocity, previousPower, lastHeading, rotation;
     private double windowTime, windowVelocity, windowPower, windowPowerVelocity, stableAfter;
-    private double sampleTimeSum, sampleTimeSquared, sampleVelocitySum, sampleTimeVelocity;
-    private int windowSamples;
+    private double windowStartVelocity;
+    private final DeltaTime timing = new DeltaTime();
 
     public MotionCharacterizationPhase(TunerContext context) { super(context); }
     @Override protected String getPhaseName() { return "Motion Characterization"; }
@@ -47,15 +54,16 @@ public final class MotionCharacterizationPhase extends TuningPhase {
         running = complete = false;
         failure = null;
         for (MotorPowerModel[] row : models) { java.util.Arrays.fill(row, null); }
-        regression = new MotorAuthorityRegression();
+        resetRegressions();
         csv = TuningCsvWriter.openBuffered("motion_characterization",
                 "record", "axis", "direction", "run", "held_out", "time_s",
                 "velocity", "acceleration", "applied_power", "gain0", "gainSlope",
-                "drag0", "dragSlope", "max_velocity", "validation_rms", "power_velocity");
+                "drag0", "dragSlope", "max_velocity", "validation_rms", "power_velocity",
+                "native_velocity", "measurement_time_ns", "filtered_velocity");
     }
     @Override protected boolean autoTuned() {
         if (failure != null) {
-            context.getTelemetry().addLine("Characterization validation failed: " + failure);
+            context.getTelemetry().addLine("Characterization acquisition failed: " + failure);
             context.getTelemetry().addLine("Stop and rerun this phase.");
             return false;
         }
@@ -66,6 +74,7 @@ public final class MotionCharacterizationPhase extends TuningPhase {
                 : "Leave 96 inches clear " + (axis == Axis.FORWARD
                         ? (direction == 0 ? "in front" : "behind")
                         : (direction == 0 ? "to the left" : "to the right")) + ", plus stopping room.");
+        context.getTelemetry().addData("Acquisition run", (run + 1) + "/" + RUNS_PER_DIRECTION + ", " + (direction == 0 ? "+" : "-") + " direction");
         context.getTelemetry().addLine("Release sticks. Press A when positioned and stationary.");
         if (opMode.gamepad1.aWasPressed()
                 && context.getFollower().getVelocity().getVec().getMag().getIn() < .5
@@ -81,32 +90,39 @@ public final class MotionCharacterizationPhase extends TuningPhase {
         positionRobotForSimulation(axis == Axis.FORWARD ? staging.pose(-55 * sign, 0, 0)
                 : axis == Axis.STRAFE ? staging.pose(0, -55 * sign, 0) : Pose.zero());
         f.stop(); f.disableControllers(); start = f.getPose();
-        previousVelocity = speed(); previousTime = previousPower = rotation = 0;
+        previousVelocity = speed(); previousPower = rotation = 0;
+        timing.reset();
         lastHeading = start.getHeading().getRad(); resetWindow();
         stableAfter = 0; timer.reset(); running = true;
     }
     private double speed() {
         Follower f = context.getFollower();
+        // Identify the plant from sensor observations. The adaptive navigation estimator
+        // has its own transient response, which must not become motor drag/inertia.
+        return speed(f.getLocalizer().getRawVel(), f.getLocalizer().getRawPose());
+    }
+    private double speed(Pose velocity, Pose pose) {
         double sign = direction == 0 ? 1 : -1;
-        if (axis == Axis.ANGULAR) { return sign * f.getVelocity().getHeading(AngleUnit.RAD); }
-        geometry.Vector body = f.getVelocity().getVec().rotate(f.getPose().getHeading().times(-1));
+        if (axis == Axis.ANGULAR) { return sign * velocity.getHeading(AngleUnit.RAD); }
+        geometry.Vector body = velocity.getVec().rotate(pose.getHeading().times(-1));
         return sign * (axis == Axis.FORWARD ? body.getX().getIn() : body.getY().getIn());
     }
     private void resetWindow() {
         windowTime = windowVelocity = windowPower = windowPowerVelocity = 0;
-        windowSamples = 1; sampleTimeSum = sampleTimeSquared = sampleTimeVelocity = 0;
-        sampleVelocitySum = previousVelocity;
+        windowStartVelocity = previousVelocity;
     }
-    /** Two repeated power levels identify response; a separate sequence is entirely withheld. */
-    static double command(int run, double time) {
-        return run < 2 ? .65 : run < 4 ? 1 : time < .75 ? .55 : .95;
+    /** Two repeats at each acquisition power level, alternating direction after every run. */
+    static double command(int run) {
+        return run < 2 ? .65 : 1;
     }
     private void sample() {
         Follower f = context.getFollower();
         if (!f.getLocalizer().isLastMeasurementValid()) {
             reject("Invalid localization measurement"); return;
         }
-        double time = timer.seconds(), v = speed(), dt = time - previousTime;
+        double time = timer.seconds(), v = speed();
+        long measurementTime = f.getLocalizer().getLastMeasurementTimeNanos();
+        double dt = timing.update(measurementTime);
         double heading = f.getPose().getHeading().getRad();
         rotation += Math.abs(Math.atan2(Math.sin(heading - lastHeading), Math.cos(heading - lastHeading)));
         lastHeading = heading;
@@ -114,29 +130,30 @@ public final class MotionCharacterizationPhase extends TuningPhase {
         if (!Double.isFinite(v) || !Double.isFinite(distance) || !Double.isFinite(rotation)) {
             reject("Invalid localization measurement"); return;
         }
-        csv.writeRow("raw", axis, direction, run, run >= 4, time, v, "", previousPower);
+        csv.writeRow("raw", axis, direction, run, false, time, v, "", previousPower,
+                "", "", "", "", "", "", "",
+                v, measurementTime, speed(f.getVelocity(), f.getPose()));
         double threshold = axis == Axis.ANGULAR ? .1 : 1;
         if (dt > .08) { stableAfter = time + .2; }
         if (v > threshold && previousVelocity > threshold && dt > 0 && dt <= .08 && time >= stableAfter) {
             windowTime += dt; windowVelocity += .5 * (previousVelocity + v) * dt;
             windowPower += previousPower * dt;
             windowPowerVelocity += previousPower * .5 * (previousVelocity + v) * dt;
-            windowSamples++; sampleTimeSum += windowTime; sampleTimeSquared += windowTime * windowTime;
-            sampleVelocitySum += v; sampleTimeVelocity += windowTime * v;
             if (windowTime >= .15) {
                 double velocity = windowVelocity / windowTime;
-                double acceleration = (windowSamples * sampleTimeVelocity - sampleTimeSum * sampleVelocitySum)
-                        / (windowSamples * sampleTimeSquared - sampleTimeSum * sampleTimeSum);
+                // All regression terms describe the same time integral of the plant equation.
+                // A least-squares velocity slope uses a different temporal weighting.
+                double acceleration = (v - windowStartVelocity) / windowTime;
                 double power = windowPower / windowTime;
-                regression.add(run >= 4, velocity, acceleration, power, windowPowerVelocity / windowTime);
-                csv.writeRow("window", axis, direction, run, run >= 4, time, velocity, acceleration, power,
+                regressions[direction].add(velocity, acceleration, power, windowPowerVelocity / windowTime);
+                csv.writeRow("window", axis, direction, run, false, time, velocity, acceleration, power,
                         "", "", "", "", "", "", windowPowerVelocity / windowTime);
                 previousVelocity = v; resetWindow();
             }
         } else { previousVelocity = v; resetWindow(); }
-        previousVelocity = v; previousTime = time;
+        previousVelocity = v;
         if (time >= 2 || distance >= 96 || rotation >= 8 * Math.PI) { finishRun(); return; }
-        double power = (direction == 0 ? 1 : -1) * command(run, time)
+        double power = (direction == 0 ? 1 : -1) * command(run)
                 * f.getDrivetrain().getConstants().maxPower;
         f.getDrivetrain().moveWithVectors(axis == Axis.FORWARD ? power : 0,
                 axis == Axis.STRAFE ? power : 0, axis == Axis.ANGULAR ? power : 0);
@@ -144,28 +161,30 @@ public final class MotionCharacterizationPhase extends TuningPhase {
         if (Math.abs(delivered - previousPower) > .02) { resetWindow(); }
         previousPower = delivered;
     }
+    private void resetRegressions() {
+        for (int i = 0; i < regressions.length; i++) { regressions[i] = new MotorAuthorityRegression(); }
+    }
     private void finishRun() {
         stopMotion(); csv.flush();
-        if (++run < 6) { return; }
-        // Dropped timing gaps must not turn a short validation into an under-sampled fit.
-        // Repeat the withheld sequence for coverage, never add it to the acquisition data.
-        if (!regression.validationCovered() && run < 8) { return; }
+        direction = 1 - direction;
+        if (direction == 1) { return; }
+        // Increment the per-direction run count only after the negative run completes the pair.
+        if (++run < RUNS_PER_DIRECTION) { return; }
         try {
-            MotorPowerModel model = regression.fit();
-            models[axis.ordinal()][direction] = model;
-            csv.writeRow("model", axis, direction, "", true, "", "", "", "",
-                    model.gain0, model.gainSlope, model.drag0, model.dragSlope,
-                    model.maxVelocity, model.validationRms);
-            run = 0; regression = new MotorAuthorityRegression();
-            if (++direction == 2) {
-                direction = 0;
-                if (axis == Axis.ANGULAR) {
-                    context.constants.motionCharacterization = new MotionCharacterization(models,
-                            fHolonomic(), context.getFollower().getDrivetrain().getConstants().maxPower);
-                    context.constants.profileVelocityPowerCoefficient = 0;
-                    complete = true;
-                } else { axis = axis == Axis.FORWARD && fHolonomic() ? Axis.STRAFE : Axis.ANGULAR; }
+            for (int i = 0; i < 2; i++) {
+                MotorPowerModel model = regressions[i].fit();
+                models[axis.ordinal()][i] = model;
+                csv.writeRow("model", axis, i, "", false, "", "", "", "",
+                        model.gain0, model.gainSlope, model.drag0, model.dragSlope,
+                        model.maxVelocity, model.validationRms);
             }
+            run = 0; resetRegressions();
+            if (axis == Axis.ANGULAR) {
+                context.constants.motionCharacterization = new MotionCharacterization(models,
+                        fHolonomic(), context.getFollower().getDrivetrain().getConstants().maxPower);
+                context.constants.profileVelocityPowerCoefficient = 0;
+                complete = true;
+            } else { axis = axis == Axis.FORWARD && fHolonomic() ? Axis.STRAFE : Axis.ANGULAR; }
         } catch (RuntimeException e) { reject(e.getMessage()); }
     }
     private boolean fHolonomic() { return context.getFollower().getDrivetrain().isHolonomic(); }

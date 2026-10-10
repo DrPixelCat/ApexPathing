@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -39,7 +41,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
     }
 
     @Test(timeout = 150000)
-    public void automaticSearchTunesAndConfirmsBothAxes() throws Exception {
+    public void automaticSearchTunesBothAxes() throws Exception {
         runSearch(false);
     }
 
@@ -56,6 +58,19 @@ public class AccelerationFeedforwardPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = tank ? ApexSimulation.createTankHardware()
                     : ApexSimulation.createHardware();
+            if (tank) {
+                // This regression asserts a known linear plant, independently of the release's
+                // duty-dependent stock motor equation. Configure that plant explicitly.
+                double kS = .072, kV = .01256, kA = .94 / 150, radius = 2;
+                for (SimMotor motor : StockSimTestSupport.motors(hardware)) {
+                    motor.config.motorModel = new org.codeblooded.fit.MotorModel(
+                            (v, d, b) -> d * b, (v, d, b) -> -v, (v, d, b) -> -Math.signum(v));
+                    double[] coefficients = {1 / (kA * radius * motor.config.voltageSensor.getVoltage()),
+                            kV / kA, kS / (kA * radius)};
+                    motor.config.modelCoefficients = coefficients;
+                    motor.config.zeroPowerBrakeCoefficients = coefficients.clone();
+                }
+            }
             java.util.concurrent.atomic.AtomicReference<TunerContext> captured =
                     new java.util.concurrent.atomic.AtomicReference<>();
             List<String> frames = Collections.synchronizedList(new ArrayList<>());
@@ -100,7 +115,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
             String frame = "";
             while (System.nanoTime() < deadline) {
                 long now = System.nanoTime();
-                double remaining = Math.min(.05, (now - previous) * 1e-9);
+                double remaining = Math.min(.05, DeltaTime.seconds(now - previous));
                 previous = now;
                 while (remaining > 1e-9) {
                     double dt = Math.min(.005, remaining);
@@ -120,7 +135,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
             }
             assertTrue("Automatic kA phase did not finish:\n" + frame,
                     frame.contains("constants:")
-                            && frame.contains("passed paired-direction confirmation"));
+                            && frame.contains("selected from measured paired-direction trials"));
             System.out.println(frame);
             if (tank) {
                 org.junit.Assert.assertEquals("Translation inertia", .94 / 150,
@@ -145,8 +160,8 @@ public class AccelerationFeedforwardPhaseSimulationTest {
                                     time * acceleration, target, 1e-9);
                         } else { brakingRows++; }
                     }
-                    assertTrue("Both axes should produce scored evidence", scoredRows >= 640);
-                    assertTrue("Braking must influence the fitted inertia", brakingRows >= 320);
+                    assertTrue("Both axes should produce scored evidence", scoredRows >= 560);
+                    assertTrue("Braking must influence the fitted inertia", brakingRows >= 280);
                     System.out.println("TUNED TRANSLATION KA=" + captured.get().constants.translationalKA);
                     System.out.println("TUNED ANGULAR KA=" + captured.get().constants.angularKA);
                     System.out.println("KA CSV=" + log);

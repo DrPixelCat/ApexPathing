@@ -4,8 +4,6 @@ import geometry.Angle;
 
 /**
  * Represents a heading target at a specific percentage of the path.
- *
- * @author DrPixelCat - 7842 alum
  */
 @SuppressWarnings("ClassNamePrefixedWithPackageName")
 public class HeadingNode implements Comparable<HeadingNode> {

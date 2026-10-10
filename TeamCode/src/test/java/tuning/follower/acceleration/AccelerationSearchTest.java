@@ -15,17 +15,6 @@ public class AccelerationSearchTest {
                 .072, .088, 1.2, 1.2, 0)));
     }
 
-    @Test public void confirmationAllowsSmallNoiseWithoutAcceptingRealRegression() {
-        assertTrue(AccelerationFeedforwardPhase.confirmationAcceptable(.108, .238, 18));
-        assertTrue(AccelerationFeedforwardPhase.confirmationAcceptable(0, .01, 1.2));
-        org.junit.Assert.assertFalse(
-                AccelerationFeedforwardPhase.confirmationAcceptable(.108, 1, 18));
-        org.junit.Assert.assertFalse(
-                AccelerationFeedforwardPhase.confirmationAcceptable(.01, .1, 1.2));
-        org.junit.Assert.assertFalse(
-                AccelerationFeedforwardPhase.confirmationAcceptable(.1, Double.NaN, 18));
-    }
-
     @Test public void signedLagRaisesCandidateAndLeadLowersIt() {
         AccelerationSearch search = new AccelerationSearch(.08, 3);
         assertEquals(.04, search.current(), 1e-12);

@@ -7,7 +7,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Checks that automatic selection repeats one course and validates the winner. */
+/** Checks that automatic selection repeats one course and selects the winner without a validation run. */
 public class ProfiledTrackingOptimizerTest {
     private static FollowerConstants seed() throws Exception {
         FollowerConstants constants = FollowerConstants.fromJson(
@@ -22,7 +22,7 @@ public class ProfiledTrackingOptimizerTest {
         return constants;
     }
 
-    @Test public void selectsOnlyMeasuredImprovementAndValidatesIt() throws Exception {
+    @Test public void selectsOnlyMeasuredImprovement() throws Exception {
         FollowerConstants constants = seed();
         ProfiledTrackingOptimizer optimizer = new ProfiledTrackingOptimizer(constants, false, 1.0);
         int trials = 0;
@@ -30,7 +30,6 @@ public class ProfiledTrackingOptimizerTest {
             double score = optimizer.candidate().velocityGain > 0.04 ? 8.0 : 10.0;
             optimizer.record(score, 0.0);
         }
-        assertTrue(optimizer.complete());
         assertTrue(optimizer.complete());
         assertTrue("Expected a measured improvement in velocity gain",
                 optimizer.best().velocityGain > 0.04);
@@ -40,20 +39,19 @@ public class ProfiledTrackingOptimizerTest {
         assertEquals(optimizer.best().velocityGain, constants.velocityFeedbackGain, 0.0);
     }
 
-    @Test public void failedRepeatValidationKeepsMeasuredBaseline() throws Exception {
-        FollowerConstants constants = seed();
-        ProfiledTrackingOptimizer optimizer = new ProfiledTrackingOptimizer(constants, false, 1.0);
-        int trials = 0;
-        while (!optimizer.complete() && trials++ < 50) {
-            double score = optimizer.status().startsWith("Validating") ? 20.0
-                    : optimizer.candidate().velocityGain > 0.04 ? 8.0 : 10.0;
-            optimizer.record(score, 0.0);
+    @Test public void measuredWinnerCompletesWithoutAnotherRun() throws Exception {
+        ProfiledTrackingOptimizer optimizer = new ProfiledTrackingOptimizer(seed(), false, 1.0);
+        optimizer.record(10.0, 0.0);
+        optimizer.record(10.0, 0.0);
+        int candidates = 0;
+        while (!optimizer.complete()) {
+            assertTrue(optimizer.canRejectCurrentCandidate());
+            optimizer.record(optimizer.candidate().velocityGain > 0.04 ? 8.0 : 10.0, 0.0);
+            assertTrue(++candidates <= optimizer.candidateLimit());
         }
-        assertTrue(optimizer.complete());
-        assertTrue(optimizer.complete());
-        assertEquals(0.4, optimizer.candidate().pulsePower, 0.0);
-        assertEquals(0.4, optimizer.best().pulsePower, 0.0);
-        assertEquals(0.04, optimizer.best().velocityGain, 0.0);
+        assertEquals(optimizer.candidateLimit(), candidates);
+        assertTrue(optimizer.best().velocityGain > 0.04);
+        assertTrue(optimizer.candidate().sameAs(optimizer.best()));
     }
 
     @Test public void unusableCandidateAdvancesWithoutRetryingIt() throws Exception {

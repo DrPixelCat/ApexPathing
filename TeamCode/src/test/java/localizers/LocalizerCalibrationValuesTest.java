@@ -8,7 +8,7 @@ import geometry.Dist;
 import geometry.DistUnit;
 import geometry.Pose;
 import geometry.Vector;
-import tuning.localizer.calibration.CalibrationAxis;
+import drivetrains.TranslationAxis;
 import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.LocalizerAdapters;
 
@@ -45,10 +45,10 @@ public class LocalizerCalibrationValuesTest {
     @Test public void adapterCapabilitiesMatchLocalizerAndEncoderLayout() {
         LocalizerAdapter twoEncoderMecanum = LocalizerAdapters.create(
                 new MecanumDriveEncoders.Constants().setFrontLeftName("l").setFrontRightName("r"));
-        assertTrue(twoEncoderMecanum.supportsDistance(CalibrationAxis.FORWARD));
-        assertFalse(twoEncoderMecanum.supportsDistance(CalibrationAxis.STRAFE));
+        assertTrue(twoEncoderMecanum.supportsDistance(TranslationAxis.FORWARD));
+        assertFalse(twoEncoderMecanum.supportsDistance(TranslationAxis.STRAFE));
         assertFalse(LocalizerAdapters.create(new TankDriveEncoders.Constants())
-                .supportsDistance(CalibrationAxis.STRAFE));
+                .supportsDistance(TranslationAxis.STRAFE));
         assertTrue(LocalizerAdapters.create(new ThreeWheel.Constants()).supportsSpinCalibration());
         assertTrue(LocalizerAdapters.create(new Pinpoint.Constants()).supportsSpinCalibration());
         assertTrue(LocalizerAdapters.create(new Octoquad.Constants()).supportsSpinCalibration());

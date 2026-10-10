@@ -8,7 +8,11 @@ import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
-/** Isotropic translation with coupled heading and signed acceleration constraints. */
+/**
+ * Isotropic translation with coupled heading and signed acceleration constraints.
+ *
+ * @author Joel H
+ */
 public class SwerveProfileGenerator extends BaseProfileGenerator {
     public SwerveProfileGenerator(FollowerConstants constants, Path path) { super(constants, path); }
     public SwerveProfileGenerator(FollowerConstants constants, Path path, double powerLimit) { super(constants, path, powerLimit); }
@@ -30,24 +34,49 @@ public class SwerveProfileGenerator extends BaseProfileGenerator {
         Vector body = point.getFirstDerivative().normalize().rotate(targetHeading.times(-1));
         double bx = body.getX().getIn(), by = body.getY().getIn();
         double normal = point.getSignedCurvature() * constants.kCentripetal;
-        return (v, a, omega, alpha, normalVelocity) -> {
-            double x, y;
-            if (constants.motionCharacterization == null) {
-                double tangent = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
-                x = bx * tangent - by * normal * normalVelocity * normalVelocity;
-                y = by * tangent + bx * normal * normalVelocity * normalVelocity;
-            } else {
-                double tangent = v * profileKV() + a * constants.getTranslationalKA(v, a) + signedStatic(v, a, constants.translationalFeedforwardKS);
-                x = bx * tangent; y = by * tangent;
-                if (v * a >= -1e-6) {
-                    x = constants.characterizedPower(Axis.FORWARD, v * bx, a * bx, x);
-                    y = constants.characterizedPower(Axis.STRAFE, v * by, a * by, y);
+        return new PowerEvaluator() {
+            private final double[] coefficients = new double[6];
+            @Override public double utilization(double v, double a, double omega, double alpha, double normalVelocity) {
+                double x, y;
+                if (constants.motionCharacterization == null) {
+                    double tangent = v * profileKV() + a * constants.translationalKA + signedStatic(v, a, constants.translationalFeedforwardKS);
+                    x = bx * tangent - by * normal * normalVelocity * normalVelocity;
+                    y = by * tangent + bx * normal * normalVelocity * normalVelocity;
+                } else {
+                    double tangent = v * profileKV() + a * constants.getTranslationalKA(v, a) + signedStatic(v, a, constants.translationalFeedforwardKS);
+                    x = bx * tangent; y = by * tangent;
+                    if (v * a >= -1e-6) {
+                        x = constants.characterizedPower(Axis.FORWARD, v * bx, a * bx, x);
+                        y = constants.characterizedPower(Axis.STRAFE, v * by, a * by, y);
+                    }
+                    x -= by * normal * normalVelocity * normalVelocity;
+                    y += bx * normal * normalVelocity * normalVelocity;
                 }
-                x -= by * normal * normalVelocity * normalVelocity;
-                y += bx * normal * normalVelocity * normalVelocity;
+                double turn = HolonomicFeedforward.heading(constants, omega, alpha);
+                return Math.hypot(x, y) + Math.abs(turn);
             }
-            double turn = HolonomicFeedforward.heading(constants, omega, alpha);
-            return Math.hypot(x, y) + Math.abs(turn);
+            @Override public double maximumAcceleration(double v, double prime, double second, double min, double max, double limit) {
+                double omega = prime * v, baseAlpha = second * v * v;
+                double firstAlpha = baseAlpha + prime * min, lastAlpha = baseAlpha + prime * max;
+                if (feedforward.HolonomicFeedforward.motionSign(v, min) != feedforward.HolonomicFeedforward.motionSign(v, max)
+                        || feedforward.HolonomicFeedforward.motionSign(omega, firstAlpha) != feedforward.HolonomicFeedforward.motionSign(omega, lastAlpha)
+                        || (constants.motionCharacterization != null && (v * min < -1e-6) != (v * max < -1e-6))) {
+                    return Double.NEGATIVE_INFINITY;
+                }
+                double tangent = v * profileKV() + signedStatic(v, min, constants.translationalFeedforwardKS);
+                double turn = omega * constants.angularKV + baseAlpha * constants.angularKA
+                        + signedStatic(omega, firstAlpha, constants.angularFeedforwardKS);
+                boolean characterizedTranslation = v * min >= -1e-6;
+                if (!linearAxisPower(Axis.FORWARD, bx * v, 0, bx, bx * tangent, bx * constants.translationalKA,
+                        min, max, characterizedTranslation, coefficients, 0)
+                        || !linearAxisPower(Axis.STRAFE, by * v, 0, by, by * tangent, by * constants.translationalKA,
+                        min, max, characterizedTranslation, coefficients, 2)
+                        || !linearAxisPower(Axis.ANGULAR, omega, baseAlpha, prime, turn, prime * constants.angularKA,
+                        min, max, true, coefficients, 4)) { return Double.NEGATIVE_INFINITY; }
+                coefficients[0] -= by * normal * v * v;
+                coefficients[2] += bx * normal * v * v;
+                return maximumNormPowerAcceleration(coefficients, min, max, limit);
+            }
         };
     }
     @Override protected void evaluatePoint(Path path, PathPoint prev, PathPoint current, double vPrev,

@@ -6,7 +6,11 @@ import geometry.PathPoint;
 import geometry.Vector;
 import paths.movements.Path;
 
-/** Differential-drive reference powers with physical traction and heading limits. */
+/**
+ * Differential-drive reference powers with physical traction and heading limits.
+ *
+ * @author Joel H
+ */
 public class TankProfileGenerator extends BaseProfileGenerator {
     public TankProfileGenerator(FollowerConstants constants, Path path) { super(constants, path); }
     public TankProfileGenerator(FollowerConstants constants, Path path, double powerLimit) { super(constants, path, powerLimit); }

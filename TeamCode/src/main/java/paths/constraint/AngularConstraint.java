@@ -5,8 +5,6 @@ import geometry.Angle;
 /**
  * A constraint that applies to the robot's angular movement along a path, such as angular velocity
  * or angular acceleration.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class AngularConstraint implements PathConstraint {
     private double s;

@@ -1,5 +1,7 @@
 package controllers;
 
+import util.DeltaTime;
+
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.function.LongSupplier;
@@ -20,6 +22,8 @@ import geometry.Scalar;
  *
  * <p>The terminal {@link Calculation#calculate(double)} call samples and updates the controller's
  * derivative state once, regardless of which terms are selected.
+ *
+ * @author Joel H
  */
 public class FeedbackController {
     public static final double LINEAR_STATIC_DEADBAND = 0.25;
@@ -32,6 +36,7 @@ public class FeedbackController {
 
     private enum Component {
         P,
+        I,
         D,
         SQRT,
         STATIC,
@@ -44,14 +49,17 @@ public class FeedbackController {
     private boolean angularController;
 
     private double lastError;
+    private double integralOutput;
+    private double integralOutputLimit = 1.0;
     private boolean firstRun = true;
-    private long lastTimestamp;
+    private final DeltaTime timing = new DeltaTime();
     private final LongSupplier nanoTime;
 
     /** Holds the gains used by the available controller components. */
     public static class Coefficients {
         /** A NaN gain is not included and cannot be used by a calculation. */
         public double kP = Double.NaN;
+        public double kI = Double.NaN;
         public double kD = Double.NaN;
         public double kS = Double.NaN;
         public double kSqrt = Double.NaN;
@@ -62,9 +70,10 @@ public class FeedbackController {
         public Coefficients() {}
 
         public Coefficients p(double kP) { this.kP = kP; return this; }
+        public Coefficients i(double kI) { this.kI = kI; return this; }
         public Coefficients d(double kD) { this.kD = kD; return this; }
-        public Coefficients s(double kS) { this.kS = kS; return this; }
         public Coefficients sqrt(double kSqrt) { this.kSqrt = kSqrt; return this; }
+        public Coefficients s(double kS) { this.kS = kS; return this; }
         public Coefficients vel(double kV) { this.kV = kV; return this; }
         public Coefficients accel(double kA) { this.kA = kA; return this; }
     }
@@ -78,7 +87,7 @@ public class FeedbackController {
     public FeedbackController(Coefficients coefficients, LongSupplier nanoTime) {
         this.coefficients = Objects.requireNonNull(coefficients, "coefficients");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
-        this.lastTimestamp = nanoTime.getAsLong();
+        timing.reset(nanoTime.getAsLong());
     }
 
     /** Replaces the coefficients used by future calculations. */
@@ -88,6 +97,25 @@ public class FeedbackController {
 
     /** @return the coefficients currently used by this controller. */
     public Coefficients getCoefficients() { return coefficients; }
+
+    /**
+     * Limits the magnitude of the stored integral contribution in controller output units.
+     * Defaults to 1.0. Zero disables and clears integral feedback.
+     * This bounds accumulation, allowing reversed error to unwind it immediately.
+     */
+    public void setIntegralOutputLimit(double limit) {
+        if (!Double.isFinite(limit) || limit < 0.0) {
+            throw new IllegalArgumentException("Integral output limit must be finite and nonnegative");
+        }
+        integralOutputLimit = limit;
+        integralOutput = clampIntegralOutput(integralOutput);
+    }
+
+    public double getIntegralOutputLimit() { return integralOutputLimit; }
+
+    private double clampIntegralOutput(double output) {
+        return Math.max(-integralOutputLimit, Math.min(integralOutputLimit, output));
+    }
 
     public void setLinearStaticDeadband(double linearStaticDeadband) {
         this.linearStaticDeadband = linearStaticDeadband;
@@ -107,14 +135,18 @@ public class FeedbackController {
         staticDeadband = angularStaticDeadband;
     }
 
-    /** Resets the derivative history before beginning a new movement. */
+    /** Resets the integral and derivative history before beginning a new movement. */
     public void reset() {
         firstRun = true;
-        lastTimestamp = nanoTime.getAsLong();
+        integralOutput = 0.0;
+        timing.reset(nanoTime.getAsLong());
     }
 
     /** Starts a calculation containing the proportional term. */
     public Calculation p() { return calculation().p(); }
+
+    /** Starts a calculation containing integral feedback. */
+    public Calculation i() { return calculation().i(); }
 
     /** Starts a calculation containing an internally calculated derivative term. */
     public Calculation d() { return calculation().d(); }
@@ -148,9 +180,9 @@ public class FeedbackController {
 
     private Scalar calculate(Calculation calculation, double error) {
         calculation.validateCoefficients();
-        long currentNano = nanoTime.getAsLong();
-        double deltaTime = (currentNano - lastTimestamp) / 1_000_000_000.0;
-        boolean timeAnomaly = deltaTime < 1E-6 || deltaTime > 0.15;
+
+        double deltaTime = timing.update(nanoTime.getAsLong());
+        boolean timeAnomaly = timing.isTimeAnomalyDetected();
         double actualError = angularController ? Angle.wrap(error) : error;
 
         if (firstRun) {
@@ -166,6 +198,15 @@ public class FeedbackController {
 
         if (calculation.has(Component.P)) {
             response += coefficients.kP * actualError;
+        }
+        if (calculation.has(Component.I)) {
+            if (coefficients.kI == 0.0 || integralOutputLimit == 0.0) {
+                integralOutput = 0.0;
+            } else if (!timeAnomaly) {
+                integralOutput = clampIntegralOutput(
+                        integralOutput + coefficients.kI * actualError * deltaTime);
+            }
+            response += integralOutput;
         }
         if (calculation.has(Component.D)) {
             response += coefficients.kD * errorRate;
@@ -189,7 +230,6 @@ public class FeedbackController {
         }
         response += calculation.feedforward;
 
-        lastTimestamp = currentNano;
         lastError = actualError;
         return Scalar.of(response);
     }
@@ -227,6 +267,7 @@ public class FeedbackController {
 
         private void validateCoefficients() {
             if (has(Component.P)) { requireCoefficient(coefficients.kP, "kP", "p"); }
+            if (has(Component.I)) { requireCoefficient(coefficients.kI, "kI", "i"); }
             if (has(Component.D)) { requireCoefficient(coefficients.kD, "kD", "d"); }
             if (has(Component.SQRT)) {
                 requireCoefficient(coefficients.kSqrt, "kSqrt", "sqrt");
@@ -244,6 +285,17 @@ public class FeedbackController {
         public Calculation p() {
             requireCoefficient(coefficients.kP, "kP", "p");
             components.add(Component.P);
+            return this;
+        }
+
+        /**
+         * Includes integral feedback, accumulating gain-scaled error only while selected,
+         * bounded by {@link FeedbackController#setIntegralOutputLimit(double)}.
+         * The first sample and anomalous time intervals are skipped; reset clears the sum.
+         */
+        public Calculation i() {
+            requireCoefficient(coefficients.kI, "kI", "i");
+            components.add(Component.I);
             return this;
         }
 

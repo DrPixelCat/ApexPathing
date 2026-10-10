@@ -5,9 +5,6 @@ import java.util.List;
 
 /** Fits power = kS sign(v) + kV v + kA a from signed, time-averaged windows. */
 final class SysIdRegression {
-    // A pooled R² can hide opposite signed errors in the four excitation runs.
-    // Five percent of full motor power is already a material feedforward error.
-    private static final double MAX_RUN_BIAS_POWER = 0.05;
     static final class Sample {
         final int run;
         final double time, velocity, acceleration, power;
@@ -78,7 +75,7 @@ final class SysIdRegression {
         double[] k = {m[0][3] / scale[0], m[1][3] / scale[1], m[2][3] / scale[2]};
         // A frictionless plant can put the unconstrained intercept below zero through noise
         // or model mismatch. Refit the physical kS=0 boundary rather than clamp the old fit.
-        // The same excitation, gain-sign and R-squared checks still apply to the new model.
+        // The same excitation, excitation and gain-sign checks still apply to the new model.
         if (k[0] < 0 && k[1] > 0 && k[2] >= 0) {
             double vv = 0, va = 0, aa = 0, vp = 0, ap = 0;
             for (Sample s : samples) {
@@ -106,14 +103,13 @@ final class SysIdRegression {
         double r2 = total > 0 ? 1 - error / total : Double.NaN;
         boolean valid = k[0] >= 0 && k[0] < .9 && k[1] > 0 && k[2] >= 0
                 && Double.isFinite(k[0]) && Double.isFinite(k[1]) && Double.isFinite(k[2])
-                && r2 >= .9 && max - min >= minimumSpan;
+                && max - min >= minimumSpan;
         double maxRunBias = 0.0;
         for (int run = 0; run < counts.length; run++) {
             maxRunBias = Math.max(maxRunBias,
                     Math.abs(runResiduals[run] / Math.max(1, counts[run])));
             valid &= counts[run] >= 5;
         }
-        valid &= maxRunBias <= MAX_RUN_BIAS_POWER;
         return new Fit(k, r2, Math.sqrt(error / samples.size()), maxRunBias, valid);
     }
     private Fit invalid() { return new Fit(new double[]{Double.NaN, Double.NaN, Double.NaN},

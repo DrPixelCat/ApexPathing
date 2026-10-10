@@ -9,7 +9,7 @@ import feedforward.MotionCharacterization;
  * <p>Quick turns target the final heading directly. Stored turns track angular velocity
  * and acceleration sampled from their precomputed profile by measured heading progress.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class TurnController {
     private static final double EPSILON = 1e-6;

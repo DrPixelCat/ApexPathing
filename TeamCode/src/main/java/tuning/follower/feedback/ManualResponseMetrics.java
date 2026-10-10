@@ -1,10 +1,10 @@
 package tuning.follower.feedback;
 
+import util.DeltaTime;
 
 import tuning.TuningCsvWriter;
 
 import java.util.function.LongSupplier;
-
 
 /** Compact scalar-response recorder shared by the manual position-controller tests. */
 final class ManualResponseMetrics {
@@ -23,6 +23,7 @@ final class ManualResponseMetrics {
     private double positionTolerance;
     private double velocityTolerance;
     private double lastTime;
+    private final DeltaTime timing = new DeltaTime();
     private double squaredErrorIntegral;
     private double timeWeightedSquaredError;
     private double peakVelocity;
@@ -54,6 +55,7 @@ final class ManualResponseMetrics {
         this.positionTolerance = positionTolerance;
         this.velocityTolerance = velocityTolerance;
         lastTime = 0.0;
+        timing.reset(0L);
         squaredErrorIntegral = 0.0;
         timeWeightedSquaredError = 0.0;
         peakVelocity = 0.0;
@@ -69,8 +71,10 @@ final class ManualResponseMetrics {
 
     void sample(double position, double velocity, double maxMotorPower) {
         if (!active || !Double.isFinite(position) || !Double.isFinite(velocity)) { return; }
-        double elapsed = Math.max(0, (clock.getAsLong() - started) * 1e-9);
-        double dt = Math.max(0.0, elapsed - lastTime);
+        long elapsedNanos = Math.max(0L, clock.getAsLong() - started);
+        double elapsed = DeltaTime.seconds(elapsedNanos);
+        double dt = Math.max(0.0, timing.update(elapsedNanos));
+
         double error = target - position;
         squaredErrorIntegral += error * error * dt;
         timeWeightedSquaredError += elapsed * error * error * dt;

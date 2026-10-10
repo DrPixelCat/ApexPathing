@@ -1,5 +1,7 @@
 package tuning.follower.acceleration;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.Arrays;
@@ -68,8 +70,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private double translationRms = Double.NaN;
     private double angularRms = Double.NaN;
     private int direction;
-    private boolean confirmation;
-    private double lastLoopTime;
+    private final DeltaTime timing = new DeltaTime();
     private double lastCommand;
     private boolean lastSampleEligible;
     private boolean saturated;
@@ -168,7 +169,6 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
 
     private void startAutomaticAxis() {
         search = new AccelerationSearch(searchUpper, SEARCH_ROUNDS);
-        confirmation = false;
         automaticTrialRetries = 0;
         scheduleTrial(search.current());
     }
@@ -231,7 +231,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     private double stationaryThreshold() { return axis == Axis.TRANSLATION ? 1.0 : .1; }
 
     private void beginDirection() {
-        lastLoopTime = 0.0;
+        timing.reset(0L);
         lastCommand = 0.0;
         lastSampleEligible = false;
         timer.reset();
@@ -239,8 +239,9 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
     }
 
     private void updateDirection() {
-        double elapsed = timer.seconds();
-        double dt = elapsed - lastLoopTime;
+        long elapsedNanos = (long) timer.nanoseconds();
+        double elapsed = DeltaTime.seconds(elapsedNanos);
+        double dt = timing.update(elapsedNanos);
         double filtered = measuredVelocity(false);
         double raw = measuredVelocity(true);
         double alignedFiltered = directionSign() * filtered;
@@ -293,7 +294,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
                 axis == Axis.TRANSLATION ? command : 0.0,
                 0.0,
                 axis == Axis.ANGULAR ? command : 0.0);
-        lastLoopTime = elapsed;
+
         lastCommand = command;
         lastSampleEligible = isScoringTime(elapsed);
     }
@@ -384,37 +385,18 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             return;
         }
 
-        if (confirmation) {
-            if (!confirmationAcceptable(search.bestRms(), trial.rms, peakVelocity)) {
-                fail("Confirmation RMS worsened beyond the 25% / 2%-of-peak repeatability allowance.");
-                return;
-            }
-            acceptAutomaticAxis(search.bestCandidate(), trial.rms);
-            return;
-        }
-
         search.record(trial.rms, trial.meanError);
         if (search.isComplete()) {
-            confirmation = true;
-            scheduleTrial(search.bestCandidate());
+            acceptAutomaticAxis(search.bestCandidate(), search.bestRms());
         } else {
             scheduleTrial(search.current());
         }
     }
 
-    static boolean confirmationAcceptable(double bestRms, double confirmedRms, double peak) {
-        if (!Double.isFinite(bestRms) || bestRms < 0.0
-                || !Double.isFinite(confirmedRms) || confirmedRms < 0.0
-                || !Double.isFinite(peak) || peak <= 0.0) { return false; }
-        // A relative-only comparison becomes arbitrarily strict as the best score
-        // approaches zero. Allow a small, axis-scaled repeatability floor as well.
-        return confirmedRms <= bestRms + Math.max(.25 * bestRms, .02 * peak);
-    }
-
-    private void acceptAutomaticAxis(double value, double confirmedRms) {
+    private void acceptAutomaticAxis(double value, double measuredRms) {
         if (axis == Axis.TRANSLATION) {
             pendingTranslationKA = value;
-            translationRms = confirmedRms;
+            translationRms = measuredRms;
             axis = Axis.ANGULAR;
             positionForAxis();
             if (!configureAxis()) {
@@ -424,9 +406,9 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
             startAutomaticAxis();
         } else {
             pendingAngularKA = value;
-            angularRms = confirmedRms;
+            angularRms = measuredRms;
             applyPendingGains();
-            result = "Both kA values passed paired-direction confirmation.";
+            result = "Both kA values selected from measured paired-direction trials.";
             state = State.DONE;
             closeCsv();
         }
@@ -517,7 +499,7 @@ public final class AccelerationFeedforwardPhase extends TuningPhase {
         context.getTelemetry().addData(axis == Axis.TRANSLATION ? "Translation kA" : "Angular kA",
                 number(candidateKA));
         if (state == State.FAILED) {
-            context.getTelemetry().addLine("Acceleration feedforward validation failed: " + result);
+            context.getTelemetry().addLine("Acceleration feedforward acquisition failed: " + result);
             context.getTelemetry().addLine("Press A to restart the complete search.");
         }
     }

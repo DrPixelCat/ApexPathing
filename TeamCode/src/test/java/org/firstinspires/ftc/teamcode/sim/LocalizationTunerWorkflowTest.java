@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -66,6 +68,12 @@ public class LocalizationTunerWorkflowTest {
             moveSelectionDown(session, tuner, telemetry, hardware, 4);
             press(session, tuner, telemetry, hardware, Button.A);
             await(session, tuner, telemetry, hardware, frames, "Selected Unified adaptive Kalman", 2_000L);
+            java.lang.reflect.Field initialContext = LocalizationTuner.class.getDeclaredField("context");
+            initialContext.setAccessible(true);
+            BaseLocalizer<?> initialLocalizer = ((LocalizationTunerContext) initialContext.get(tuner)).getLocalizer();
+            // Cleanup restores the prior policy; make this interruption fixture start frozen.
+            initialLocalizer.setKalmanAutoTuning(false, false, false);
+            initialLocalizer.setPoseAutoTuning(false);
             press(session, tuner, telemetry, hardware, Button.A);
             await(session, tuner, telemetry, hardware, frames, "Move X", 5_000L);
             java.lang.reflect.Field contextField = LocalizationTuner.class.getDeclaredField("context");
@@ -188,12 +196,11 @@ public class LocalizationTunerWorkflowTest {
             runAutomaticSpin(session, tuner, telemetry, hardware, frames);
             runKalmanCollection(session, tuner, telemetry, hardware, frames);
             await(session, tuner, telemetry, hardware, frames,
-                    "[READY] TEST <", 3_000L);
+                    "[DONE] DIRECTIONS <", 3_000L);
             String menu = latestFrame(frames);
-            assertContains(menu, "[READY] TEST <");
-            // The live localization display intentionally runs until the OpMode stops.
-            runLocalizationTest(session, tuner, telemetry, hardware, frames);
-            assertContains(latestFrame(frames), "Localization test", "X ", "Y ", "Heading ");
+            assertContains(menu, "[DONE] DIRECTIONS <");
+            assertFalse("Validation must not appear as a tuner phase", menu.contains(" TEST <"));
+            validateLocalization(session, tuner, telemetry, hardware);
 
             File saved = new File(storage, "localization.json");
             assertTrue("localization.json should be saved", saved.isFile());
@@ -448,7 +455,7 @@ public class LocalizationTunerWorkflowTest {
             await(session, tuner, telemetry, hardware, frames, "A: save", 5_000L);
             assertContains(latestFrame(frames), "Estimator Moving average", "Window 9");
             press(session, tuner, telemetry, hardware, Button.A);
-            await(session, tuner, telemetry, hardware, frames, "TEST <", 2_000L);
+            await(session, tuner, telemetry, hardware, frames, "DIRECTIONS <", 2_000L);
 
             JSONObject filter = readSavedSetup(storage).getJSONObject("filter");
             assertEquals(BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE.name(),
@@ -593,21 +600,29 @@ public class LocalizationTunerWorkflowTest {
         assertContains(latestFrame(frames), "Estimator Unified adaptive Kalman", "X velocity R / jerk Q",
                 "Y velocity R / jerk Q", "Heading velocity R / jerk Q");
         press(session, tuner, telemetry, hardware, Button.A);
-        await(session, tuner, telemetry, hardware, frames, "TEST <", 2_000L);
+        await(session, tuner, telemetry, hardware, frames, "DIRECTIONS <", 2_000L);
     }
 
-    private static void runLocalizationTest(SimLinearOpModeBridge.Session session,
+    /** JUnit drives and compares localization directly; no validation OpMode phase. */
+    private static void validateLocalization(SimLinearOpModeBridge.Session session,
             LocalizationTuner tuner, ApexSimTelemetry telemetry,
-            ApexSimulation.Hardware hardware, List<String> frames) throws Exception {
-        selectAndBegin(session, tuner, telemetry, hardware, frames, "Localization test");
-        tuner.gamepad1.left_stick_y = -0.45f;
-        tuner.gamepad1.left_stick_x = 0.20f;
-        tuner.gamepad1.right_stick_x = -0.25f;
-        pump(session, tuner, telemetry, hardware, 1_000L);
-        assertContains(latestFrame(frames), "X ", "Y ", "Heading ");
-        tuner.gamepad1.left_stick_y = 0.0f;
-        tuner.gamepad1.left_stick_x = 0.0f;
-        tuner.gamepad1.right_stick_x = 0.0f;
+            ApexSimulation.Hardware hardware) throws Exception {
+        java.lang.reflect.Field field = LocalizationTuner.class.getDeclaredField("context");
+        field.setAccessible(true);
+        LocalizationTunerContext context = (LocalizationTunerContext) field.get(tuner);
+        Pose initial = context.getLocalizer().getPose();
+        double physicalX = hardware.drivetrain.position.x, physicalY = hardware.drivetrain.position.y;
+        double physicalHeading = hardware.drivetrain.position.theta;
+        context.getDrivetrain().moveWithVectors(.35, .15, .2);
+        try {
+            pump(session, tuner, telemetry, hardware, 1_000L);
+            Pose measured = context.getLocalizer().getPose();
+            assertEquals("Calibrated X", hardware.drivetrain.position.x - physicalX, measured.getX().getIn() - initial.getX().getIn(), 1.0);
+            assertEquals("Calibrated Y", hardware.drivetrain.position.y - physicalY, measured.getY().getIn() - initial.getY().getIn(), 1.0);
+            assertEquals("Calibrated heading", 0.0,
+                    geometry.Angle.wrap(measured.getHeading().getRad() - initial.getHeading().getRad()
+                            - hardware.drivetrain.position.theta + physicalHeading), .1);
+        } finally { context.stop(); }
     }
 
     private static void selectAndBegin(SimLinearOpModeBridge.Session session,
@@ -655,7 +670,7 @@ public class LocalizationTunerWorkflowTest {
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
             double remaining = Math.max(0.0, Math.min(0.05,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+                    DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos)));
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double step = Math.min(0.005, remaining);
@@ -766,7 +781,7 @@ public class LocalizationTunerWorkflowTest {
             assertContains(latestFrame(frames), "[N/A] STRAFE DISTANCE <");
             moveSelectionDown(session, tuner, telemetry, hardware, 1);
             assertContains(latestFrame(frames), "[READY] ROTATION <");
-            moveSelectionDown(session, tuner, telemetry, hardware, 3);
+            moveSelectionDown(session, tuner, telemetry, hardware, 2);
             SimLinearOpModeBridge.start(session);
             press(session, tuner, telemetry, hardware, Button.A);
             await(session, tuner, telemetry, hardware, frames,

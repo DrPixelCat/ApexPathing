@@ -4,7 +4,6 @@ package paths.heading;
  * Defines the strategy used to calculate the robot's target heading (orientation)
  * at any given distance percentage along a path segment.
  *
- * @author DrPixelCat
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public enum InterpolationStyle {

@@ -6,8 +6,6 @@ package geometry;
  * <p>This class is used to populate a Look-Up Table (LUT), allowing the robot to quickly map a
  * parametric 't' value to physical coordinates and estimate the remaining arc-length distance to
  * the end of the curve in O(1) time.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class PathPoint {
     private final double t;

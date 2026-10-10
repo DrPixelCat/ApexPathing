@@ -16,7 +16,11 @@ import localizers.BaseLocalizer;
 import paths.movements.Path;
 import trajectory.TrajectorySample;
 
-/** Shared holonomic control for online and stored vector targets. */
+/**
+ * Shared holonomic control for online and stored vector targets.
+ *
+ * @author Joel H
+ */
 final class HolonomicPathFollower {
     private final BaseDrivetrain<?> drivetrain;
     private final DriveController driveController;

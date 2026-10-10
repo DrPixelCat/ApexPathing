@@ -1,5 +1,9 @@
 # Online planning performance
 
+This document records the earlier half-density optimization and its measurements.
+Current online planning uses full geometry resolution and shared solver improvements;
+see [the current implementation and measurements](OnlinePlanningEfficiency.md).
+
 These optimizations build on the earlier half-density online window. They keep its
 exact window boundaries, midpoint, constraint transitions, and full-resolution
 retry when the coarse solve has no reachable or controllable state.

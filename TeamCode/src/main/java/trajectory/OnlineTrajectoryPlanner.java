@@ -6,7 +6,11 @@ import geometry.PathSegment;
 import geometry.Vector;
 import paths.movements.Path;
 
-/** Per-traversal bounded feasibility planner, optionally consuming stored future-speed goals. */
+/**
+ * Per-traversal bounded feasibility planner, optionally consuming stored future-speed goals.
+ *
+ * @author Joel H
+ */
 public final class OnlineTrajectoryPlanner {
     private final Path path;
     private final BaseProfileGenerator generator;
@@ -67,6 +71,8 @@ public final class OnlineTrajectoryPlanner {
                 ? generator.generatePursuitWindow(distance,horizonIn,speed,angularVelocity,dt,pursuitSeconds)
                 : generator.generateWindow(distance, horizonIn, speed, angularVelocity, dt, previewSeconds);
         goalDistanceIn=target.goalDistanceIn;goalVelocity=target.goalVelocity;currentSpeedCeiling=target.currentSpeedCeiling;
-        return TrajectorySample.onPath(path, distance, position, target.motion, target.overspeed, target.normalVelocity);
+        return target.point != null
+                ? TrajectorySample.onPath(path, target.point, position, target.motion, target.overspeed, target.normalVelocity)
+                : TrajectorySample.onPath(path, distance, position, target.motion, target.overspeed, target.normalVelocity);
     }
 }

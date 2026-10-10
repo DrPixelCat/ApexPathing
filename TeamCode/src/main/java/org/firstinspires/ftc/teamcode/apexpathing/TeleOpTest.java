@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import follower.Follower;
 import geometry.Pose;
+import util.DeltaTime;
 
 /**
  * Test OpMode for using Apex Pathing in TeleOp mode.
@@ -14,7 +15,8 @@ import geometry.Pose;
  */
 @TeleOp(name = "Apex TeleOp Test", group = "Apex Pathing")
 public class TeleOpTest extends LinearOpMode {
-    public double loops = 0, lastLoop = 0, loopTime = 0;
+    public double loops = 0, loopTime = 0;
+    private final DeltaTime loopTiming = new DeltaTime();
     Constants constants = new Constants();
 
     @Override
@@ -26,7 +28,7 @@ public class TeleOpTest extends LinearOpMode {
             telemetry.update();
             waitForStart();
             loops = loopTime = 0;
-            lastLoop = System.nanoTime();
+            loopTiming.reset(System.nanoTime());
 
             while (opModeIsActive()) {
                 follower.update();
@@ -37,9 +39,9 @@ public class TeleOpTest extends LinearOpMode {
                 loops++;
 
                 if (loops > 15) {
-                    double now = System.nanoTime();
-                    loopTime = (now - lastLoop) / (loops * 1e6);
-                    lastLoop = now;
+
+                    loopTime = loopTiming.update(System.nanoTime()) * 1_000 / loops;
+
                     loops = 0;
                 }
 

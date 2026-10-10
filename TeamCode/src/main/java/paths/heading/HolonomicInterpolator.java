@@ -7,7 +7,7 @@ import geometry.Vector;
 /**
  * Calculates heading profiles allowing independent rotational control.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  */
 public class HolonomicInterpolator implements HeadingInterpolator {
     private final double DEFAULT_BLEND_WINDOW_IN = 15.0;

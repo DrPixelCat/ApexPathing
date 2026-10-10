@@ -1,5 +1,7 @@
 package org.codeblooded.ftcodesim.simulator;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -54,7 +56,7 @@ public final class FTCodeSimLinearOpModeRunner {
         ftcLog.start(opMode, 5800, "", true, "sim-logs");
         Logger.setSimulation(true);
         long start = System.nanoTime();
-        Logger.setTimeSource(() -> (System.nanoTime() - start) * 1e-9);
+        Logger.setTimeSource(() -> DeltaTime.seconds(System.nanoTime() - start));
         ApexAdvantageScopeLogger apexLogger = new ApexAdvantageScopeLogger();
         Follower.setDiagnostics(apexLogger);
 

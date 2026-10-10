@@ -23,7 +23,7 @@ import paths.movements.Path;
  * This class captures path configurations (waypoints, interpolators, callbacks) in any order and
  * defers geometric and kinematic compilation until a build method is called.
  *
- * @author DrPixelCat - 7842 alum
+ * @author Joel H
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {

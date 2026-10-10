@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -104,6 +106,10 @@ public class ProfiledTrackingPhaseSimulationTest {
             assertTrue("Return run should preserve the original heading",
                     Math.abs(follower[0].getPose().getHeading()
                             .getShortestAngleTo(courseStart.getHeading()).getDeg()) < 5.0);
+            File[] measuredCsv = directory.listFiles((dir, name) ->
+                    name.startsWith("profiled_tracking_") && name.endsWith(".csv"));
+            assertTrue(measuredCsv != null && measuredCsv.length == 1);
+            ProfiledTrackingValidationTest.assertLastTrial(measuredCsv[0].toPath());
             pressA(session, opMode, telemetry, hardware);
             assertTrue(values.profiledTrackingTuned);
             waitForFrame(session, opMode, telemetry, hardware, frames,
@@ -234,7 +240,7 @@ public class ProfiledTrackingPhaseSimulationTest {
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
             double remaining = Math.max(0.0, Math.min(0.05,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+                    DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos)));
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double step = Math.min(0.005, remaining);

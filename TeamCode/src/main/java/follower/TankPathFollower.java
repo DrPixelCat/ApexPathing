@@ -15,7 +15,11 @@ import geometry.Vector;
 import localizers.BaseLocalizer;
 import paths.movements.Path;
 
-/** Tracks online and stored vector targets for differential drives using Ramsete feedback. */
+/**
+ * Tracks online and stored vector targets for differential drives using Ramsete feedback.
+ *
+ * @author Joel H
+ */
 final class TankPathFollower {
     private static final double INCHES_TO_METRES = 0.0254;
     // Conventional Ramsete tuning assumes SI: b has units rad^2/m^2 and zeta has units 1/rad.

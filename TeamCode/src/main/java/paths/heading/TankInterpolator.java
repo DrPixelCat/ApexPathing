@@ -5,8 +5,6 @@ import geometry.Vector;
 
 /**
  * Calculates heading profiles strictly constrained to the path tangent.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class TankInterpolator implements HeadingInterpolator {
 

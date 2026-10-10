@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -22,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 /** Runs the same profiled brake measurement through the tank follower. */
 public class TankProfiledTrackingPhaseSimulationTest {
     @Test(timeout = 60_000L)
-    public void inadequateTankPrerequisitesDoNotMarkProfileTuned() throws Exception {
+    public void junitDetectsPoorTankTrackingWithoutBlockingAcquisition() throws Exception {
         TankAutoAccuracySimulationTest environment = new TankAutoAccuracySimulationTest();
         environment.preserveConfiguration();
         String previousUnlock = System.getProperty(FollowerTuner.UNLOCK_PHASES_PROPERTY);
@@ -58,16 +60,19 @@ public class TankProfiledTrackingPhaseSimulationTest {
             SimLinearOpModeBridge.start(session);
             long deadline = System.nanoTime() + 45_000_000_000L;
             long lastPress = 0L;
+            boolean ran = false;
             while (System.nanoTime() < deadline) {
                 long now = System.nanoTime();
                 String frame = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-                if (frame.contains("verify earlier tuning phases")) { break; }
+                if (frame.contains("Tuning ") && !frame.contains("Press A when positioned")
+                        && lastPress != 0L) { ran = true; }
+                if (ran && frame.contains("Press A when positioned")) { break; }
                 if (frame.contains("Press A") && now - lastPress > 250_000_000L) {
                     lastPress = now;
                 }
                 opMode.gamepad1.a = now - lastPress < 70_000_000L;
                 double remaining = Math.max(0.0, Math.min(0.05,
-                        (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+                        DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos)));
                 hardware.lastPhysicsUpdateNanos = now;
                 while (remaining > 1e-9) {
                     double dt = Math.min(0.005, remaining);
@@ -79,12 +84,17 @@ public class TankProfiledTrackingPhaseSimulationTest {
                 telemetry.update();
                 Thread.sleep(5);
             }
-            String last = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-            assertTrue("Poor tank baseline must point back to prerequisites: " + last,
-                    last.contains("verify earlier tuning phases"));
-            assertTrue("Poor tank baseline must not complete the phase", !complete.get());
-            assertTrue("Poor tank baseline must not be saved as tuned",
-                    !FollowerConstants.getInstance().profiledTrackingTuned);
+            java.nio.file.Path csv;
+            try (java.util.stream.Stream<java.nio.file.Path> logs = Files.list(directory)) {
+                csv = logs.filter(p -> p.getFileName().toString().startsWith("profiled_tracking_")
+                        && p.toString().endsWith(".csv")).findFirst().get();
+            }
+            AssertionError failure = org.junit.Assert.assertThrows("JUnit must detect the known poor plant response",
+                    AssertionError.class, () -> ProfiledTrackingValidationTest.assertLastTrial(csv));
+            assertTrue("Must reject tracking quality rather than missing acquisition",
+                    failure.getMessage().contains("RMS") || failure.getMessage().contains("peak"));
+            assertTrue("Validation telemetry must stay outside the tuner", frames.stream()
+                    .noneMatch(f -> f.contains("tracking failed") || f.contains("verify earlier tuning phases")));
         } finally {
             if (session != null) { SimLinearOpModeBridge.stop(session); }
             if (previousUnlock == null) { System.clearProperty(FollowerTuner.UNLOCK_PHASES_PROPERTY); }

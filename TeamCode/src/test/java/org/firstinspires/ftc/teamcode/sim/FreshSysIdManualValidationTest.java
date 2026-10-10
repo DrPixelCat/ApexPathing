@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
 import com.qualcomm.robotcore.hardware.Gamepad;
@@ -129,7 +131,7 @@ public class FreshSysIdManualValidationTest {
                 int index = phaseIndex.get();
                 String value = frame.get();
                 if (index != lastPhase) { lastPhase = index; completed = 0; lastResult = ""; }
-                assertFalse("Fresh fit failed: " + value, value.contains("validation failed"));
+                assertFalse("Fresh fit failed: " + value, value.contains("acquisition failed"));
                 if (index >= 2 && (value.contains("Trial Completed") || value.contains("Trial Aborted"))) {
                     String result = value.substring(value.indexOf("Trial "));
                     result = result.substring(0, result.indexOf('\n'));
@@ -215,10 +217,10 @@ public class FreshSysIdManualValidationTest {
                     boolean cruiseReached = false;
                     String outcome = "timeout";
                     double progress = 0;
-                    while ((System.nanoTime() - start) * 1e-9 < 8) {
+                    while (DeltaTime.seconds(System.nanoTime() - start) < 8) {
                         previous = advanceRealtime(hardware, previous);
                         follower.update(false);
-                        double time = (System.nanoTime() - start) * 1e-9;
+                        double time = DeltaTime.seconds(System.nanoTime() - start);
                         double currentHeading = follower.getPose().getHeading().getRad();
                         angularDisplacement += Math.atan2(Math.sin(currentHeading - lastHeading), Math.cos(currentHeading - lastHeading));
                         lastHeading = currentHeading;
@@ -305,7 +307,7 @@ public class FreshSysIdManualValidationTest {
 
     private static long advanceRealtime(ApexSimulation.Hardware hardware, long previous) {
         long now = System.nanoTime();
-        double remaining = (now - previous) * 1e-9;
+        double remaining = DeltaTime.seconds(now - previous);
         while (remaining > 1e-9) {
             double dt = Math.min(.005, remaining); StockSimTestSupport.step(hardware, dt); remaining -= dt;
         }

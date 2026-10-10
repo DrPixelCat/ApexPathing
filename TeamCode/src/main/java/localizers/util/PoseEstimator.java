@@ -1,13 +1,18 @@
 package localizers.util;
 
+import util.DeltaTime;
+
 import geometry.Angle;
 import geometry.DistUnit;
 import geometry.Pose;
 import geometry.Vector;
 
-/** Sensor-specific pose model and adaptive tuning, backed by the reusable Kalman core. */
+/**
+ * Sensor-specific pose model and adaptive tuning, backed by the reusable Kalman core.
+ *
+ * @author Joel H
+ */
 public final class PoseEstimator {
-    private static final long MAX_GAP_NS = 200_000_000L;
     private static final double INITIAL_DT = 0.02;
 
     public static final class Tuning {
@@ -51,7 +56,7 @@ public final class PoseEstimator {
     }
 
     private final Axis[] axes = {new Axis(), new Axis(), new Axis()};
-    private long lastTime = -1;
+    private final DeltaTime timing = new DeltaTime(INITIAL_DT);
     private Pose raw = Pose.zero(), estimate = Pose.zero(), velocity = Pose.zero(), acceleration = Pose.zero();
     private double unwrappedHeading;
 
@@ -61,7 +66,7 @@ public final class PoseEstimator {
     public Pose getRawPose() { return raw; }
     public Pose getVelocity() { return velocity; }
     public Pose getAcceleration() { return acceleration; }
-    public boolean isInitialized() { return lastTime != -1; }
+    public boolean isInitialized() { return timing.isInitialized(); }
     public boolean isAutoTuning() { return axes[0].auto || axes[1].auto || axes[2].auto; }
     public boolean isAutoTuning(int axis) { return axes[axis].auto; }
     public void setAutoTuning(boolean enabled) { setAutoTuning(enabled, enabled, enabled); }
@@ -124,7 +129,7 @@ public final class PoseEstimator {
         raw = estimate = pose;
         velocity = acceleration = Pose.zero();
         unwrappedHeading = pose.getHeading().getRad();
-        lastTime = -1;
+        timing.reset();
         for (Axis axis : axes) { axis.clear(); }
     }
 
@@ -148,10 +153,10 @@ public final class PoseEstimator {
      */
     public boolean updateOdometry(Pose measurement, Pose nativeVelocity, long timestampNanos) {
         if (!finite(measurement) || (nativeVelocity != null && !finite(nativeVelocity))
-                || timestampNanos < 0 || (lastTime != -1 && timestampNanos <= lastTime)) { return false; }
-        boolean reacquire = lastTime == -1 || timestampNanos - lastTime > MAX_GAP_NS;
-        double dt = reacquire ? INITIAL_DT : (timestampNanos - lastTime) / 1e9;
-        if (lastTime == -1) {
+                || timestampNanos < 0 || (timing.isInitialized() && !timing.isAfterPrevious(timestampNanos))) { return false; }
+        boolean reacquire = !timing.isInitialized() || timing.isLongGap(timestampNanos);
+        double dt = reacquire ? INITIAL_DT : timing.elapsed(timestampNanos);
+        if (!timing.isInitialized()) {
             // Keep the reset's angle reference, including multiple turns.
             unwrappedHeading = raw.getHeading().getRad()
                     + Angle.wrap(measurement.getHeading().getRad() - raw.getHeading().getRad());
@@ -166,7 +171,7 @@ public final class PoseEstimator {
             else { axes[i].update(positions[i], speeds == null ? null : speeds[i], dt); }
         }
         estimate = statePose(0); velocity = statePose(1); acceleration = statePose(2);
-        raw = measurement; lastTime = timestampNanos;
+        raw = measurement; timing.reset(timestampNanos);
         return true;
     }
 

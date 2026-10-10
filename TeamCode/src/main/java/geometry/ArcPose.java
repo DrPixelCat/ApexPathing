@@ -7,7 +7,6 @@ package geometry;
  * corner at this location should be dynamically split and rounded. The {@code radius} defines how
  * far from the corner the smoothing begins and ends.
  *
- * @author DrPixelCat
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class ArcPose extends Pose {

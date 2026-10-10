@@ -15,7 +15,7 @@ import paths.movements.Turn;
  * <p>This handles stationary point-turns, allowing users to inject mechanical callbacks at specific
  * angles during the rotation.
  *
- * @author DrPixelCat
+ * @author Joel H
  */
 public class TurnBuilder {
     private final Pose startPose;

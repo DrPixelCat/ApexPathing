@@ -1,5 +1,7 @@
 package localizers;
 
+import util.DeltaTime;
+
 import geometry.Angle;
 import geometry.Dist;
 import geometry.DistUnit;
@@ -24,6 +26,7 @@ import localizers.util.PoseEstimator;
  * @param <T> the type of localizer configuration this drivetrain uses, which must extend
  *        {@link BaseLocalizerConstants}
  * @author Dylan B. - 18597 RoboClovers - Delta
+ * @author Joel H
  */
 public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     private static final AdaptiveKalmanFilter.KalmanTuning DEFAULT_TRANSLATION_KALMAN =
@@ -57,7 +60,7 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     /** History shared by pose-derived and native-velocity localizers. */
     private Pose prevPose = Pose.zero();
     private Pose prevRawVelocity = Pose.zero();
-    private long prevTimeNs = -1;
+    private final DeltaTime timing = new DeltaTime();
     private long lastMeasurementTimeNanos = -1;
     private boolean lastMeasurementValid;
 
@@ -222,20 +225,20 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         if (!acceptPoseSample(currentTimeNs, null)) { return; }
         markMeasurementValid(currentTimeNs);
 
-        if (prevTimeNs == -1) {
-            prevTimeNs = currentTimeNs;
+        if (!timing.isInitialized()) {
+            timing.reset(currentTimeNs);
             prevPose = pose;
             return;
         }
 
-        double dt = (currentTimeNs - prevTimeNs) / 1_000_000_000.0;
+        double dt = timing.elapsed(currentTimeNs);
         if (dt <= 1e-6) { return; }
 
         Pose delta = new Pose(pose.getVec().minus(prevPose.getVec()),
                 Angle.fromRad(Angle.wrap(pose.getHeading().getRad() - prevPose.getHeading().getRad())));
         applyVelocityMeasurement(delta.div(dt), updateType, dt, currentTimeNs);
         prevPose = pose;
-        prevTimeNs = currentTimeNs;
+        timing.reset(currentTimeNs);
     }
 
     /**
@@ -251,22 +254,22 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         if (!PoseEstimator.finite(measuredVelocity)) { markMeasurementInvalid(); return; }
         if (!acceptPoseSample(currentTimeNs, measuredVelocity)) { return; }
         markMeasurementValid(currentTimeNs);
-        if (prevTimeNs == -1) {
+        if (!timing.isInitialized()) {
             rawVelocity = measuredVelocity;
             rawAcceleration = Pose.zero();
             applyFilterState(UpdateType.BOTH, currentTimeNs);
             prevPose = pose;
             prevRawVelocity = measuredVelocity;
-            prevTimeNs = currentTimeNs;
+            timing.reset(currentTimeNs);
             return;
         }
 
-        double dt = (currentTimeNs - prevTimeNs) / 1_000_000_000.0;
+        double dt = timing.elapsed(currentTimeNs);
         if (dt <= 1e-6) { return; }
 
         applyVelocityMeasurement(measuredVelocity, UpdateType.BOTH, dt, currentTimeNs);
         prevPose = pose;
-        prevTimeNs = currentTimeNs;
+        timing.reset(currentTimeNs);
     }
 
     private void applyVelocityMeasurement(Pose measuredVelocity, UpdateType updateType,
@@ -340,7 +343,7 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         rawAcceleration = Pose.zero();
         prevPose = newPose;
         prevRawVelocity = Pose.zero();
-        prevTimeNs = -1;
+        timing.reset();
         lastMeasurementTimeNanos = -1;
         lastMeasurementValid = false;
         xFilter.reset();

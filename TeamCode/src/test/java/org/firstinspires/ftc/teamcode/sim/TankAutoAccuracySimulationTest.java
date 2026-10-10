@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -109,7 +111,7 @@ public class TankAutoAccuracySimulationTest {
             }
 
             String frame = latest(frames);
-            double routeRunSeconds = (System.nanoTime() - routeStartedNanos) * 1e-9;
+            double routeRunSeconds = DeltaTime.seconds(System.nanoTime() - routeStartedNanos);
             assertFalse("Auto Test failed after its outbound path:\n" + frame,
                     frame.contains("Current check FAILED"));
             assertTrue("Auto Test did not complete every movement:\n" + frame,
@@ -143,7 +145,7 @@ public class TankAutoAccuracySimulationTest {
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
             double remaining = Math.max(0, Math.min(0.05,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+                    DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos)));
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double dt = Math.min(0.005, remaining);

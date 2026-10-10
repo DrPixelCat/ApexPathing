@@ -7,19 +7,28 @@ Existing feedforward gains remain the fallback for older profiles and planned br
 
 The new phase measures forward, reverse, both strafing directions on holonomic drives,
 and both rotation directions. Tank profiles omit strafe. Leave 96 inches of travel plus
-stopping room, or room for four full turns. Real robots must be repositioned between
-runs; only the simulator staging helper can move the robot automatically.
+stopping room, or room for four full turns. On real robots, check clearance
+and adjust position as needed between runs; the simulator staging helper moves the
+robot automatically.
 
 ## What is measured
 
-Each direction has repeated acquisition runs at 0.65 and 1.0 normalized motor power.
-Independent validation starts at 0.55 power to cover low speeds, then uses 0.95 power;
-none of its measurements enter the fit. These levels scale to the drivetrain's configured
-maximum motor power. The phase
-records delivered power and measured robot-relative velocity, rather than a nominal
-motor specification. Acceleration comes from a least-squares slope of measured velocity
-over 150 ms windows. Timing gaps discard the affected window and its short recovery
-interval. Validation repeats when too few usable windows survive.
+Each direction has four acquisition runs: two at 0.65 and two at 1.0 normalized
+motor power, scaled to the drivetrain's configured maximum motor power. Directions
+alternate after every run, so each axis uses `+ / -` at 0.65 twice, then `+ / -`
+at 1.0 twice. Mecanum uses 24 runs instead of 36; tank uses 16 instead of 24.
+Each run lasts at most two seconds, 96 inches, or four full turns. Alternating
+reduces repositioning but does not guarantee a return to the starting position:
+travel and stopping distance can differ between directions.
+
+The tuner collects acquisition data only. It does not run held-out validation
+motions or repeat runs to meet prediction-error gates. Independent validation
+belongs in the branch's testing programs. The phase records delivered power and
+native robot-relative velocity, rather than nominal motor specifications or the
+adaptive navigation estimator's transient response. Acceleration is the endpoint
+velocity change divided by elapsed time over approximately 150 ms windows; velocity,
+power, and power-times-velocity terms use matching time integrals. Timing gaps
+discard the affected window and its short recovery interval.
 
 The measured moving response is
 
@@ -28,17 +37,24 @@ The measured moving response is
 Consequently, `holdingPower(speed) = drag(speed) / gain(speed)` and
 `kA(speed) = 1 / gain(speed)`. A conventional constant-gain motor is included by
 `gainSlope = 0`. All coefficients come from measurements; no simulator coefficients
-or FTC Code Sim equations are embedded in the tuner. This is a compact response model,
-not a guarantee that every robot obeys that equation. Inadequate fits are rejected.
+or FTC Code Sim equations are embedded in the tuner.
 
-Acceptance requires identifiable acquisition data, at least 12 withheld windows,
-high-speed validation coverage, at least two validation samples per speed band,
-power RMS error <= 0.04 overall and <= 0.05 in each band, and peak error <= 0.10.
-Validation evaluates the shared acquisition/validation speed range; samples beyond
-that range cannot justify extrapolation or a higher speed ceiling.
-Gain must remain positive and holding demand nonnegative, monotonic and below full
-power over the accepted range. The speed ceiling is at most 95% of the smaller
-acquisition/validation coverage; the planner does not extrapolate to unmeasured speeds.
+A fit still requires at least 20 usable acquisition windows and an identifiable
+power/speed response. Nonfinite measurements and physically invalid models cannot
+produce constants. Gain must remain positive, and holding demand must be
+nonnegative, monotonic and below full power over the accepted range. The speed
+ceiling remains 95% of measured acquisition coverage; the planner does not
+extrapolate to unmeasured speeds. The historical JSON field `validationRms` and CSV
+column `validation_rms` now record acquisition power residual RMS, with no
+prediction-error rejection threshold. Older saved models remain readable. CSV
+`held_out` entries are false for the new acquisition-only workflow.
+
+The test programs retain independent high-speed coverage, per-band, RMS and peak
+prediction checks. `MotionCharacterizationSimulationTest` executes the real reduced
+phase for mecanum and tank, checks every run's direction and count, restores saved
+models, and probes their predictions against stock physics at separately imposed
+speeds and powers. `AngularCharacterizationMeasurementTest` retains independent
+angular holding probes and recorded-cadence checks through a test-only validator.
 
 Raw samples, fitted windows and accepted models are saved in the
 `motion_characterization_*.csv` file beside the existing tuning logs. The accepted
@@ -74,6 +90,27 @@ The existing affine feedforward model follows the conventional
 The extra measured duty-speed interaction addresses the mismatch documented in
 [the stock acceleration diagnosis](StockAccelerationDiagnosis.md).
 
+## Shortened workflow validation (October 7, 2026)
+
+The focused/broader run covered 44 tests: acquisition and independent probes for all
+six mecanum directions and all four tank directions, alternating run order and count,
+serialization, recorded angular cadence, regression identifiability, residual-only
+reporting, power limits, coupled profiles, tracking and idle drivetrain ownership.
+43 passed in the combined run. The manual tracking return-endpoint check missed its
+tolerance using the existing simulator calibration; its isolated rerun passed unchanged.
+
+A separate AutoTest run used the newly saved mecanum characterization, rather than
+the versioned characterization fixture. The twisting outbound path completed in
+14.95 seconds at a 20.01 ms average loop, with 0.31 inch endpoint position error,
+0.69 degree endpoint heading error, 1.34 in/s acceleration tracking RMS and
+0.77 in/s braking tracking RMS. Its existing completion, trace and timing checks
+passed. These are simulator results; no physical robot testing was performed.
+
+Local run logs are `work/motion-shortening-tests.log` and
+`work/motion-shortening-route-tests.log`. Generated acquisition CSVs and constants
+are under `TeamCode/build/motion-characterization-validation/phase-mecanum` and
+`phase-tank`.
+
 ## Stock simulator validation
 
 The October 2, 2026 validation used the unchanged FTC Code Sim alpha.1 stock
@@ -102,7 +139,7 @@ the subsequent controller/limit tuning and the 12% reserve; they are not a contr
 comparison changing just one coefficient.
 
 The versioned simulator calibration includes these measured maps. Tests also cover
-legacy fallback, per-profile serialization, rejection of unsupported fits, shared
+legacy fallback, per-profile serialization, rejection of unidentifiable/physically invalid fits and test-only independent prediction validation, shared
 translation/turn power budgets, lower drivetrain power caps, and profile limits.
 Tank and swerve generator coverage is numerical; their physical characterization
 still needs to be validated on the corresponding robot.

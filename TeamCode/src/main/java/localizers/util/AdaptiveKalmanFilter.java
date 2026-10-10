@@ -1,5 +1,7 @@
 package localizers.util;
 
+import util.DeltaTime;
+
 import java.util.function.LongSupplier;
 
 /**
@@ -12,11 +14,10 @@ import java.util.function.LongSupplier;
  *
  * The two-state model, timing and noise adaptation wrap the shared {@link KalmanFilter} core.
  *
- * @author Joel H - 7842a
+ * @author Joel H
  */
 public class AdaptiveKalmanFilter implements DataFilter {
     private static final double MINIMUM_DT = 1e-4; // Near-zero threshold
-    private static final double MAXIMUM_DT = 0.2;  // 200ms threshold
 
     private static final double MINIMUM_VARIANCE = 1e-24;
     private static final int BOOTSTRAP_SAMPLES = 10;
@@ -25,9 +26,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
     private boolean initialized;
     private final LongSupplier nanoTimeSource;
     private final KalmanFilter filter = new KalmanFilter(2); // [value, rate]
-    private long lastUpdateTimeNanos = -1;
-    private double lastDt = 0.02; // Default starting assumption (50Hz)
-    private boolean timeAnomalyDetected = false;
+    private final DeltaTime timing = new DeltaTime(.02);
     private double measurementVariance = 1.0;
     private double processVariance = 1.0;
 
@@ -91,26 +90,10 @@ public class AdaptiveKalmanFilter implements DataFilter {
     @Override
     public FilterState update(double measurement, long currentNanos) {
         if (!Double.isFinite(measurement) || currentNanos < 0
-                || (lastUpdateTimeNanos != -1 && currentNanos <= lastUpdateTimeNanos)) {
+                || (timing.isInitialized() && !timing.isAfterPrevious(currentNanos))) {
             return new FilterState(filter.getState(0), filter.getState(1));
         }
-        double dt;
-
-        if (lastUpdateTimeNanos == -1) {
-            dt = lastDt;
-        } else {
-            dt = (currentNanos - lastUpdateTimeNanos) / 1.0e9;
-        }
-        lastUpdateTimeNanos = currentNanos;
-
-        // Time Anomaly Protection
-        if (dt > MAXIMUM_DT || dt < MINIMUM_DT) {
-            timeAnomalyDetected = true;
-            dt = lastDt;
-        } else {
-            timeAnomalyDetected = false;
-            lastDt = dt;
-        }
+        double dt = timing.update(currentNanos);
 
         if (!initialized) {
             initialized = true;
@@ -381,7 +364,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
      * @return true if the last dt was overridden to protect the math.
      */
     public boolean isTimeAnomalyDetected() {
-        return timeAnomalyDetected;
+        return timing.isTimeAnomalyDetected();
     }
 
     /**
@@ -399,9 +382,7 @@ public class AdaptiveKalmanFilter implements DataFilter {
         }
 
         referenceDt = 0.02;
-        lastDt = 0.02;
-        lastUpdateTimeNanos = -1;
-        timeAnomalyDetected = false;
+        timing.reset();
 
         previousMeasurement = previousInnovation = 0.0;
         previousInnovationVariance = 1.0;

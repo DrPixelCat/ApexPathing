@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import follower.Follower;
 import follower.FollowerConstants;
 import geometry.Angle;
@@ -128,7 +130,7 @@ public class LinePowerSimulationTest {
                     long tick = clock.getAsLong();
                     // Localization differentiates pose using wall time. Advance the plant
                     // by that same elapsed interval, including host scheduling delays.
-                    double physicsSeconds = (tick - previousPhysicsNanos) * 1e-9;
+                    double physicsSeconds = DeltaTime.seconds(tick - previousPhysicsNanos);
                     maxControlInterval=Math.max(maxControlInterval,physicsSeconds);
                     previousPhysicsNanos = tick;
                     while (physicsSeconds > 1e-9) {
@@ -200,7 +202,7 @@ public class LinePowerSimulationTest {
                         writer.printf(Locale.US, "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f," +
                                         "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%s," +
                                         "%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f%n",
-                                (clock.getAsLong() - start) * 1e-9, target.progressIn, target.expectedMotorPower, actual,
+                                DeltaTime.seconds(clock.getAsLong() - start), target.progressIn, target.expectedMotorPower, actual,
                                 target.tangentialVelocity(), velocity, plantVelocity, target.tangentialAcceleration(),
                                 feedback, follower.getTrackingEndpointBlend(), follower.getTrackingFeedforward(),
                                 follower.getDrivetrain().getLastFlPower(), follower.getDrivetrain().getLastFrPower(),

@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -142,7 +144,7 @@ public class FeedforwardPhaseSimulationTest {
             String frame = "";
             while (System.nanoTime() < deadline) {
                 long now = System.nanoTime();
-                double remaining = Math.min(.05, (now - previous) * 1e-9);
+                double remaining = Math.min(.05, DeltaTime.seconds(now - previous));
                 previous = now;
                 while (remaining > 1e-9) {
                     double dt = Math.min(.005, remaining);
@@ -150,7 +152,7 @@ public class FeedforwardPhaseSimulationTest {
                     remaining -= dt;
                 }
                 frame = frames.isEmpty() ? "" : frames.get(frames.size() - 1);
-                if (frame.contains("validation failed") || frame.contains("HEADING Feedforward SysId constants:")
+                if (frame.contains("acquisition failed") || frame.contains("HEADING Feedforward SysId constants:")
                         || frame.contains("Fit rejected")) {
                     break;
                 }

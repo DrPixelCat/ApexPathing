@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import util.DeltaTime;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -91,7 +93,7 @@ public class AutoTestSimulationTest {
             }
 
             String frame = latest(frames);
-            double routeRunSeconds = (System.nanoTime() - routeStartedNanos) * 1e-9;
+            double routeRunSeconds = DeltaTime.seconds(System.nanoTime() - routeStartedNanos);
             File velocityTrace = new File(auto.getOutboundVelocityCsvPath());
             if (velocityTrace.isFile()) {
                 String graphPrefix = centeredBraking ? "AutoTest_Centered_Braking"
@@ -156,7 +158,7 @@ public class AutoTestSimulationTest {
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
             double remaining = Math.max(0, Math.min(0.05,
-                    (now - hardware.lastPhysicsUpdateNanos) * 1e-9));
+                    DeltaTime.seconds(now - hardware.lastPhysicsUpdateNanos)));
             hardware.lastPhysicsUpdateNanos = now;
             while (remaining > 1e-9) {
                 double dt = Math.min(0.005, remaining);

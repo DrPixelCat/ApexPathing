@@ -5,7 +5,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.Assert.*;
 
 public class ManualResponseMetricsTest {
-    @Test public void settlementMustPersistThroughTheEndOfTheTrial() {
+    @Test public void settlementMustPersistThroughTheEndOfTheTrial() throws Exception {
+        String previousDirectory = System.getProperty(storage.ApexStorage.DIRECTORY_PROPERTY);
+        System.setProperty(storage.ApexStorage.DIRECTORY_PROPERTY,
+                java.nio.file.Files.createTempDirectory("manual-response-test-").toString());
         AtomicLong clock = new AtomicLong();
         ManualResponseMetrics metrics = new ManualResponseMetrics(clock::get);
         try {
@@ -18,6 +21,10 @@ public class ManualResponseMetricsTest {
             metrics.sample(.5, 0, .1);
             assertTrue(Double.isNaN(metrics.getSettlingTime()));
             assertEquals(2.0 / 3, metrics.getSaturationFraction(), 1e-12);
-        } finally { metrics.finish(); }
+        } finally {
+            metrics.finish();
+            if (previousDirectory == null) { System.clearProperty(storage.ApexStorage.DIRECTORY_PROPERTY); }
+            else { System.setProperty(storage.ApexStorage.DIRECTORY_PROPERTY, previousDirectory); }
+        }
     }
 }

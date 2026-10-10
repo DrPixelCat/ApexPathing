@@ -1,6 +1,12 @@
 package follower;
 
-/** Owns endpoint tolerances and the completion dwell timer for path movements. */
+import util.DeltaTime;
+
+/**
+ * Owns endpoint tolerances and the completion dwell timer for path movements.
+ *
+ * @author Joel H
+ */
 final class PathCompletionPolicy {
     private static final double SETTLED_LINEAR_VELOCITY_SQ = 64.0;
     private static final double SETTLED_ANGULAR_VELOCITY = 0.25;
@@ -17,7 +23,7 @@ final class PathCompletionPolicy {
             toleranceEnteredNanos = nowNanos;
             return false;
         }
-        return (nowNanos - toleranceEnteredNanos) * 1e-9 >= COMPLETION_DWELL_SECONDS;
+        return DeltaTime.seconds(nowNanos - toleranceEnteredNanos) >= COMPLETION_DWELL_SECONDS;
     }
 
     void reset() {

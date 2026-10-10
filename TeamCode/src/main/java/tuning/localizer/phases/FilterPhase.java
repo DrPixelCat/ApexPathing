@@ -1,9 +1,10 @@
 package tuning.localizer.phases;
 
-import tuning.localizer.calibration.CalibrationAxis;
+import util.DeltaTime;
+
+import drivetrains.TranslationAxis;
 
 import tuning.localizer.LocalizationTunerContext;
-import tuning.localizer.LocalizerAdapter;
 import tuning.localizer.TuningPhase;
 
 import geometry.Pose;
@@ -28,7 +29,7 @@ public final class FilterPhase extends TuningPhase {
     private FilterMetrics metrics;
     private TuningCsvWriter csv;
     private long started;
-    private long previousSample;
+    private final DeltaTime timing = new DeltaTime();
     private double xMovement;
     private double yMovement;
     private double headingMovement;
@@ -82,7 +83,7 @@ public final class FilterPhase extends TuningPhase {
         }
         recordingStarted = true;
         requiresYMovement = context.getDrivetrain().isHolonomic()
-                && context.getAdapter().supportsDistance(CalibrationAxis.STRAFE);
+                && context.getAdapter().supportsDistance(TranslationAxis.STRAFE);
         context.getLocalizer().setVelocityFilterMode(selected);
         if (selected == BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE) {
             context.getLocalizer().setFilterWindow(window);
@@ -95,7 +96,7 @@ public final class FilterPhase extends TuningPhase {
                 "raw_x", "raw_y", "raw_heading", "filtered_x", "filtered_y",
                 "filtered_heading", "accel_x", "accel_y", "accel_heading");
         started = System.nanoTime();
-        previousSample = started;
+        timing.reset(started);
         xMovement = 0.0;
         yMovement = 0.0;
         headingMovement = 0.0;
@@ -106,8 +107,8 @@ public final class FilterPhase extends TuningPhase {
         long now = System.nanoTime();
         long elapsed = now - started;
         double dt = Math.min(MAX_INTEGRATION_SECONDS,
-                Math.max(0.0, (now - previousSample) / 1e9));
-        previousSample = now;
+                Math.max(0.0, timing.update(now)));
+
         boolean initialStill = stage == Stage.STILL;
         boolean driving = stage == Stage.MOVE;
         boolean stopping = stage == Stage.STOP;
@@ -119,7 +120,7 @@ public final class FilterPhase extends TuningPhase {
         boolean valid = context.getLocalizer().isLastMeasurementValid();
         metrics.sample(raw, filtered, initialStill, stopping, valid);
         if (driving && valid) { accumulateMovement(raw, dt); }
-        writeCsv(elapsed / 1e9, stage.name(),
+        writeCsv(DeltaTime.seconds(elapsed), stage.name(),
                 raw, filtered, accel);
 
         if (stage == Stage.STILL) {

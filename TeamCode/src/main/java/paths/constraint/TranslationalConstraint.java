@@ -5,8 +5,6 @@ import geometry.Dist;
 /**
  * A constraint that applies to the robot's translational movement along a path, such as
  * translational velocity or translational acceleration.
- *
- * @author DrPixelCat - 7842 alum
  */
 public class TranslationalConstraint implements PathConstraint {
     private double s;

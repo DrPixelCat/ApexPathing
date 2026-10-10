@@ -6,7 +6,11 @@ import geometry.PathSegment;
 import geometry.Vector;
 import paths.movements.Path;
 
-/** Immutable rectangular, bilinearly interpolated field. No per-node Vector objects are retained. */
+/**
+ * Immutable rectangular, bilinearly interpolated field. No per-node Vector objects are retained.
+ *
+ * @author Joel H
+ */
 public final class TrajectoryField2D {
     private static final int CHANNELS = 12;
     private final PathSegment segment;

@@ -1,26 +1,27 @@
 package follower;
 
+import util.DeltaTime;
+
 /** Filters the derivative of closest-point path progress while rejecting timing discontinuities. */
 final class PathProgressEstimator {
     private static final double FILTER_SECONDS = 0.08;
     private static final double MAX_SAMPLE_SECONDS = 0.10;
 
     private double previousDistanceIn = Double.NaN;
-    private long previousSampleNanos;
+    private final DeltaTime timing = new DeltaTime();
     private double velocityInPerSecond;
 
     double update(double distanceTraveled, double measuredTangentialVelocity, long nowNanos) {
-        if (!Double.isFinite(previousDistanceIn) || previousSampleNanos == 0L) {
+        if (!Double.isFinite(previousDistanceIn) || !timing.isInitialized()) {
             previousDistanceIn = distanceTraveled;
-            previousSampleNanos = nowNanos;
+            timing.reset(nowNanos);
             velocityInPerSecond = measuredTangentialVelocity;
             return velocityInPerSecond;
         }
 
-        double dt = (nowNanos - previousSampleNanos) * 1e-9;
+        double dt = timing.update(nowNanos);
         double distanceDelta = distanceTraveled - previousDistanceIn;
         previousDistanceIn = distanceTraveled;
-        previousSampleNanos = nowNanos;
         if (dt <= 1e-4 || dt > MAX_SAMPLE_SECONDS || distanceDelta < 0.0) {
             return velocityInPerSecond;
         }
@@ -33,7 +34,7 @@ final class PathProgressEstimator {
 
     void reset() {
         previousDistanceIn = Double.NaN;
-        previousSampleNanos = 0L;
+        timing.reset();
         velocityInPerSecond = 0.0;
     }
 }
