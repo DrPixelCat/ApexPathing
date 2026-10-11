@@ -9,6 +9,8 @@ or tank follower according to their declared capability.
 For custom tracking, extend `Follower` or `HolonomicFollower` and construct that follower
 directly. The base lifecycle stays final; override `updatePath`, `holdPose`, and
 `resetPathControllers` as needed. Concrete named followers remain final.
+See [custom paths and followers](Customization.md) for builder overrides and a custom
+tracking law that reuses sampling, allocation, callbacks and completion handling.
 
 ## Reading follower diagnostics
 

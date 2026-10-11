@@ -279,6 +279,37 @@ public abstract class Follower {
                 headingControllerEnabled, driveControllerEnabled);
     }
 
+    /** Sample the selected online/stored reference once per updatePath() call. */
+    protected final trajectory.TrajectorySample samplePathTarget(Path path) {
+        requireActiveHolonomicPath(path);
+        return runtime.samplePathTarget(path, getPose(), localizer);
+    }
+
+    /** Custom field-space power corrections plus shared body-axis feedforward, allocation and execution services.
+     * Specialized inverse-wheel pulse compensation remains the built-in tracker's responsibility. */
+    protected final MovementOutcome executeHolonomicPath(Path path, trajectory.TrajectorySample target,
+            Vector fieldCorrection, double headingCorrection) {
+        requireActiveHolonomicPath(path);
+        return runtime.executeHolonomicPath(path, java.util.Objects.requireNonNull(target), getPose(), localizer,
+                fieldCorrection, headingCorrection, headingControllerEnabled, driveControllerEnabled);
+    }
+
+    /** Explicit field-space reference power for trackers supplying their own feedforward.
+     * All custom corrections share the position-correction allocation stage; the reference is scaled as one stage.
+     * Call once per updatePath() and return its outcome so callbacks, diagnostics, completion and stall detection run. */
+    protected final MovementOutcome executeHolonomicPath(Path path, trajectory.TrajectorySample target,
+            Vector fieldCorrection, double headingCorrection, Vector fieldFeedforward, double headingFeedforward) {
+        requireActiveHolonomicPath(path);
+        return runtime.executeHolonomicPath(path, java.util.Objects.requireNonNull(target), getPose(), localizer,
+                fieldCorrection, headingCorrection, fieldFeedforward, headingFeedforward,
+                headingControllerEnabled, driveControllerEnabled);
+    }
+
+    private void requireActiveHolonomicPath(Path path) {
+        if (path == null || path != currentMovement || path.getPathType() != Path.PathType.HOLONOMIC || !drivetrain.isHolonomic())
+            throw new IllegalStateException("Custom holonomic helpers require the active holonomic path and drivetrain");
+    }
+
     protected final void holdPose(Pose target, boolean holonomic) {
         runtime.holdPose(target, getPose(), holonomic,
                 headingControllerEnabled, driveControllerEnabled);

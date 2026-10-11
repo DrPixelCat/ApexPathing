@@ -179,19 +179,9 @@ final class TankPathFollower implements PathExecutor {
 
         // 2.8 Completion and stuck detection
         double endpointDistance = currentPosition.distanceTo(path.getEndPose().getVec()).getIn();
-        boolean insideTolerance = PathCompletionPolicy.isInsideTolerance(
-                endpointDistance, endpointHeadingError, distanceTolerance, headingTolerance);
-        boolean velocitySettled = PathCompletionPolicy.isVelocitySettled(
-                robotVelocity.getMagSq().getIn(), currentAngularVelocity);
-        // A dwell inside pose tolerance is not a substitute for actually slowing down.
-        if (state.completion.isComplete(insideTolerance, velocitySettled, monotonicClock.getAsLong())) {
-            return Follower.MovementOutcome.COMPLETED;
-        }
-        // End the movement if the robot remains stuck.
-        if (state.stuckWatchdog.update(
-                !insideTolerance && FollowerMath.stuckForSpeed(robotVelocity.getMag().getIn()), monotonicClock.getAsLong())) {
-            return Follower.MovementOutcome.FAILED;
-        }
+        Follower.MovementOutcome outcome = state.completionOutcome(endpointDistance, endpointHeadingError,
+                robotVelocity, currentAngularVelocity, distanceTolerance, headingTolerance, monotonicClock.getAsLong());
+        if (outcome != Follower.MovementOutcome.RUNNING) return outcome;
 
         // endregion
 

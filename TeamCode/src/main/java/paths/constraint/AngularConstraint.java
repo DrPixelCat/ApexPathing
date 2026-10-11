@@ -38,4 +38,9 @@ public class AngularConstraint implements PathConstraint {
 
     @SuppressWarnings("PublicMethodNotExposedInInterface")
     public double getValueRad() { return value_rad; }
+    @Override public Domain getDomain() { return Domain.ANGULAR; }
+    @Override public double getLimit() { return getValueRad(); }
+    @Override public PathConstraint copyForTrajectory() {
+        return new AngularConstraint(getS(), getType(), Angle.fromRad(getLimit()));
+    }
 }

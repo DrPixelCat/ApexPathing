@@ -2,15 +2,21 @@ package paths.builders;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import geometry.Angle;
 import geometry.ArcPose;
 import geometry.Dist;
 import geometry.Pose;
+import geometry.BSpline;
+import geometry.ParametricSegment;
+import geometry.PathSegment;
 import geometry.Vector;
 import paths.constraint.PathConstraint;
 import paths.heading.InterpolationStyle;
+import paths.heading.HeadingInterpolator;
 import paths.movements.Path;
+import trajectory.generators.PathProfileGenerator;
 
 /**
  * Provides shared functionality and structure for building paths for all drivetrain types.
@@ -21,6 +27,66 @@ import paths.movements.Path;
 public abstract class PathBuilder<T extends PathBuilder<T>> {
     protected Path path;
     private boolean built;
+    private ParametricSegment customCurve;
+    private HeadingInterpolator customHeading;
+
+    /** Custom field geometry in inches, t in [0,1]. Supply only start/end poses and an immutable curve. */
+    @SuppressWarnings("unchecked")
+    public T setCurve(ParametricSegment curve) {
+        if (rawPoses.length != 2)
+            throw new IllegalArgumentException("Custom curves use exactly two endpoint poses");
+        customCurve = Objects.requireNonNull(curve, "Curve");
+        return (T) this;
+    }
+
+    /** Takes precedence over built-in heading styles. Mutable providers must implement copyForTrajectory(). */
+    @SuppressWarnings("unchecked")
+    public T setHeadingInterpolator(HeadingInterpolator interpolator) {
+        Objects.requireNonNull(interpolator, "Heading interpolator");
+        if (path.getPathType() == Path.PathType.TANK && !interpolator.supportsTank())
+            throw new IllegalArgumentException("Tank paths require tangent-compatible heading interpolation");
+        customHeading = interpolator;
+        return (T) this;
+    }
+
+    @SuppressWarnings("unchecked")
+    public T setProfileGeneratorFactory(PathProfileGenerator.Factory factory) {
+        path.setProfileGeneratorFactory(factory);
+        return (T) this;
+    }
+
+    protected final PathSegment createPathSegment(Vector[] controlPoints) {
+        if (customCurve == null) return new PathSegment(new BSpline(controlPoints));
+        for (int i = 0; i <= 64; i++) {
+            double t = i / 64.0;
+            if (!isFinite(customCurve.getPosition(t)) || !isFinite(customCurve.getFirstDerivative(t))
+                    || !isFinite(customCurve.getSecondDerivative(t)))
+                throw new IllegalArgumentException("Custom curve positions and derivatives must be finite");
+        }
+        if (customCurve.getPosition(0).distanceTo(rawPoses[0].getVec()).getIn() > 1e-6
+                || customCurve.getPosition(1).distanceTo(rawPoses[1].getVec()).getIn() > 1e-6)
+            throw new IllegalArgumentException("Custom curve endpoints must match the supplied poses");
+        return new PathSegment(customCurve);
+    }
+
+    private static boolean isFinite(Vector value) { return value != null && value.isFinite(); }
+
+    private HeadingInterpolator headingFor(PathSegment curve, HeadingInterpolator defaults) {
+        HeadingInterpolator selected = customHeading == null ? defaults
+                : Objects.requireNonNull(customHeading.copyForTrajectory(), "Heading copy");
+        selected.setPathLength(curve.getLengthIn());
+        return selected;
+    }
+
+    protected final boolean hasCustomHeading() { return customHeading != null; }
+
+    protected final void finishGeometry(PathSegment curve, HeadingInterpolator defaults, Pose endPose) {
+        HeadingInterpolator heading = headingFor(curve, defaults);
+        path.setInterpolator(heading);
+        path.setEndPose(hasCustomHeading() ? new Pose(endPose.getVec(),
+                heading.getHeadingTarg(0, curve.getFirstDerivative(1), curve.getFirstDerivative(1))) : endPose);
+        for (Runnable task : buildTasks) task.run();
+    }
 
     protected void beginBuild() {
         if (built) { throw new IllegalStateException("Path builders can only be built once"); }

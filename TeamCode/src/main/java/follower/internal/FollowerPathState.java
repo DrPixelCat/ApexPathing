@@ -91,6 +91,17 @@ final class FollowerPathState implements follower.FollowerTelemetry {
     boolean centeredBrakingActive;
     double centeredBrakingMeanPower;
 
+    Follower.MovementOutcome completionOutcome(double endpointDistance, double headingError,
+            Vector velocity, double omega, double distanceTolerance, double headingTolerance, long now) {
+        boolean inside = PathCompletionPolicy.isInsideTolerance(endpointDistance, headingError,
+                distanceTolerance, headingTolerance);
+        if (completion.isComplete(inside, PathCompletionPolicy.isVelocitySettled(velocity.getMagSq().getIn(), omega), now))
+            return Follower.MovementOutcome.COMPLETED;
+        if (stuckWatchdog.update(!inside && FollowerMath.stuckForSpeed(velocity.getMag().getIn()), now))
+            return Follower.MovementOutcome.FAILED;
+        return Follower.MovementOutcome.RUNNING;
+    }
+
     void reset() {
         t = crossTrackError = centripetalError = 0;
         closestPathPoint = crossTrackNormal = pathNormal = crossTrackCorrection = centripetalCorrection = Vector.zero();

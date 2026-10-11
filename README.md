@@ -117,6 +117,8 @@ Drivetrains can override `createDriveModel(settings, mode)` and
 omni derives directional limits from its actual wheel projections. Both online and stored
 planning use these hooks, and execution uses the supplied drive model's power calculation.
 See [custom drivetrains and directional kinematics](doc/CustomDrivetrains.md) for examples.
+Optional [custom paths and followers](doc/Customization.md) can supply curves, heading
+interpolation, constraints, profile generation or a different tracking feedback law.
 
 All localizers use a shared position, velocity and acceleration Kalman estimate by default,
 with bounded automatic noise tuning from their existing sensor readings.

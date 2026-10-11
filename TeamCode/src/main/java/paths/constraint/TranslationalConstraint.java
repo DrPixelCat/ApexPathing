@@ -37,4 +37,9 @@ public class TranslationalConstraint implements PathConstraint {
 
     @SuppressWarnings("PublicMethodNotExposedInInterface")
     public double getValueIn() { return value_in; }
+    @Override public Domain getDomain() { return Domain.TRANSLATIONAL; }
+    @Override public double getLimit() { return getValueIn(); }
+    @Override public PathConstraint copyForTrajectory() {
+        return new TranslationalConstraint(getS(), getType(), Dist.fromIn(getLimit()));
+    }
 }

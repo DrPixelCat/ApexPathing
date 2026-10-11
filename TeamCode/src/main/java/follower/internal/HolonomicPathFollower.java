@@ -274,15 +274,13 @@ final class HolonomicPathFollower implements PathExecutor {
             double angularVelocity, double endpointHeadingError, boolean independentReference,
             long now, FollowerPathState state) {
         double endpointDistance = position.distanceTo(path.getEndPose().getVec()).getIn();
-        boolean inside = PathCompletionPolicy.isInsideTolerance(endpointDistance, endpointHeadingError, distanceTolerance, headingTolerance);
-        boolean settled = PathCompletionPolicy.isVelocitySettled(velocity.getMagSq().getIn(), angularVelocity);
         if (independentReference) {
             // Endpoint capture normally permits an early motor stop at 8 in/s.
             // An isolated feedforward test must execute its entire braking schedule.
             if (state.independentReferenceFinished() && velocity.getMag().getIn()<.5 && Math.abs(angularVelocity)<.1) return Follower.MovementOutcome.COMPLETED;
         } else {
-            if (state.completion.isComplete(inside, settled, now)) { return Follower.MovementOutcome.COMPLETED; }
-            if (state.stuckWatchdog.update(!inside && FollowerMath.stuckForSpeed(velocity.getMag().getIn()), now)) { return Follower.MovementOutcome.FAILED; }
+            return state.completionOutcome(endpointDistance, endpointHeadingError, velocity, angularVelocity,
+                    distanceTolerance, headingTolerance, now);
         }
         return Follower.MovementOutcome.RUNNING;
     }

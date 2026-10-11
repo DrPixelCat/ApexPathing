@@ -10,6 +10,7 @@ import follower.FollowerConstants;
 import geometry.Angle;
 import geometry.PathSegment;
 import geometry.Pose;
+import geometry.Vector;
 import java.util.function.LongSupplier;
 import localizers.BaseLocalizer;
 import paths.movements.Path;
@@ -96,6 +97,71 @@ public final class FollowerRuntime {
     public void holdPose(Pose target, Pose current, boolean holonomic,
             boolean headingEnabled, boolean driveEnabled) {
         poseHoldController.update(target, current, holonomic, headingEnabled, driveEnabled);
+    }
+
+    public TrajectorySample samplePathTarget(Path path, Pose pose, BaseLocalizer<?> localizer) {
+        return pathState.target(path, pose.getVec(), localizer.getVel().getVec(),
+                localizer.getVel().getHeading().getRad(), clock.getAsLong());
+    }
+
+    /** Body-axis reference power; custom trackers may instead supply their own reference to executeHolonomicPath. */
+    public Follower.MovementOutcome executeHolonomicPath(Path path, TrajectorySample target, Pose pose,
+            BaseLocalizer<?> localizer, Vector correction, double headingCorrection,
+            boolean headingEnabled, boolean driveEnabled) {
+        Vector tangent = target.tangent;
+        Vector body = tangent.rotate(target.heading.times(-1));
+        feedforward.MotionPowerCalculator.Output power = holonomicModel.powerCalculator().calculate(body,
+                target.tangentialVelocity(), target.tangentialAcceleration(), target.angularVelocity,
+                target.angularAcceleration, target.normalAcceleration().dot(PathSegment.calculateLeftNormal(tangent)).getIn());
+        return executeHolonomicPath(path, target, pose, localizer, correction, headingCorrection,
+                power.translation().plus(power.normal()).rotate(target.heading), power.heading, headingEnabled, driveEnabled);
+    }
+
+    public Follower.MovementOutcome executeHolonomicPath(Path path, TrajectorySample target, Pose pose,
+            BaseLocalizer<?> localizer, Vector correction, double headingCorrection,
+            Vector feedforward, double headingFeedforward, boolean headingEnabled, boolean driveEnabled) {
+        if (!correction.isFinite() || !feedforward.isFinite() || !Double.isFinite(headingCorrection)
+                || !Double.isFinite(headingFeedforward)) throw new IllegalArgumentException("Path commands must be finite");
+        if (!driveEnabled) correction = Vector.zero();
+        if (!headingEnabled) headingCorrection = 0;
+        Vector tangent = target.tangent, normal = PathSegment.calculateLeftNormal(tangent);
+        double alongCorrection = correction.dot(tangent).getIn();
+        Vector crossCorrection = correction.minus(tangent.times(alongCorrection));
+        double alongFeedforward = feedforward.dot(tangent).getIn();
+        HolonomicCommandAllocator.Result command = allocator.allocate(crossCorrection, Vector.zero(), tangent,
+                pose.getHeading(), alongCorrection, headingCorrection, alongFeedforward, 0, 0, headingFeedforward,
+                feedforward.minus(tangent.times(alongFeedforward)));
+        long now = clock.getAsLong();
+        pathState.trajectorySample = target;
+        pathState.t = target.pathT; pathState.closestPathPoint = target.positionOnPath;
+        pathState.crossTrackNormal = normal;
+        pathState.pathNormal = PathSegment.calculateArcNormal(path.getParametricPath().getFirstDerivative(target.pathT),
+                path.getParametricPath().getSecondDerivative(target.pathT));
+        pathState.crossTrackError = target.toPath.dot(normal).getIn();
+        pathState.centripetalError = target.toPath.dot(pathState.pathNormal).getIn();
+        pathState.crossTrackCorrection = crossCorrection;
+        pathState.centripetalCorrection = Vector.zero();
+        pathState.trackingVelocityTarget = target.tangentialVelocity();
+        pathState.trackingMeasuredVelocity = localizer.getVel().getVec().dot(tangent).getIn();
+        pathState.trackingProgressVelocity = pathState.progressEstimator.update(target.progressIn, pathState.trackingMeasuredVelocity, now);
+        pathState.trackingAngularVelocityTarget = target.angularVelocity;
+        pathState.trackingFeedforward = alongFeedforward; pathState.trackingHeadingFeedforward = headingFeedforward;
+        pathState.trackingVelocityFeedback = pathState.trackingEndpointBlend = 0;
+        pathState.velocitySampleAvailable = true;
+        pathState.wheelFeedforwardActive = pathState.centeredBrakingActive = false;
+        pathState.centeredBrakingMeanPower = 0;
+        pathState.lastCommandDemand = command.demand;
+        double length = path.getParametricPath().getLengthIn();
+        callbackRunner.process(path, length > 1e-9 ? Math.max(0, Math.min(1, target.progressIn / length)) : 1, pose.getHeading());
+        // A callback may stop or pause the movement; preserve the stopped output in that case.
+        if (pathState.trajectorySample != target) return Follower.MovementOutcome.RUNNING;
+        Follower.MovementOutcome outcome = pathState.completionOutcome(
+                pose.getVec().distanceTo(path.getEndPose().getVec()).getIn(),
+                pose.getHeading().getShortestAngleTo(path.getEndPose().getHeading()).getRad(),
+                localizer.getVel().getVec(), localizer.getVel().getHeading().getRad(), distanceTolerance, headingTolerance, now);
+        if (outcome == Follower.MovementOutcome.RUNNING)
+            drivetrain.drive(command.drive.getX().getIn(), command.drive.getY().getIn(), command.turn);
+        return outcome;
     }
 
     public void startTurn(Turn turn, long now) { turnExecutor.start(turn, now); }

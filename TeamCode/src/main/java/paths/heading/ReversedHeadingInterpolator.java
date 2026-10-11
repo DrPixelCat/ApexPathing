@@ -9,6 +9,7 @@ public final class ReversedHeadingInterpolator implements HeadingInterpolator {
     private final Vector sourceFinalTangent;
     private double pathLength;
     private long configurationRevision;
+    @Override public boolean supportsTank() { return source.supportsTank(); }
 
     public ReversedHeadingInterpolator(HeadingInterpolator source, double pathLength,
                                        Vector sourceFinalTangent) {

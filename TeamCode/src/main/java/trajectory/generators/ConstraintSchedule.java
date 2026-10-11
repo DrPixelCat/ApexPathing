@@ -2,9 +2,7 @@ package trajectory.generators;
 
 import java.util.Arrays;
 import java.util.Comparator;
-import paths.constraint.AngularConstraint;
 import paths.constraint.PathConstraint;
-import paths.constraint.TranslationalConstraint;
 import paths.movements.Path;
 import geometry.PathPoint;
 import geometry.PathSegment;
@@ -30,12 +28,11 @@ final class ConstraintSchedule {
             PathConstraint constraint = constraints[i];
             progress[i] = constraint.getS();
             transitions[i] = path.constraintProgress(progress[i]) * path.getParametricPath().getLengthIn();
-            if (constraint instanceof TranslationalConstraint) {
-                double value = nonNegative(((TranslationalConstraint) constraint).getValueIn());
+            double value = nonNegative(constraint.getLimit());
+            if (java.util.Objects.requireNonNull(constraint.getDomain()) == PathConstraint.Domain.TRANSLATIONAL) {
                 if (constraint.getType() == PathConstraint.Type.VELOCITY) { velocity = value; }
                 else { acceleration = value; }
-            } else if (constraint instanceof AngularConstraint) {
-                double value = nonNegative(((AngularConstraint) constraint).getValueRad());
+            } else {
                 if (constraint.getType() == PathConstraint.Type.VELOCITY) { omega = value; }
                 else { alpha = value; }
             }

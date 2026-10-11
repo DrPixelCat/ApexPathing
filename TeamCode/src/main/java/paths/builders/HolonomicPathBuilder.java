@@ -6,7 +6,6 @@ import java.util.List;
 
 import geometry.Angle;
 import geometry.ArcPose;
-import geometry.BSpline;
 import geometry.CubicSpline1D;
 import geometry.Dist;
 import geometry.PathPoint;
@@ -286,8 +285,12 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
             vectors[i] = processedPoses.get(i).getVec();
         }
 
-        PathSegment curve = new PathSegment(new BSpline(vectors));
+        PathSegment curve = createPathSegment(vectors);
         path.setParametricPath(curve);
+        if (hasCustomHeading()) {
+            finishGeometry(curve, null, expectedEndPose);
+            return;
+        }
 
         Angle startH = startPose.getHeading();
         Angle endH = expectedEndPose.getHeading();
@@ -356,12 +359,8 @@ public class HolonomicPathBuilder extends PathBuilder<HolonomicPathBuilder> {
 
         HolonomicInterpolator interpolator = new HolonomicInterpolator(style, startH, endH,
                 customOffset, spline);
-        interpolator.setPathLength(curve.getLengthIn());
         if (blendWindow != null) { interpolator.setBlendWindow(blendWindow.getIn()); }
-        path.setInterpolator(interpolator);
-        path.setEndPose(expectedEndPose);
-
-        for (Runnable task : buildTasks) { task.run(); }
+        finishGeometry(curve, interpolator, expectedEndPose);
     }
 
     @Override

@@ -5,7 +5,6 @@ import java.util.List;
 
 import geometry.Angle;
 import geometry.ArcPose;
-import geometry.BSpline;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
@@ -100,8 +99,12 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
             vectors[i] = processedPoses.get(i).getVec();
         }
 
-        PathSegment curve = new PathSegment(new BSpline(vectors));
+        PathSegment curve = createPathSegment(vectors);
         path.setParametricPath(curve);
+        if (hasCustomHeading()) {
+            finishGeometry(curve, null, rawPoses[rawPoses.length - 1]);
+            return;
+        }
 
         InterpolationStyle resolvedStyle = style;
         Vector startTangent = curve.getFirstDerivative(0.0);
@@ -120,7 +123,6 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
         }
 
         TankInterpolator interpolator = new TankInterpolator(resolvedStyle);
-        path.setInterpolator(interpolator);
 
         Vector finalVec = vectors[vectors.length - 1];
         Vector finalTangent = curve.getFirstDerivative(1.0);
@@ -129,9 +131,7 @@ public class TankPathBuilder extends PathBuilder<TankPathBuilder> {
             finalHeading = finalHeading.plus(Angle.fromRad(Math.PI));
         }
 
-        path.setEndPose(new Pose(finalVec, finalHeading));
-
-        for (Runnable task : buildTasks) { task.run(); }
+        finishGeometry(curve, interpolator, new Pose(finalVec, finalHeading));
     }
 
     @Override

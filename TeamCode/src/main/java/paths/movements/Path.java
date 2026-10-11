@@ -10,7 +10,6 @@ import drivetrains.models.DriveModels;
 import trajectory.generators.PathProfileGenerator;
 import trajectory.profile.FFLut;
 import geometry.Angle;
-import geometry.AngleUnit;
 import geometry.Dist;
 import geometry.ParametricSegment;
 import geometry.PathPoint;
@@ -18,10 +17,8 @@ import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
 import paths.Callback;
-import paths.constraint.AngularConstraint;
 import paths.constraint.PathConstraint;
 import paths.constraint.PathConstraint.Type;
-import paths.constraint.TranslationalConstraint;
 import paths.heading.HeadingInterpolator;
 import paths.heading.ReversedHeadingInterpolator;
 
@@ -50,6 +47,8 @@ public class Path extends FollowerMovement {
     private trajectory.TrajectoryField2D trajectoryField;
     private FollowerConstants planningConstants;
     private DriveModel planningDriveModel;
+    private PathProfileGenerator.Factory generatorFactory =
+            (path, settings, model) -> new PathProfileGenerator(settings, path, model);
     private Double lookaheadDistanceIn;
     private double memoryGridSpacingIn = 1.0, memoryGridPaddingIn = 12.0;
 
@@ -99,14 +98,19 @@ public class Path extends FollowerMovement {
         }
         return planningConstants.copy();
     }
-    public PathProfileGenerator createGenerator() { return new PathProfileGenerator(this); }
+    /** Configure before building; replacements must implement the entry points used by the selected build mode. */
+    public void setProfileGeneratorFactory(PathProfileGenerator.Factory factory) {
+        generatorFactory = java.util.Objects.requireNonNull(factory, "Generator factory");
+        invalidateTrajectory();
+    }
+    public PathProfileGenerator createGenerator() { return createGenerator(getPlanningConstants()); }
     public PathProfileGenerator createGenerator(FollowerConstants constants) {
-        return new PathProfileGenerator(constants,this);
+        return createGenerator(constants, getDriveModel(constants));
     }
     public PathProfileGenerator createGenerator(FollowerConstants constants, DriveModel model) {
         if (model.isHolonomic() != (pathType == PathType.HOLONOMIC))
             throw new IllegalArgumentException("Drive model does not match path mode");
-        return new PathProfileGenerator(constants,this,model);
+        return java.util.Objects.requireNonNull(generatorFactory.create(this, constants, model), "Profile generator");
     }
     private boolean reverseConstraintProgress;
     private Double profilePowerLimit;
@@ -179,12 +183,12 @@ public class Path extends FollowerMovement {
         double highestS = -1.0;
 
         for (PathConstraint baseConstraint : constraints) {
-            if (baseConstraint instanceof TranslationalConstraint) {
-                TranslationalConstraint constraint = (TranslationalConstraint) baseConstraint;
+            if (baseConstraint.getDomain() == PathConstraint.Domain.TRANSLATIONAL) {
+                PathConstraint constraint = baseConstraint;
                 if (constraint.getType() == Type.VELOCITY) {
                     if (constraintProgress >= constraint.getS() &&
                             constraint.getS() > highestS) {
-                        currentLimit = constraint.getValueIn();
+                        currentLimit = constraint.getLimit();
                         highestS = constraint.getS();
                     }
                 }
@@ -216,6 +220,9 @@ public class Path extends FollowerMovement {
 
     /** @param interpolator The heading interpolator to use */
     public void setInterpolator(HeadingInterpolator interpolator) {
+        java.util.Objects.requireNonNull(interpolator, "Heading interpolator");
+        if (pathType == PathType.TANK && !interpolator.supportsTank())
+            throw new IllegalArgumentException("Tank paths require tangent-compatible heading interpolation");
         this.interpolator = interpolator;
         invalidateTrajectory();
     }
@@ -294,7 +301,7 @@ public class Path extends FollowerMovement {
         Path result = new Path(pathType);
         result.setParametricPath(reversedSegment);
         result.setInterpolator(new ReversedHeadingInterpolator(
-                interpolator, sourceSegment.getLengthIn(),
+                interpolator.copyForTrajectory(), sourceSegment.getLengthIn(),
                 sourceSegment.getFirstDerivative(1.0)));
 
         Vector endTangent = reversedSegment.getFirstDerivative(1.0);
@@ -303,11 +310,12 @@ public class Path extends FollowerMovement {
         result.setEndPose(new Pose(reversedSegment.getPosition(1.0), endHeading));
 
         for (PathConstraint constraint : constraints) {
-            result.addConstraint(copyConstraint(constraint));
+            result.addConstraint(java.util.Objects.requireNonNull(constraint.copyForTrajectory(), "Constraint copy"));
         }
         result.reverseConstraintProgress = !reverseConstraintProgress;
         result.isAccelBoosted = isAccelBoosted;
         result.buildMode = buildMode;
+        result.generatorFactory = generatorFactory;
         result.profilePowerLimit = profilePowerLimit;
         result.lookaheadDistanceIn = lookaheadDistanceIn;
         result.planningConstants = planningConstants == null ? null : planningConstants.copy();
@@ -329,18 +337,4 @@ public class Path extends FollowerMovement {
         FFLut = nominal; trajectoryField = field;
     }
 
-    private static PathConstraint copyConstraint(PathConstraint constraint) {
-        if (constraint instanceof TranslationalConstraint) {
-            TranslationalConstraint translational = (TranslationalConstraint) constraint;
-            return new TranslationalConstraint(translational.getS(), translational.getType(),
-                    Dist.fromIn(translational.getValueIn()));
-        }
-        if (constraint instanceof AngularConstraint) {
-            AngularConstraint angular = (AngularConstraint) constraint;
-            return new AngularConstraint(angular.getS(), angular.getType(),
-                    Angle.of(angular.getValueRad(), AngleUnit.RAD));
-        }
-        throw new IllegalArgumentException("Unsupported path constraint type: " +
-                constraint.getClass().getName());
-    }
 }

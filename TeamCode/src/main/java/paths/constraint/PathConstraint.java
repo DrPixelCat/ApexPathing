@@ -11,6 +11,20 @@ package paths.constraint;
  * @see AngularConstraint
  */
 public interface PathConstraint {
+    enum Domain { TRANSLATIONAL, ANGULAR }
+
+    /** Units are inches/second or radians/second for velocity; per second squared for acceleration. */
+    default Domain getDomain() {
+        throw new UnsupportedOperationException("Custom constraints must implement getDomain()");
+    }
+
+    /** Numeric limit in the domain's internal units. */
+    default double getLimit() {
+        throw new UnsupportedOperationException("Custom constraints must implement getLimit()");
+    }
+
+    /** Immutable constraints may return themselves; mutable implementations must return a detached copy. */
+    default PathConstraint copyForTrajectory() { return this; }
 
     /**
      * Identifies the motion quantity limited by a constraint.

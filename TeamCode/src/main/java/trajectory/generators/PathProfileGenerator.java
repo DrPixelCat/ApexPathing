@@ -24,6 +24,11 @@ import paths.movements.Path;
  * @author Joel H
  */
 public class PathProfileGenerator {
+    /** Optional per-path construction hook shared by online and stored planning. */
+    @FunctionalInterface
+    public interface Factory {
+        PathProfileGenerator create(Path path, FollowerConstants settings, DriveModel model);
+    }
     protected static final double EPSILON = 1e-6;
     private static final double UTILIZATION_TOLERANCE = 1e-6;
     private static final int SEARCH_ITERATIONS = 32;

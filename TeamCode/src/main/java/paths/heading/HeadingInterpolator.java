@@ -9,13 +9,15 @@ import geometry.Vector;
  */
 @SuppressWarnings("ClassNamePrefixedWithPackageName")
 public interface HeadingInterpolator {
-    /** Calculates the target heading, f(s). */
+    /** Opt in only for tangent/backward-tangent heading with matching curvature derivatives. */
+    default boolean supportsTank() { return false; }
+    /** Target heading. All s arguments in this interface mean remaining distance in inches. */
     Angle getHeadingTarg(double s, Vector pathTangent, Vector finalTangent);
 
-    /** Calculates the first spatial derivative, f'(s), in rad/in. */
+    /** First derivative with respect to forward distance traveled, in rad/in (not remaining distance). */
     double getHeadingFirstDerivative(double s, double kappa, Vector finalTangent);
 
-    /** Calculates the second spatial derivative, f''(s), in rad/in^2. */
+    /** Second derivative with respect to forward distance traveled, in rad/in^2. */
     double getHeadingSecondDerivative(double s, double dKappa, Vector finalTangent);
 
     /** Sets the total path length, primarily used for terminal blending math. */
