@@ -335,10 +335,12 @@ public class TrajectoryTest {
                 assertTrue(Math.abs(target.angularAcceleration) <= constants.angularAccelLimitRad + 1e-5);
                 assertTrue(Math.abs(target.angularVelocity) <= constants.angularVelLimitRad + 1e-5);
                 Vector body = target.tangent.rotate(target.heading.times(-1));
-                Vector ff = feedforward.HolonomicFeedforward.translation(constants, body, target.tangentialVelocity(), target.tangentialAcceleration(), constants.translationalKV)
-                        .plus(target.normalAcceleration().rotate(target.heading.times(-1)).times(constants.kCentripetal));
-                assertTrue(feedforward.HolonomicFeedforward.mecanumDemand(ff,
-                        feedforward.HolonomicFeedforward.heading(constants, target.angularVelocity, target.angularAcceleration)) <= 1 + 1e-5);
+                double normalAcceleration = target.normalAcceleration().dot(
+                        Vector.of(-target.tangent.getY().getIn(), target.tangent.getX().getIn(), DistUnit.IN)).getIn();
+                feedforward.MotionPowerCalculator.Output power = drivetrains.models.DriveModels.mecanum(constants)
+                        .powerCalculator().calculate(body, target.tangentialVelocity(), target.tangentialAcceleration(),
+                                target.angularVelocity, target.angularAcceleration, normalAcceleration);
+                assertTrue(power.demand <= 1 + 1e-5);
             }
         }
     }

@@ -157,7 +157,7 @@ public final class MotionCharacterizationPhase extends TuningPhase {
                 * f.getDrivetrain().getConstants().maxPower;
         f.getDrivetrain().moveWithVectors(axis == Axis.FORWARD ? power : 0,
                 axis == Axis.STRAFE ? power : 0, axis == Axis.ANGULAR ? power : 0);
-        double delivered = TuningMeasurements.maxMotorPower(f.getDrivetrain());
+        double delivered = TuningMeasurements.axisCommandPower(f.getDrivetrain(), axis);
         if (Math.abs(delivered - previousPower) > .02) { resetWindow(); }
         previousPower = delivered;
     }

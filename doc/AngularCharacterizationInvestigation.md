@@ -80,14 +80,14 @@ held-out power RMS values were 0.001419/0.001771 for forward,
 completed heading feedback, drive feedback, movement limits, and centripetal
 tuning. Trajectory tracking did not complete: trial 42 threw
 `No feasible braking command for measured overspeed 33.53931949027496`
-from `BaseProfileGenerator.recoveryMotion()`. The saved profile correctly retains
+from `PathProfileGenerator.recoveryMotion()`. The saved profile correctly retains
 `profiledTrackingTuned=false`.
 
 The final logged tracking sample had measured speed 43.377 in/s versus a
 27.774 in/s target, followed by the recovery exception. This is a later control/
 planning failure, not a characterization rejection. The powered characterization
 map deliberately falls back to legacy SysId coefficients during braking;
-`MecanumProfileGenerator` combines that braking demand with lateral and heading
+`HolonomicDriveModel` (formerly the mecanum profile generator) combines that braking demand with lateral and heading
 power, and recovery rejects commands exceeding its power budget. The earlier
 stock/SysId holding-power mismatch therefore remains relevant to investigate,
 but the trace does not yet establish which demand made this recovery infeasible.

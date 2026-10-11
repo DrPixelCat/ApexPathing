@@ -5,6 +5,119 @@ Class JavaDoc lists credited authors.
 See the [main-source authorship audit](reviews/authorship/AUTHORSHIP.md) for Git evidence,
 recorded AI involvement, and unresolved historical credits.
 
+## Follower API
+
+`Follower` is the abstract base for the follower hierarchy. `MecanumFollower`,
+`SwerveFollower` and `OmniFollower` extend the shared `HolonomicFollower` implementation; `TankFollower` and
+`DualActuatedFollower` extend `Follower` directly. The base owns localization, movement lifecycle, turns, callbacks,
+diagnostics, and failure handling. Each subclass selects its path-tracking and pose-holding
+behavior. Fixed-drive followers own only their matching tracking algorithm; the dual follower
+reuses both algorithms with one drivetrain and one movement state. Mecanum retains directional
+power allocation and wheel-model support; swerve uses isotropic allocation and its module steering.
+Omni supports any number of uniformly spaced tangent-driving wheels, with at least three.
+Its follower budgets signed translation and rotation using the configured wheel projections.
+Three-wheel layouts use the same omni implementation as larger layouts. The generic
+`HolonomicFollower` remains available for custom fixed holonomic drives.
+
+Replace `new Follower(...)` with `Follower.create(...)`. The factory builds the drivetrain once
+and selects a subclass from the resulting hardware capabilities, including dual drives that
+start in tank mode:
+
+```java
+import follower.Follower;
+
+Follower follower = Follower.create(constants, hardwareMap);
+follower.setPose(startPose);
+follower.follow(path);
+// Call repeatedly in the active OpMode loop.
+follower.update();
+```
+
+Explicit construction is also available as `new TankFollower(constants, hardwareMap)`,
+`new MecanumFollower(constants, hardwareMap)`, `new SwerveFollower(constants, hardwareMap)`,
+`new OmniFollower(constants, hardwareMap)`, or
+`new DualActuatedFollower(constants, hardwareMap)`. Explicit constructors reject incompatible
+drivetrains; fixed-drive followers cannot be used for dual-actuated hardware.
+
+`Follower.create(...)` automatically selects `MecanumFollower` for `Mecanum` hardware,
+`SwerveFollower` for `CoaxialSwerve` hardware, and `OmniFollower` for `Omni` hardware.
+Existing generic `HolonomicFollower` construction
+remains compatible; use the specialized constructors when declaring a specific drivetrain type.
+
+Concrete followers now live in `follower.drivetrains`; update their imports accordingly.
+The base, settings, and diagnostics retain their `follower` imports.
+
+The factory and each subclass support `(constants, hardwareMap, tuningMode)` and
+`(constants, hardwareMap, tuningMode, monotonicClock)` overloads. Existing follow, update,
+pause/resume, stop, manual driving, tuning, and diagnostic calls remain available through
+the base type. A holonomic braking model has no effect on tank-only followers, as before.
+
+The base lifecycle methods are final. The protected extension methods are
+`updatePath(Path)`, `holdPose(Pose)`, and `resetPathControllers()`, with optional
+`prepareMovement(FollowerMovement)`, `synchronizeDriveProfile()`, and
+`isDriveTransitioning()` hooks for mode-switching hardware. Constructors initialize shared
+state without calling overridable follower methods.
+
+## Circular omni-wheel drive
+
+Use `Omni.Constants` for three or more omni wheels equally spaced around a circle centered
+on the robot. Add motors in counterclockwise order as viewed from above. The first wheel's
+radial position defaults to straight ahead (0 degrees); 90 degrees is the robot's left side.
+Each wheel's powered direction must be tangent to the circle. Positive motor power should
+drive along the counterclockwise tangent; use `Motor.reverse()` where needed. Wheels are
+assumed to have matching size and gearing.
+
+For example, the drivetrain portion of a robot configuration can declare a six-wheel layout:
+
+```java
+import drivetrains.Motor;
+import drivetrains.Omni;
+import geometry.Angle;
+
+@Override
+public Omni.Constants drivetrainConstants() {
+    return new Omni.Constants()
+            .setFirstWheelAngle(Angle.fromDeg(0))
+            .addWheel(new Motor("wheel0")) // Front: 0 degrees
+            .addWheel(new Motor("wheel1")) // 60 degrees
+            .addWheel(new Motor("wheel2")) // 120 degrees
+            .addWheel(new Motor("wheel3")) // Back: 180 degrees
+            .addWheel(new Motor("wheel4")) // 240 degrees
+            .addWheel(new Motor("wheel5")) // 300 degrees
+            .setMaxPower(0.8);
+}
+```
+
+The number of registered wheels determines `n`; no separate wheel-count setting is needed.
+For wheel `i`, `theta = firstWheelAngle + i * 2*pi/n` and its command is
+`-sin(theta)*forward + cos(theta)*left + turn`. Positive turn is counterclockwise.
+All wheel powers scale together when any wheel reaches the configured power limit.
+Turn is a normalized power contribution; tune angular gains for the actual mounting radius.
+
+`Follower.create(constants, hardwareMap)` selects `OmniFollower`, or construct one explicitly
+with `new OmniFollower(constants, hardwareMap)`. Its normal path, turn, hold, pause/resume,
+and failure APIs match the other holonomic followers. Online and stored trajectory planning
+use the exact largest absolute wheel command, including signed translation/rotation cancellation,
+for every wheel count and mounting angle.
+
+Use `getMotorCount()`, `getLastMotorPower(index)`, `getLastMotorPowers()`, and
+`getMaxMotorPower()` for indexed output diagnostics. `Omni.setWheelPowers(...)` accepts one
+power per registered wheel for direct output. Named front/back power getters describe only
+the first four slots; shared tuning measurements include every motor.
+Single-axis characterization converts wheel projections back to body-axis command units
+before fitting gains, including when the configured output limit scales the motors.
+
+The dedicated `Kiwi`, `KiwiFollower`, and `KIWI` drivetrain type have been removed.
+Configure a three-wheel `Omni` instead, registering its motors in counterclockwise order
+and setting `firstWheelAngle` and motor directions to match the physical layout.
+Saved `KIWI` tuning settings load as `OMNI`; update Java hardware configuration explicitly.
+
+Drivetrains can override `createDriveModel(settings, mode)` and
+`createDirectionalKinematics(settings)`. Mecanum preserves its directional LUT by default;
+omni derives directional limits from its actual wheel projections. Both online and stored
+planning use these hooks, and execution uses the supplied drive model's power calculation.
+See [custom drivetrains and directional kinematics](doc/CustomDrivetrains.md) for examples.
+
 All localizers use a shared position, velocity and acceleration Kalman estimate by default,
 with bounded automatic noise tuning from their existing sensor readings.
 See [Kalman localization](doc/KalmanLocalization.md) for configuration and validation.
@@ -16,14 +129,16 @@ The library sources are in `TeamCode/src/main/java`, with matching unit-test pac
 
 | Package | Responsibility |
 | --- | --- |
-| `follower` | Movement lifecycle, path/turn execution, follower settings, and diagnostics |
+| `follower` | Public base lifecycle API, follower settings, and diagnostics |
+| `follower.drivetrains` | Mecanum, swerve, omni, tank, dual-actuated, and shared holonomic followers; construction factory |
+| `follower.internal` | Tracking engines, allocation, callbacks, completion, runtime state, and math; implementation details |
 | `config` | Robot configuration contract (`ApexConstants`) |
 | `storage` | Persisted tuning-data storage |
 | `localizers` | Localization implementations, mode switching, and saved calibration |
 | `feedforward` | Measured motor-response models and reference-power calculations |
 | `trajectory` | Online planning, stored trajectory fields, and physical target samples |
 | `trajectory.profile` | Motion-profile solvers, samples, and lookup tables |
-| `trajectory.generators` | Drivetrain-specific profile generation and constraint scheduling |
+| `trajectory.generators` | Shared path and turn profile generation and constraint scheduling |
 | `tuning.follower` | Shared tuner context, phase contract, and measurement helpers |
 | `tuning.follower.{sysid,characterization,feedback,limits,centripetal,tracking,acceleration}` | Each follower-tuning workflow and its supporting algorithms |
 | `tuning.localizer.calibration` | Calibration data shared by localization adapters and phases |
@@ -213,6 +328,15 @@ Accepted results are saved immediately to `FIRST/ApexPathing/localization.json`,
 one localizer across both modes by default. Override `usesSharedLocalizer()` and
 `localizerConstants(Profile)` in the robot's `ApexConstants` implementation when tank and
 holonomic modes need separate localizers.
+
+### Shared drive models
+
+Followers and profile generation share one `MotionPowerCalculator` for reference power.
+Hardware-independent drive models supply physical limits, wheel geometry, and power bounds.
+Every drivetrain uses `PathProfileGenerator`; stationary turns retain `TurnProfileGenerator`. `new GeometryFactory(follower)` binds builders to the physical
+drive and snapshots the appropriate tank or holonomic settings without actuating the robot.
+For direct profile generation, use `path.createGenerator().generateRestToRest()`.
+See [trajectory planning](doc/TrajectoryPlanning.md) for the model API and generator migration.
 
 ### Trajectory build modes
 

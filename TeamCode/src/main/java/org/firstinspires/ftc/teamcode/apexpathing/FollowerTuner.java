@@ -92,7 +92,7 @@ public class FollowerTuner extends LinearOpMode {
     public void runOpMode() {
         resetPhaseSelection();
         context = new TunerContext(this);
-        context.setFollower(new Follower(createConstants(), hardwareMap, true));
+        context.setFollower(Follower.create(createConstants(), hardwareMap, true));
         try {
             context.constants.drivetrainType = context.getFollower().getDrivetrain().getDrivetrainType();
 

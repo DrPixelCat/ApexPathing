@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import trajectory.generators.PathProfileGenerator;
+
 import feedforward.MotionCharacterization;
 import follower.FollowerConstants;
 import geometry.AngleUnit;
@@ -14,7 +16,6 @@ import org.knowm.xchart.XYChartBuilder;
 import org.knowm.xchart.style.Styler;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
-import trajectory.generators.MecanumProfileGenerator;
 import trajectory.profile.FFLut;
 import trajectory.profile.MotionParameters;
 
@@ -138,7 +139,7 @@ public class BrakingFeedforwardDiagnosticTest {
         GeometryFactory geometry = new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
         Path path = geometry.holonomicPath(geometry.pose(-40, 0, 0), geometry.pose(40, 0, 0))
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
-        FFLut profile = new FFLut(new MecanumProfileGenerator(constants, path).generate());
+        FFLut profile = new FFLut(new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).generate());
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         hardware.drivetrain.setPosition(new MotionVector(ApexSimulation.FIELD_CENTER_INCHES - direction * 40,
                 ApexSimulation.FIELD_CENTER_INCHES, 0));

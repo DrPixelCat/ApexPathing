@@ -31,7 +31,7 @@ public class TrajectoryLifecycleSimulationTest {
     }
     @After public void restore() throws Exception { singleton.set(null, previous); Follower.setDiagnostics(null); }
     private Follower follower(ApexSimulation.Hardware hardware) {
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         constants.forwardVelLimitIn = constants.strafeVelLimitIn = 60;
         constants.forwardAccelLimitIn = constants.strafeAccelLimitIn = 100;
         constants.angularVelLimitRad = 4; constants.angularAccelLimitRad = 8;

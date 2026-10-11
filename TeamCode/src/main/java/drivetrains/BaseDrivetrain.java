@@ -21,7 +21,7 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
     public enum DrivetrainType {
         COAXIAL_SWERVE,
         DUAL_ACTUATED,
-        KIWI,
+        OMNI,
         MECANUM,
         TANK
     }
@@ -30,12 +30,14 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
     private final boolean isHolonomic;
 
     /**
-     * Note: front motors are guaranteed to be non-null, but rear motors may be null if not needed
+     * Legacy aliases for the first four slots. Fixed layouts may omit their rear motors.
      */
     protected DcMotorEx flMotor, frMotor, blMotor, brMotor;
 
     private static final double POWER_TOLERANCE = 0.001;
-    private double lastFlPower, lastFrPower, lastBlPower, lastBrPower = 0.0;
+    private final DcMotorEx[] motors;
+    private final double[] lastMotorPowers;
+    private final double[] namedMotorPowers = new double[4];
 
     /**
      * Your drivetrain class constructor should call this super constructor to initialize motors and
@@ -46,24 +48,45 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      * @param hardwareMap the hardware map to use for initializing motors
      */
     public BaseDrivetrain(T constants, HardwareMap hardwareMap, DrivetrainType drivetrainType) {
+        this(constants, hardwareMap, drivetrainType, new Motor[]{constants.flMotorConfig,
+                constants.frMotorConfig, constants.blMotorConfig, constants.brMotorConfig});
+    }
+
+    /** Initializes an indexed motor layout; fixed-drive subclasses retain their named slots. */
+    protected BaseDrivetrain(T constants, HardwareMap hardwareMap, DrivetrainType drivetrainType,
+                             Motor[] motorConfigs) {
         constants.validate();
-        flMotor = constants.flMotorConfig.build(hardwareMap);
-        frMotor = constants.frMotorConfig.build(hardwareMap);
-        if (constants.blMotorConfig != null) {
-            blMotor = constants.blMotorConfig.build(hardwareMap);
+        motors = new DcMotorEx[motorConfigs.length];
+        lastMotorPowers = new double[motorConfigs.length];
+        for (int i = 0; i < motorConfigs.length; i++) {
+            if (motorConfigs[i] != null) { motors[i] = motorConfigs[i].build(hardwareMap); }
         }
-        if (constants.brMotorConfig != null) {
-            brMotor = constants.brMotorConfig.build(hardwareMap);
-        }
+        flMotor = motorAt(0); frMotor = motorAt(1);
+        blMotor = motorAt(2); brMotor = motorAt(3);
 
         this.constants = constants;
         this.drivetrainType = drivetrainType;
         this.isHolonomic = drivetrainType != DrivetrainType.TANK;
     }
 
+    /** Hardware-independent model factory. Overrides must support settings snapshots without actuating hardware. */
+    public drivetrains.models.DriveModel createDriveModel(follower.FollowerConstants settings,
+                                                          paths.movements.Path.PathType mode) {
+        drivetrains.models.DriveModel model = drivetrains.models.DriveModels.defaultForDrivetrain(this,settings,mode);
+        return model instanceof drivetrains.models.HolonomicDriveModel
+                ? ((drivetrains.models.HolonomicDriveModel) model).withDirectionalKinematics(this::createDirectionalKinematics)
+                : model;
+    }
+
+    /** Override for measured directional limits. Bind the returned provider to the supplied settings only. */
+    protected drivetrains.models.DirectionalKinematics createDirectionalKinematics(follower.FollowerConstants settings) {
+        return drivetrainType == DrivetrainType.MECANUM || drivetrainType == DrivetrainType.DUAL_ACTUATED
+                ? drivetrains.models.DirectionalKinematics.mecanum(settings)
+                : drivetrains.models.DirectionalKinematics.isotropic(settings);
+    }
+
     /**
-     * Moves the robot using the provided drive, strafe, and turn vectors. The values are normalized
-     * and applied to the motors according to the mecanum drive formulas.
+     * Moves the robot using the provided drive, strafe, and turn vectors, mixed by the subclass.
      *
      * @param x the forward/backward movement vector (positive for forward, negative for backward)
      * @param y the left/right movement vector (positive for left, negative for right)
@@ -118,64 +141,66 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
      * drivetrain class does not use all 4 motors, just pass 0 for the motors you don't use.
      */
     public void setPowers(double flPower, double frPower, double blPower, double brPower) {
-        if (!Double.isFinite(flPower) || !Double.isFinite(frPower)
-                || !Double.isFinite(blPower) || !Double.isFinite(brPower)) {
+        namedMotorPowers[0] = flPower; namedMotorPowers[1] = frPower;
+        namedMotorPowers[2] = blPower; namedMotorPowers[3] = brPower;
+        setMotorPowers(namedMotorPowers);
+    }
+
+    /** Applies one power per configured slot, scaling all motors together to the power limit. */
+    protected final void setMotorPowers(double[] powers) {
+        if (powers == null || powers.length != motors.length) {
             stop();
-            throw new IllegalArgumentException("Motor powers must be finite");
+            throw new IllegalArgumentException("Provide one power per motor slot");
+        }
+        double peak = 0;
+        for (int i = 0; i < powers.length; i++) {
+            if (!Double.isFinite(powers[i])) {
+                stop();
+                throw new IllegalArgumentException("Motor powers must be finite");
+            }
+            if (motors[i] != null) { peak = Math.max(peak, Math.abs(powers[i])); }
         }
         if (!Double.isFinite(constants.maxPower) || constants.maxPower < 0 || constants.maxPower > 1) {
             stop();
             throw new IllegalStateException("Maximum power must be in [0, 1]");
         }
-        // Motor power limiting
-        double max = Math.max(0, Math.abs(flPower));
-        max = Math.max(max, Math.abs(frPower));
-        if (blMotor != null) { max = Math.max(max, Math.abs(blPower)); }
-        if (brMotor != null) { max = Math.max(max, Math.abs(brPower)); }
-
-        double newFlPower = flPower;
-        double newFrPower = frPower;
-        double newBlPower = blPower;
-        double newBrPower = brPower;
-        if (max > constants.maxPower) {
-            newFlPower = flPower / max * constants.maxPower;
-            newFrPower = frPower / max * constants.maxPower;
-            if (blMotor != null) { newBlPower = blPower / max * constants.maxPower; }
-            if (brMotor != null) { newBrPower = brPower / max * constants.maxPower; }
-        }
-
-        // Write to motors only if the change exceeds the tolerance
-        if (Math.abs(newFlPower - lastFlPower) > POWER_TOLERANCE) {
-            flMotor.setPower(newFlPower);
-            lastFlPower = newFlPower;
-        }
-        if (Math.abs(newFrPower - lastFrPower) > POWER_TOLERANCE) {
-            frMotor.setPower(newFrPower);
-            lastFrPower = newFrPower;
-        }
-        if (blMotor != null && Math.abs(newBlPower - lastBlPower) > POWER_TOLERANCE) {
-            blMotor.setPower(newBlPower);
-            lastBlPower = newBlPower;
-        }
-        if (brMotor != null && Math.abs(newBrPower - lastBrPower) > POWER_TOLERANCE) {
-            brMotor.setPower(newBrPower);
-            lastBrPower = newBrPower;
+        for (int i = 0; i < powers.length; i++) {
+            double power = peak > constants.maxPower ? powers[i] / peak * constants.maxPower : powers[i];
+            if (motors[i] != null && (Math.abs(power - lastMotorPowers[i]) > POWER_TOLERANCE
+                    || power == 0 && lastMotorPowers[i] != 0
+                    || Math.abs(lastMotorPowers[i]) > constants.maxPower)) {
+                motors[i].setPower(power);
+                lastMotorPowers[i] = power;
+            }
         }
     }
 
     /** Stop all drivetrain actuators */
     public void stop() {
-        flMotor.setPower(0);
-        frMotor.setPower(0);
-        if (blMotor != null) { blMotor.setPower(0); }
-        if (brMotor != null) { brMotor.setPower(0); }
-        lastFlPower = lastFrPower = lastBlPower = lastBrPower = 0;
+        for (int i = 0; i < motors.length; i++) {
+            if (motors[i] != null) { motors[i].setPower(0); }
+            lastMotorPowers[i] = 0;
+        }
     }
 
-    public double getLastFlPower() { return lastFlPower; }
-    public double getLastFrPower() { return lastFrPower; }
-    public double getLastBlPower() { return lastBlPower; }
-    public double getLastBrPower() { return lastBrPower; }
+    private DcMotorEx motorAt(int index) { return index < motors.length ? motors[index] : null; }
+    private double powerAt(int index) { return index < motors.length ? lastMotorPowers[index] : 0; }
+
+    public double getLastFlPower() { return powerAt(0); }
+    public double getLastFrPower() { return powerAt(1); }
+    public double getLastBlPower() { return powerAt(2); }
+    public double getLastBrPower() { return powerAt(3); }
+
+    /** Number of indexed slots; fixed four-slot drives may have unused rear slots. */
+    public int getMotorCount() { return motors.length; }
+    public double getLastMotorPower(int index) { return lastMotorPowers[index]; }
+    public double[] getLastMotorPowers() { return lastMotorPowers.clone(); }
+
+    public double getMaxMotorPower() {
+        double peak = 0;
+        for (double power : lastMotorPowers) { peak = Math.max(peak, Math.abs(power)); }
+        return peak;
+    }
 
     public T getConstants() { return constants; }
 }

@@ -21,7 +21,7 @@ public class TeleOpTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        Follower follower = new Follower(constants, hardwareMap);
+        Follower follower = Follower.create(constants, hardwareMap);
 
         try {
             telemetry.addLine("Press Start to begin");

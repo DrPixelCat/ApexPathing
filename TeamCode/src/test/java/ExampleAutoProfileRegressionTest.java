@@ -1,3 +1,5 @@
+
+import trajectory.generators.PathProfileGenerator;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -8,7 +10,6 @@ import controllers.FeedbackController.Coefficients;
 import follower.FollowerConstants;
 import storage.ApexStorage;
 import trajectory.profile.MotionParameters;
-import trajectory.generators.MecanumProfileGenerator;
 import geometry.AngleUnit;
 import geometry.DistUnit;
 import geometry.GeometryFactory;
@@ -33,8 +34,7 @@ public class ExampleAutoProfileRegressionTest {
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .quickBuild();
 
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(
-                FollowerConstants.getInstance(), path);
+        PathProfileGenerator generator = new PathProfileGenerator(FollowerConstants.getInstance(), path, drivetrains.models.DriveModels.mecanum(FollowerConstants.getInstance()));
         MotionParameters[] profile = generator.generate();
         int firstMoving = -1;
         for (int i = 0; i < profile.length; i++) {

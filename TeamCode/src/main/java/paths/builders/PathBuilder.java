@@ -32,6 +32,12 @@ public abstract class PathBuilder<T extends PathBuilder<T>> {
         path.setPlanningConstants(constants);
         return (T) this;
     }
+    /** Uses the follower's physical model and a snapshot of its selected profile. */
+    @SuppressWarnings("unchecked")
+    public T setDriveModel(drivetrains.models.DriveModel model) {
+        path.setDriveModel(model);
+        return (T) this;
+    }
     protected InterpolationStyle style = InterpolationStyle.TANGENT_FORWARD;
 
     final Pose[] rawPoses;

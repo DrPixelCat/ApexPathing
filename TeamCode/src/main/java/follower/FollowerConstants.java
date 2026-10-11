@@ -241,7 +241,11 @@ public class FollowerConstants {
             throw new IllegalArgumentException("Unsupported follower constants schema: " + version);
         }
         BaseDrivetrain.DrivetrainType type;
-        try { type = BaseDrivetrain.DrivetrainType.valueOf(json.getString("drivetrainType")); }
+        try {
+            String savedType = json.getString("drivetrainType");
+            // Migrate tuning data from the removed three-wheel-specific drivetrain.
+            type = BaseDrivetrain.DrivetrainType.valueOf("KIWI".equals(savedType) ? "OMNI" : savedType);
+        }
         catch (Exception e) { throw new IllegalArgumentException("Invalid drivetrainType in follower constants", e); }
         profiles.clear();
         drivetrainType = type;

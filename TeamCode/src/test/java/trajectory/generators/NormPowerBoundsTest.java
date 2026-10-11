@@ -18,7 +18,7 @@ public class NormPowerBoundsTest {
             for (int j = 0; j < c.length; j++) { c[j] = (random.nextDouble() * 2 - 1) * (j % 2 == 0 ? 1 : .03); }
             double min = -100 * random.nextDouble(), max = 100 * random.nextDouble();
             double limit = .1 + random.nextDouble() * 1.5;
-            double candidate = BaseProfileGenerator.maximumNormPowerAcceleration(c, min, max, limit);
+            double candidate = drivetrains.models.DriveModel.maximumNormPowerAcceleration(c, min, max, limit);
             if (candidate == Double.NEGATIVE_INFINITY) { continue; }
             analytic++;
             double gridBest = Double.NaN;
@@ -37,9 +37,9 @@ public class NormPowerBoundsTest {
     }
 
     @Test public void degenerateLinearAndZeroTranslationBranchesRemainFeasible() {
-        assertEquals(20, BaseProfileGenerator.maximumNormPowerAcceleration(new double[]{0,.01,0,0,0,.02}, -100,100,.6), 1e-10);
-        assertEquals(30, BaseProfileGenerator.maximumNormPowerAcceleration(new double[]{0,0,0,0,0,.02}, -100,100,.6), 1e-10);
-        assertEquals(100, BaseProfileGenerator.maximumNormPowerAcceleration(new double[6], -100,100,.6), 0);
-        assertTrue(Double.isNaN(BaseProfileGenerator.maximumNormPowerAcceleration(new double[]{2,0,0,0,0,0}, -100,100,.6)));
+        assertEquals(20, drivetrains.models.DriveModel.maximumNormPowerAcceleration(new double[]{0,.01,0,0,0,.02}, -100,100,.6), 1e-10);
+        assertEquals(30, drivetrains.models.DriveModel.maximumNormPowerAcceleration(new double[]{0,0,0,0,0,.02}, -100,100,.6), 1e-10);
+        assertEquals(100, drivetrains.models.DriveModel.maximumNormPowerAcceleration(new double[6], -100,100,.6), 0);
+        assertTrue(Double.isNaN(drivetrains.models.DriveModel.maximumNormPowerAcceleration(new double[]{2,0,0,0,0,0}, -100,100,.6)));
     }
 }

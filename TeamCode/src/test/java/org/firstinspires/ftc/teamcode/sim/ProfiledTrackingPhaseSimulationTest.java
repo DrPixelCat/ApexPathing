@@ -37,7 +37,7 @@ public class ProfiledTrackingPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             Constants robot = new Constants();
-            Follower seed = new Follower(robot, hardware.hardwareMap, true);
+            Follower seed = Follower.create(robot, hardware.hardwareMap, true);
             LocalizationConstants localization = LocalizationConstants.empty();
             localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                     LocalizationConstants.Status.ACCEPTED,
@@ -54,7 +54,7 @@ public class ProfiledTrackingPhaseSimulationTest {
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() {
                     TunerContext context = new TunerContext(this);
-                    follower[0] = new Follower(new Constants(), hardwareMap, true);
+                    follower[0] = Follower.create(new Constants(), hardwareMap, true);
                     context.setFollower(follower[0]);
                     waitForStart();
                     complete.set(new ProfiledTrackingPhase(context).run(this));
@@ -133,7 +133,7 @@ public class ProfiledTrackingPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             Constants robot = new Constants();
-            Follower seed = new Follower(robot, hardware.hardwareMap, true);
+            Follower seed = Follower.create(robot, hardware.hardwareMap, true);
             LocalizationConstants localization = LocalizationConstants.empty();
             localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                     LocalizationConstants.Status.ACCEPTED,

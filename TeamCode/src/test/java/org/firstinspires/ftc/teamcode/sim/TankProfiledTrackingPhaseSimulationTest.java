@@ -46,7 +46,7 @@ public class TankProfiledTrackingPhaseSimulationTest {
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() {
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(new TankSimulationConstants(), hardwareMap, true));
+                    context.setFollower(Follower.create(new TankSimulationConstants(), hardwareMap, true));
                     waitForStart();
                     complete.set(new ProfiledTrackingPhase(context).run(this));
                     context.getFollower().stop();

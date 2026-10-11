@@ -86,7 +86,7 @@ public class FreshSysIdManualValidationTest {
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() throws InterruptedException {
                     Constants robot = new Constants();
-                    Follower seed = new Follower(robot, hardwareMap, true);
+                    Follower seed = Follower.create(robot, hardwareMap, true);
                     LocalizationConstants localization = LocalizationConstants.empty();
                     localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                             LocalizationConstants.Status.ACCEPTED, LocalizationConstants.Status.ACCEPTED);
@@ -100,7 +100,7 @@ public class FreshSysIdManualValidationTest {
                             super.beginFrame();
                         }
                     };
-                    context.setFollower(new Follower(robot, hardwareMap, true));
+                    context.setFollower(Follower.create(robot, hardwareMap, true));
                     contextRef.set(context);
                     waitForStart();
                     for (int i = 0; i < 4 && opModeIsActive(); i++) {

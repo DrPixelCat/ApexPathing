@@ -1,6 +1,5 @@
 package trajectory.generators;
 
-import trajectory.generators.MecanumProfileGenerator;
 
 import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
@@ -112,7 +111,7 @@ public class MecanumCoupledProfileTest {
         }
     }
     private MotionParameters[] verify(FollowerConstants c, Path p) {
-        MecanumProfileGenerator generator=new MecanumProfileGenerator(c,p);
+        PathProfileGenerator generator=new PathProfileGenerator(c, p, drivetrains.models.DriveModels.mecanum(c));
         MotionParameters[] profile=generator.generate();
         PathPoint[] points=p.getGeneratedPoints(); Vector end=p.getParametricPath().getFirstDerivative(1);
         Mecanum.DirectionalLut limits=new Mecanum.DirectionalLut(c.forwardVelLimitIn,c.forwardAccelLimitIn,c.strafeVelLimitIn,c.strafeAccelLimitIn);

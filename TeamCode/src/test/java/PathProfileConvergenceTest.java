@@ -1,3 +1,5 @@
+
+import trajectory.generators.PathProfileGenerator;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -19,10 +21,6 @@ import drivetrains.BaseDrivetrain.DrivetrainType;
 import drivetrains.Mecanum;
 import drivetrains.Mecanum.DirectionalLut.DirectionalKinematics;
 import trajectory.profile.MotionParameters;
-import trajectory.generators.BaseProfileGenerator;
-import trajectory.generators.MecanumProfileGenerator;
-import trajectory.generators.SwerveProfileGenerator;
-import trajectory.generators.TankProfileGenerator;
 import geometry.Angle;
 import geometry.AngleUnit;
 import geometry.Dist;
@@ -43,7 +41,7 @@ public class PathProfileConvergenceTest {
     private FollowerConstants constants;
     private GeometryFactory geometry;
     private Path path;
-    private BaseProfileGenerator generator;
+    private PathProfileGenerator generator;
 
     @Before
     public void setUp() {
@@ -77,7 +75,7 @@ public class PathProfileConvergenceTest {
                 geometry.pose(0, 50, 0))
                 .interpolateWith(InterpolationStyle.FACING_POINT, geometry.vector(10, 0))
                 .quickBuild();
-        generator = new MecanumProfileGenerator(constants, path);
+        generator = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants));
     }
 
     @Test
@@ -176,14 +174,14 @@ public class PathProfileConvergenceTest {
                 geometry.pose(100, 50, 0))
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD)
                 .quickBuild();
-        assertUsableProfile("mecanum", new MecanumProfileGenerator(constants, mecanumPath).generate());
-        assertUsableProfile("swerve", new SwerveProfileGenerator(constants, mecanumPath).generate());
+        assertUsableProfile("mecanum", new PathProfileGenerator(constants, mecanumPath, drivetrains.models.DriveModels.mecanum(constants)).generate());
+        assertUsableProfile("swerve", new PathProfileGenerator(constants, mecanumPath, drivetrains.models.DriveModels.swerve(constants)).generate());
 
         Path tankPath = new TankPathBuilder(
                 geometry.pose(0, -50, 90), geometry.arcPose(0, 50, 30),
                 geometry.pose(100, 50, 0))
                 .quickBuild();
-        assertUsableProfile("tank", new TankProfileGenerator(constants, tankPath).generate());
+        assertUsableProfile("tank", new PathProfileGenerator(constants, tankPath, drivetrains.models.DriveModels.tank(constants)).generate());
     }
 
     @Test
@@ -202,20 +200,20 @@ public class PathProfileConvergenceTest {
         Path tank = new TankPathBuilder(
                 geometry.pose(0, 0, 0), geometry.pose(60, 0, 0)).quickBuild();
         double mecanumOriginal = maxVelocity(
-                new MecanumProfileGenerator(constants, holonomic).generate());
+                new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.mecanum(constants)).generate());
         double swerveOriginal = maxVelocity(
-                new SwerveProfileGenerator(constants, holonomic).generate());
+                new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.swerve(constants)).generate());
         double tankOriginal = maxVelocity(
-                new TankProfileGenerator(constants, tank).generate());
+                new PathProfileGenerator(constants, tank, drivetrains.models.DriveModels.tank(constants)).generate());
         constants.profileVelocityPowerCoefficient = 0.02;
         assertTrue("Mecanum peak must respect speed-dependent motor power",
-                maxVelocity(new MecanumProfileGenerator(constants, holonomic).generate())
+                maxVelocity(new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.mecanum(constants)).generate())
                         < mecanumOriginal - 1.0);
         assertTrue("Swerve peak must respect speed-dependent motor power",
-                maxVelocity(new SwerveProfileGenerator(constants, holonomic).generate())
+                maxVelocity(new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.swerve(constants)).generate())
                         < swerveOriginal - 1.0);
         assertTrue("Tank peak must respect speed-dependent motor power",
-                maxVelocity(new TankProfileGenerator(constants, tank).generate())
+                maxVelocity(new PathProfileGenerator(constants, tank, drivetrains.models.DriveModels.tank(constants)).generate())
                         < tankOriginal - 1.0);
     }
 
@@ -268,7 +266,7 @@ public class PathProfileConvergenceTest {
                 geometry.pose(0, 0, headingDeg), geometry.pose(60, 0, headingDeg))
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING)
                 .quickBuild();
-        return new MecanumProfileGenerator(constants, straight).generate();
+        return new PathProfileGenerator(constants, straight, drivetrains.models.DriveModels.mecanum(constants)).generate();
     }
 
     private Mecanum.DirectionalLut createMecanumLimits() {

@@ -21,6 +21,65 @@ Turn pidTurn = factory.turn(start).turnTo(Angle.fromDeg(90)).quickBuild();
 Turn storedTurn = factory.turn(start).turnTo(Angle.fromDeg(90)).buildToMemory();
 ```
 
+
+All path profiles use one concrete `PathProfileGenerator`; the former base class and
+forwarding generator have been combined. `DriveModel` supplies physical velocity and
+acceleration limits, wheel projections, and analytic acceleration bounds.
+
+Each follower owns a drive model and its `MotionPowerCalculator`. The tracking update
+calls `calculate(...)` once for signed translation, rotation, and normal reference power.
+The planner uses the same calculator with a settings snapshot to evaluate hypothetical
+states. Planning and runtime policies retain the conservative kV reserve, tank reverse
+reserve, and runtime normal-power cap. Characterized mecanum wheels use the shared
+`MecanumWheelModel.solve(...)` kernel in both paths. Profile reporting reuses each sample's
+power evaluator instead of reconstructing a second calculation. Feedback, Ramsete
+corrections, endpoint capture, braking pulse history, and motor output remain in the follower.
+
+Use a follower-backed factory to capture the physical drivetrain and selected settings:
+
+```java
+GeometryFactory factory = new GeometryFactory(follower);
+Path path = factory.holonomicPath(start, corner, end).buildToMemory();
+// Direct generation, when needed:
+MotionParameters[] profile = path.createGenerator().generateRestToRest();
+```
+
+`factory.tankPath(...)` captures the tank profile and `factory.holonomicPath(...)` captures
+the holonomic profile. Neither building nor reversing a path actuates a dual-actuated drive
+or selects its runtime profile. Each stored path retains its own settings and physical model.
+Online following captures current settings and the actual drivetrain model at traversal start.
+Standalone builders still work: `setPlanningConstants(constants)` selects the default model
+for those settings, or `setDriveModel(model)` binds a custom model and a settings snapshot.
+For explicit use, `follower.getDriveModel(Profile.TANK)` returns a hardware-free snapshot;
+`follower.getDriveModel()` uses the current mode. Circular omni models copy the constructed
+wheel geometry, so changing the original motor configuration cannot alter an existing model.
+
+Tank and holonomic profiles share the entire sampled solver: both advance scalar distance
+with coupled heading velocity/acceleration constraints. Their physical limits and power
+metrics differ, which the drive models encapsulate. Separate generators would duplicate
+window planning, reachability, constraints, caching, and validation without simplifying
+those differences. `TurnProfileGenerator` remains separate because stationary turns use
+angular displacement instead of distance along a path.
+
+`HolonomicDriveModel` supports mecanum directional limits, isotropic swerve limits, and
+circular omni limits. Omni planning and allocation use the exact peak of the combined
+signed translation and rotation wheel commands for any wheel count or mounting offset.
+Its analytic acceleration bound intersects each wheel's affine power interval. Swerve planning continues to assume steering alignment and
+does not constrain module steering slew. `TankDriveModel` reserves the worse calibrated
+forward/reverse demand because scalar profile speed does not encode travel direction.
+The optional conservative profile kV changes planning only. Runtime feedforward uses
+identified kV. Custom mutable drive models use live geometry evaluation unless they
+explicitly opt into solver sample caching. Custom directional providers also default to
+uncached evaluation; built-in providers opt in. The drivetrain supplies its model through
+`createDriveModel(settings, mode)` for runtime and planning alike. Directional overrides
+are recreated against each settings snapshot. Stopping-horizon sizing checks all 360
+body directions for every holonomic model, including custom providers and omni layouts.
+See [custom drivetrains](CustomDrivetrains.md) for the extension contract.
+
+The former mecanum, swerve, tank, omni, and isotropic generator classes have been removed.
+Replace direct construction with `new PathProfileGenerator(path)` or
+`new PathProfileGenerator(path, model, powerLimit)`. Calibration JSON keys are unchanged.
+
 Online traversal projects the measured pose onto the route. The coupled solver samples
 only its visible arc-length window, exact boundaries, and authored constraint transitions.
 Online windows retain every geometry LUT node (about 0.75 nodes per inch
@@ -103,8 +162,8 @@ Reversal creates a new movement, retaining mode and settings and precomputing it
 stored data when needed. Traversal callbacks are not copied.
 Custom mutable heading interpolators implement `copyForTrajectory()` to detach their
 stored configuration; custom curves can override `getBoundsIn()` with exact bounds.
-Legacy scalar generators and LUT access remain available for regression analysis; followers
-and tracking logs use the shared trajectory sample. Calibration JSON keys are unchanged.
+Scalar profile and LUT access remain available for regression analysis; followers
+and tracking logs use the shared trajectory sample.
 
 `trajectory.TrajectoryTest` benchmarks build cost, packed field bytes, and query/update
 latency and writes `TeamCode/build/trajectory-benchmark.csv`. It also checks solve counts:

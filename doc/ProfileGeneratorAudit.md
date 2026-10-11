@@ -21,7 +21,7 @@ trajectory's optimality gap.
 | False convergence report | The old flag tested estimated power only. | Report power feasibility, kinematic feasibility, maximum constraint ratio, duration, and effective power ceiling; reject a failed final validation. |
 | Authored constraints applied in insertion order | An earlier constraint added later could replace the latest active constraint. | Sort by path progression before applying active overrides, including reversed paths. |
 
-`HolonomicFeedforward` supplies the reference translation and heading calculations
+`MotionPowerCalculator` supplies the reference translation and heading calculations
 for planning and execution. Runtime normal force still responds to measured speed;
 tracking errors, feedback, endpoint blending, and an explicit planning-only kV
 override can make actual commands differ from the zero-error reference model.

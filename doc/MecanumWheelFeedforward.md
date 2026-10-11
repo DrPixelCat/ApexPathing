@@ -64,7 +64,7 @@ before wheel inversion. Saturation scales chassis force, then solves the motor
 regimes again. Adding corrective power after inversion can otherwise switch a
 wheel's braking regime and invalidate the physical prediction.
 
-`MecanumProfileGenerator` uses the same model for power utilization, wheel-speed
+`PathProfileGenerator` delegates to `HolonomicDriveModel`, which uses the same wheel model for power utilization, wheel-speed
 domains and exact affine acceleration bounds. On straight geometry it checks held-acceleration
 intervals at both endpoints and both speed bounds, preventing the
 launch demand from overrunning power between solver rows. A separate test samples

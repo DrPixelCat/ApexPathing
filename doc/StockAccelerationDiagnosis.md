@@ -7,9 +7,9 @@ diagnostic is `StockAccelerationDiagnosticTest`; outputs are under
 
 ## Main cause: incorrect high-speed acceleration authority
 
-Apex does account for speed-dependent power consumption. `MecanumProfileGenerator.evaluatePoint`
+Apex does account for speed-dependent power consumption. `HolonomicDriveModel.powerEvaluator`
 uses the calibrated affine feedforward relation `u = kS + kV*v + kA*a` for forward powered
-motion, and `BaseProfileGenerator` limits its predicted normalized utilization to 1.0.
+motion, and `PathProfileGenerator` limits its predicted normalized utilization to 1.0.
 However, that fitted relation is insufficient to characterize this stock simulator across
 its full powered acceleration envelope.
 

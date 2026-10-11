@@ -85,7 +85,7 @@ public class AutoTest extends LinearOpMode {
     @Override
     public void runOpMode() {
         resetRunState();
-        Follower follower = new Follower(createConstants(), hardwareMap);
+        Follower follower = Follower.create(createConstants(), hardwareMap);
         try {
             configureFollower(follower);
             if (useTankPath()) {
@@ -483,11 +483,7 @@ public class AutoTest extends LinearOpMode {
         double crossTrackError = follower.getCrossTrackErrorIn();
         double curvature = segment.getSignedCurvature(t);
         Follower.CommandDemand demand = follower.getLastCommandDemand();
-        double commandPower = Math.max(Math.max(
-                        Math.abs(follower.getDrivetrain().getLastFlPower()),
-                        Math.abs(follower.getDrivetrain().getLastFrPower())),
-                Math.max(Math.abs(follower.getDrivetrain().getLastBlPower()),
-                        Math.abs(follower.getDrivetrain().getLastBrPower())));
+        double commandPower = follower.getDrivetrain().getMaxMotorPower();
 
         try {
             outboundVelocityCsv.write(String.format(

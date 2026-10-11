@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
-import feedforward.HolonomicFeedforward;
+import feedforward.MotionPowerCalculator;
+import drivetrains.models.DriveModels;
 import follower.FollowerConstants;
 import geometry.Angle;
 import geometry.DistUnit;
@@ -31,6 +32,7 @@ public class StraightTwistFeedforwardDiagnosticTest {
         File directory = new File("build/path-power-graphs/straight-twist-diagnosis").getAbsoluteFile();
         Files.createDirectories(directory.toPath());
         FollowerConstants constants = SimulatorTuning.snapshot();
+        MotionPowerCalculator calculator = DriveModels.mecanum(constants).powerCalculator();
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         new Constants().drivetrainConstants().build(hardware.hardwareMap); // Normal motor brake configuration.
         SimMotor[] motors = StockSimTestSupport.motors(hardware);
@@ -44,9 +46,9 @@ public class StraightTwistFeedforwardDiagnosticTest {
             // Separate angular acceleration from concurrent linear speed at identical omega/power.
             List<Double> speeds = new ArrayList<>(), isolated = new ArrayList<>(), combined = new ArrayList<>();
             double omega = .47;
-            double turn = HolonomicFeedforward.heading(constants, omega, 0);
+            double turn = calculator.calculate(vector(1, 0), 0, 0, omega, 0, 0).heading;
             for (double speed : new double[]{0, 8, 16, 24, 32}) {
-                Vector drive = HolonomicFeedforward.translation(constants, vector(1, 0), speed, 0, constants.translationalKV);
+                Vector drive = calculator.calculate(vector(1, 0), speed, 0, 0, 0, 0).translation();
                 Probe p = probe(hardware, motors, speed, 0, omega, drive.getX().getIn(), 0, turn);
                 row(csv, "cruise-angular-coupling", speed, 0, omega, p);
                 speeds.add(speed); combined.add(p.alpha);
@@ -59,14 +61,13 @@ public class StraightTwistFeedforwardDiagnosticTest {
                     "Rotation only", isolated, "Translation + rotation", combined);
 
             // Tiny negative alpha selects the legacy branch, not the measured response.
-            double accelerating = HolonomicFeedforward.heading(constants, omega, .001);
-            double cruise = HolonomicFeedforward.heading(constants, omega, 0);
-            double braking = HolonomicFeedforward.heading(constants, omega, -.001);
+            double accelerating = calculator.calculate(vector(1, 0), 0, 0, omega, .001, 0).heading;
+            double cruise = calculator.calculate(vector(1, 0), 0, 0, omega, 0, 0).heading;
+            double braking = calculator.calculate(vector(1, 0), 0, 0, omega, -.001, 0).heading;
             for (double alpha : new double[]{.001, 0, -.001, -.2}) {
-                double power = HolonomicFeedforward.heading(constants, omega, alpha);
+                double power = calculator.calculate(vector(1, 0), 0, 0, omega, alpha, 0).heading;
                 for (double vx : new double[]{0, 16}) {
-                    double x = vx == 0 ? 0 : HolonomicFeedforward.translation(constants, vector(1, 0), vx, 0,
-                            constants.translationalKV).getX().getIn();
+                    double x = vx == 0 ? 0 : calculator.calculate(vector(1, 0), vx, 0, 0, 0, 0).translation().getX().getIn();
                     Probe p = probe(hardware, motors, vx, 0, omega, x, 0, power);
                     row(csv, "angular-phase-switch-alpha=" + alpha, vx, 0, omega, p);
                     summary.printf(Locale.US, "angular phase vx=%.1f requestedAlpha=%.6f turn=%.6f actualAlpha=%.6f%n",
@@ -81,7 +82,7 @@ public class StraightTwistFeedforwardDiagnosticTest {
             for (double heading : new double[]{0, .001, .1, 10, 30, 45, 90}) {
                 double theta = Math.toRadians(heading);
                 Vector direction = vector(Math.cos(theta), -Math.sin(theta));
-                Vector drive = HolonomicFeedforward.translation(constants, direction, 16, 0, constants.translationalKV);
+                Vector drive = calculator.calculate(direction, 16, 0, 0, 0, 0).translation();
                 Probe matching = probe(hardware, motors, 16 * Math.cos(theta), -16 * Math.sin(theta), 0,
                         drive.getX().getIn(), drive.getY().getIn(), 0);
                 row(csv, "translation-matching-heading=" + heading, 16 * Math.cos(theta), -16 * Math.sin(theta), 0, matching);
@@ -103,7 +104,7 @@ public class StraightTwistFeedforwardDiagnosticTest {
             // A local response inversion, fitted only to probe results, confirms missing coupling.
             // It is diagnostic, not a persisted calibration or a controller using live error.
             double speed = 16;
-            double x = HolonomicFeedforward.translation(constants, vector(1, 0), speed, 0, constants.translationalKV).getX().getIn();
+            double x = calculator.calculate(vector(1, 0), speed, 0, 0, 0, 0).translation().getX().getIn();
             Probe baseline = probe(hardware, motors, speed, 0, omega, x, 0, cruise);
             double[] command = {x, 0, cruise};
             double[][] jacobian = new double[3][4];

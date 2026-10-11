@@ -79,7 +79,7 @@ public class AccelerationFeedforwardPhaseSimulationTest {
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() throws InterruptedException {
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(tank ? new TankSimulationConstants()
+                    context.setFollower(Follower.create(tank ? new TankSimulationConstants()
                             : new Constants(), hardwareMap, true));
                     context.constants.translationalFeedforwardKS = .15;
                     context.constants.translationalKV = .01;

@@ -90,7 +90,7 @@ public class VelocityFeedbackExperimentTest {
                 ApexSimulation.FIELD_CENTER_INCHES,0));
         MecanumWheelModel.Demand demand=new MecanumWheelModel.Demand();
         double[] debt={.5,.5,.5,.5},powers=new double[4];
-        follower.VelocityReference continuous=new follower.VelocityReference();
+        follower.internal.VelocityReference continuous=new follower.internal.VelocityReference();
         double time=0;
         double squared=0,feedbackSquared=0,duration=0;boolean impulse=false;int tick=0;
         try(PrintWriter csv=new PrintWriter(new File(directory,"scenario-"+scenario+"-mode-"+mode+".csv"))) {

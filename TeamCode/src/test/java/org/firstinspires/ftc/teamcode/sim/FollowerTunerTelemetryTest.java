@@ -491,7 +491,7 @@ public class FollowerTunerTelemetryTest {
 
     private static void seedAcceptedLocalization(ApexSimulation.Hardware hardware) throws Exception {
         Constants robot = new Constants();
-        Follower seed = new Follower(robot, hardware.hardwareMap, true);
+        Follower seed = Follower.create(robot, hardware.hardwareMap, true);
         LocalizationConstants localization = LocalizationConstants.empty();
         localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                 LocalizationConstants.Status.ACCEPTED,

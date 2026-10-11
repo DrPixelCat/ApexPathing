@@ -1,6 +1,5 @@
 package trajectory.generators;
 
-import trajectory.generators.TankProfileGenerator;
 
 import follower.FollowerConstants;
 import org.json.JSONObject;
@@ -9,14 +8,14 @@ import static org.junit.Assert.assertEquals;
 
 public class TankTractionLimitTest {
     @Test public void bothCurveDirectionsHaveTheSameTractionLimit() {
-        assertEquals(10, TankProfileGenerator.tractionLimitedVelocity(60, .2, 20), 1e-9);
-        assertEquals(10, TankProfileGenerator.tractionLimitedVelocity(60, -.2, 20), 1e-9);
+        assertEquals(10, drivetrains.models.TankDriveModel.tractionLimitedVelocity(60, .2, 20), 1e-9);
+        assertEquals(10, drivetrains.models.TankDriveModel.tractionLimitedVelocity(60, -.2, 20), 1e-9);
     }
 
     @Test public void unsetLimitAndStraightPathsRemainUsable() {
-        assertEquals(60, TankProfileGenerator.tractionLimitedVelocity(60, .2, 0), 0);
-        assertEquals(60, TankProfileGenerator.tractionLimitedVelocity(60, 0, 20), 0);
-        assertEquals(5, TankProfileGenerator.tractionLimitedVelocity(5, .2, 20), 0);
+        assertEquals(60, drivetrains.models.TankDriveModel.tractionLimitedVelocity(60, .2, 0), 0);
+        assertEquals(60, drivetrains.models.TankDriveModel.tractionLimitedVelocity(60, 0, 20), 0);
+        assertEquals(5, drivetrains.models.TankDriveModel.tractionLimitedVelocity(5, .2, 20), 0);
     }
 
     @Test public void tractionLimitSurvivesDualProfileSwitchAndSerialization() throws Exception {

@@ -101,7 +101,7 @@ public class VelocityFeedbackSimulationTest {
                     };
                 }
             };
-            follower=new Follower(robot,hardware.hardwareMap,false,clock);
+            follower=Follower.create(robot,hardware.hardwareMap,false,clock);
             SimulatorTuning.apply(FollowerConstants.getInstance());follower.reset();
             GeometryFactory g=new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
             final boolean[] callback={false};
@@ -114,8 +114,10 @@ public class VelocityFeedbackSimulationTest {
             trajectory.profile.FFLut nominal=new trajectory.profile.FFLut(path.createGenerator(path.getPlanningConstants()).generateRestToRest());
             if(previewSeconds>0 || pursuitSeconds>0) {
                 // Future controllers are explicit historical experiments, outside normal following.
-                java.lang.reflect.Field stateField=Follower.class.getDeclaredField("pathState");
-                stateField.setAccessible(true);Object state=stateField.get(follower);
+                java.lang.reflect.Field runtimeField=Follower.class.getDeclaredField("runtime");
+                runtimeField.setAccessible(true);Object runtime=runtimeField.get(follower);
+                java.lang.reflect.Field stateField=runtime.getClass().getDeclaredField("pathState");
+                stateField.setAccessible(true);Object state=stateField.get(runtime);
                 java.lang.reflect.Field plannerField=state.getClass().getDeclaredField("onlinePlanner");
                 plannerField.setAccessible(true);
                 plannerField.set(state,new trajectory.OnlineTrajectoryPlanner(path,path.getPlanningConstants(),previewSeconds,pursuitSeconds));

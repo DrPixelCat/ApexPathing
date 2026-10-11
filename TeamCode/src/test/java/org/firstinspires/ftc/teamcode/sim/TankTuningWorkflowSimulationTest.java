@@ -47,7 +47,7 @@ public class TankTuningWorkflowSimulationTest {
             LinearOpMode op = new LinearOpMode() {
                 @Override public void runOpMode() {
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(new TankSimulationConstants(), hardwareMap, true));
+                    context.setFollower(Follower.create(new TankSimulationConstants(), hardwareMap, true));
                     waitForStart();
                     if (!feedbackOnly) {
                         if (!new FeedforwardTuner(context, FeedforwardTuner.Axis.DRIVE).run(this)) { return; }

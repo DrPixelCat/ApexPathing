@@ -45,7 +45,7 @@ public class FeedforwardPhaseSimulationTest {
         try {
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             Constants robot = new Constants();
-            Follower untuned = new Follower(robot, hardware.hardwareMap, true);
+            Follower untuned = Follower.create(robot, hardware.hardwareMap, true);
             assertFalse(untuned.hasAcceptedKalmanFilterTuning());
 
             LocalizationConstants localization = LocalizationConstants.empty();
@@ -54,7 +54,7 @@ public class FeedforwardPhaseSimulationTest {
                     LocalizationConstants.Status.ACCEPTED);
             localization.save();
 
-            Follower tuned = new Follower(robot, hardware.hardwareMap, true);
+            Follower tuned = Follower.create(robot, hardware.hardwareMap, true);
             assertTrue(tuned.hasAcceptedKalmanFilterTuning());
         } finally {
             if (previousDirectory == null) {
@@ -99,7 +99,7 @@ public class FeedforwardPhaseSimulationTest {
             LinearOpMode opMode = new LinearOpMode() {
                 @Override public void runOpMode() throws InterruptedException {
                     config.ApexConstants robot = tank ? new TankSimulationConstants() : new Constants();
-                    Follower seed = new Follower(robot, hardwareMap, true);
+                    Follower seed = Follower.create(robot, hardwareMap, true);
                     LocalizationConstants localization = LocalizationConstants.empty();
                     localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                             LocalizationConstants.Status.ACCEPTED,
@@ -107,7 +107,7 @@ public class FeedforwardPhaseSimulationTest {
                     try { localization.save(); }
                     catch (java.io.IOException e) { throw new IllegalStateException(e); }
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(robot, hardwareMap, true));
+                    context.setFollower(Follower.create(robot, hardwareMap, true));
                     context.constants.forwardVelLimitIn = 65;
                     context.constants.forwardAccelLimitIn = 148;
                     context.constants.angularVelLimitRad = 7;

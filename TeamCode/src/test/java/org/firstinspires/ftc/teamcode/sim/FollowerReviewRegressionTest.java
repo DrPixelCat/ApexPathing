@@ -24,7 +24,7 @@ public class FollowerReviewRegressionTest {
             singleton.set(null, shared);
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             AtomicLong clock = new AtomicLong(1_000_000_000L);
-            Follower follower = new Follower(new Constants(), hardware.hardwareMap, true, clock::get);
+            Follower follower = Follower.create(new Constants(), hardware.hardwareMap, true, clock::get);
             double sharedGain = shared.translationalCoeffs.kP;
             follower.getConstants().translationalCoeffs.p(.2);
             assertEquals(sharedGain, shared.translationalCoeffs.kP, 0);

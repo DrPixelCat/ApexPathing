@@ -111,7 +111,14 @@ public class DriveController {
         return endDistanceController.p().d(errorRate).s().calculate(error).get();
     }
 
-    /** Allocates one field-centric stage using mecanum direction-dependent wheel demand. */
+    /** Allocate a position correction using the drivetrain's command shaping and motor demand. */
+    public AllocatedCommand allocatePositionHold(Vector fieldCommand, Angle currentHeading,
+                                                  double availablePower, drivetrains.models.DriveModel model) {
+        Vector command = model.positionHoldCommand(fieldToRobotCentric(fieldCommand, currentHeading));
+        return limitByDemand(command, model.commandDemand(command, 0), availablePower);
+    }
+
+    /** Legacy mecanum allocation; follower code uses the drivetrain's physical model. */
     public AllocatedCommand allocateMecanum(Vector fieldCommand, Angle currentHeading,
                                              double availablePower) {
         Vector robotCommand = fieldToRobotCentric(fieldCommand, currentHeading);

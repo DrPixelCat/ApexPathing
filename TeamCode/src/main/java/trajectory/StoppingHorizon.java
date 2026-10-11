@@ -2,8 +2,7 @@ package trajectory;
 
 import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
-import drivetrains.BaseDrivetrain;
-import drivetrains.Mecanum;
+import drivetrains.models.DriveModel;
 import trajectory.profile.DynamicMotionProfile;
 import paths.movements.Path;
 
@@ -16,32 +15,26 @@ public final class StoppingHorizon {
     private StoppingHorizon() { }
 
     public static double distance(FollowerConstants c, Path path, double power) {
+        return distance(c,path,power,path.getDriveModel(c));
+    }
+    public static double distance(FollowerConstants c, Path path, double power, DriveModel driveModel) {
         double result = axis(c, MotionCharacterization.Axis.FORWARD, c.forwardVelLimitIn, c.forwardAccelLimitIn,
                 c.translationalKV, c.translationalKA, c.translationalFeedforwardKS, power);
         if (path.getPathType() == Path.PathType.HOLONOMIC && c.strafeVelLimitIn > 0 && c.strafeAccelLimitIn > 0) {
             result = Math.max(result, axis(c, MotionCharacterization.Axis.STRAFE, c.strafeVelLimitIn, c.strafeAccelLimitIn,
                     c.translationalKV, c.translationalKA, c.translationalFeedforwardKS, power));
-            if (c.drivetrainType != BaseDrivetrain.DrivetrainType.COAXIAL_SWERVE) {
-                Mecanum.DirectionalLut directions = new Mecanum.DirectionalLut(c.forwardVelLimitIn,
-                        c.forwardAccelLimitIn, c.strafeVelLimitIn, c.strafeAccelLimitIn);
-                double forward = measuredLimit(c, MotionCharacterization.Axis.FORWARD, c.forwardVelLimitIn);
-                double strafe = measuredLimit(c, MotionCharacterization.Axis.STRAFE, c.strafeVelLimitIn);
-                // Check the complete directional LUT, including diagonal wheel-power demand.
-                // Signed braking uses the legacy inertia model in either travel direction.
-                for (int degrees = 0; degrees < 360; degrees++) {
-                    double x = Math.cos(Math.toRadians(degrees)), y = Math.sin(Math.toRadians(degrees));
-                    Mecanum.DirectionalLut.DirectionalKinematics limits = directions.getKinematics(
-                            TrajectorySample.vector(x, y), geometry.Angle.fromRad(0));
-                    double speed = Math.min(limits.maxVel, Math.min(
-                            Math.abs(x) < 1e-9 ? Double.POSITIVE_INFINITY : forward / Math.abs(x),
-                            Math.abs(y) < 1e-9 ? Double.POSITIVE_INFINITY : strafe / Math.abs(y)));
-                    double wheelFactor = Math.abs(x) + Math.abs(y);
-                    result = Math.max(result, stoppingDistance(speed, limits.maxAccel,
-                            c.translationalKV * wheelFactor, c.translationalKA * wheelFactor,
-                            c.translationalFeedforwardKS * wheelFactor, power));
-                }
+            // Include custom directional acceleration limits and every circular wheel layout.
+            for (int degrees=0;degrees<360;degrees++) {
+                double x=Math.cos(Math.toRadians(degrees)), y=Math.sin(Math.toRadians(degrees));
+                geometry.Vector body=TrajectorySample.vector(x,y);
+                double speed=driveModel.maximumVelocity(body,0,0,c.angularVelLimitRad);
+                double acceleration=driveModel.maximumTangentialAcceleration(body);
+                double factor=driveModel.translationDemand(x,y);
+                result=Math.max(result,stoppingDistance(speed,acceleration,c.translationalKV*factor,
+                        c.translationalKA*factor,c.translationalFeedforwardKS*factor,power));
             }
         }
+
         return Math.max(2, result);
     }
 

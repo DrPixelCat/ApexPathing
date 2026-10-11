@@ -1,8 +1,5 @@
 package trajectory.generators;
 
-import trajectory.generators.BaseProfileGenerator;
-import trajectory.generators.MecanumProfileGenerator;
-import trajectory.generators.TankProfileGenerator;
 
 import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
@@ -38,11 +35,16 @@ public class AnalyticPowerBoundsTest {
                 }
                 c.motionCharacterization = new MotionCharacterization(models, true);
             }
-            for (BaseProfileGenerator generator : new BaseProfileGenerator[]{new MecanumProfileGenerator(c, path),
-                    new TankProfileGenerator(c, path), new SwerveProfileGenerator(c, path)}) {
+            for (drivetrains.models.DriveModel model : new drivetrains.models.DriveModel[]{
+                    drivetrains.models.DriveModels.mecanum(c), drivetrains.models.DriveModels.tank(c),
+                    drivetrains.models.DriveModels.swerve(c), drivetrains.models.DriveModels.omni(c),
+                    projected(c,3,.3), projected(c,5,1.2), projected(c,8,.7)}) {
                 for (int i = 0; i < 250; i++) {
                     PathPoint point = path.getParametricPath().getPointAtDistance(random.nextDouble() * path.getParametricPath().getLengthIn());
-                    BaseProfileGenerator.PowerEvaluator evaluator = generator.powerEvaluator(path, point);
+                    Angle heading=path.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(),point.getFirstDerivative(),
+                            path.getParametricPath().getFirstDerivative(1));
+                    Vector body=point.getFirstDerivative().normalize().rotate(heading.times(-1));
+                    drivetrains.models.DriveModel.PowerEvaluator evaluator = model.powerEvaluator(body,point.getSignedCurvature());
                     double v = random.nextDouble() * 60, prime = random.nextDouble() * .2 - .1, second = random.nextDouble() * .01 - .005;
                     double min = i % 2 == 0 ? .01 : -100, max = i % 2 == 0 ? 100 : -.01, limit = .4 + random.nextDouble() * .6;
                     double candidate = evaluator.maximumAcceleration(v, prime, second, min, max, limit);
@@ -63,5 +65,10 @@ public class AnalyticPowerBoundsTest {
             }
         }
         assertTrue("Exercise both powered and braking affine branches", eligible > 300);
+    }    private static drivetrains.models.DriveModel projected(FollowerConstants c,int n,double offset) {
+        double[] x=new double[n],y=new double[n];
+        for(int i=0;i<n;i++) { x[i]=-Math.sin(offset+i*2*Math.PI/n); y[i]=Math.cos(offset+i*2*Math.PI/n); }
+        return new drivetrains.models.HolonomicDriveModel(c,new drivetrains.models.WheelProjectionModel(x,y,1));
     }
+
 }

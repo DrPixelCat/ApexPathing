@@ -51,7 +51,7 @@ public class ApexSimulationTest {
     public void reverseProfileIsUsableOrFallsBackToClosedLoopFollowing() {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         configureKnownFollowerConstants();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         ExampleAutoPath auto = new ExampleAutoPath(follower, GeometryFactory.PoseMirror.NONE);
 
         if (auto.returnPath.getFeedforwardLut() != null) {
@@ -87,7 +87,7 @@ public class ApexSimulationTest {
 
         // Constructing the shared Follower exercises the same drivetrain/localizer initialization
         // path used by AutoTest, TeleOpTest, and FollowerTuner.
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         assertPose(Pose.zero(), follower.getPose());
     }
 
@@ -118,7 +118,7 @@ public class ApexSimulationTest {
     @Test
     public void followerPublishesAndClearsItsActivePathForSimulatorDiagnostics() {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         ExampleAutoPath auto = new ExampleAutoPath(follower, GeometryFactory.PoseMirror.NONE);
         RecordingDiagnostics diagnostics = new RecordingDiagnostics();
         Follower.setDiagnostics(diagnostics);
@@ -140,7 +140,7 @@ public class ApexSimulationTest {
     @Test
     public void reversingPureTurnUpdatesEveryWheelWithoutTranslationLeakage() {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         BaseDrivetrain<?> drivetrain = follower.getDrivetrain();
 
         drivetrain.moveWithVectors(0.0, 0.0, 0.5);
@@ -156,7 +156,7 @@ public class ApexSimulationTest {
     @Test
     public void positiveStrafeUsesTheDocumentedLeftWheelPattern() {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         BaseDrivetrain<?> drivetrain = follower.getDrivetrain();
 
         drivetrain.moveWithVectors(0.0, 0.5, 0.0);
@@ -230,7 +230,7 @@ public class ApexSimulationTest {
     @Test
     public void pinpointPoseResetIsImmediatelyVisibleToFollower() {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         Pose requested = new Pose(
                 geometry.Vector.of(12.0, -8.0, geometry.DistUnit.IN),
                 geometry.Angle.fromDeg(30.0)
@@ -288,7 +288,7 @@ public class ApexSimulationTest {
             singleton.set(null, SimulatorTuning.snapshot());
             java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
             ((SimApexPinpoint) hardware.hardwareMap.get(Pinpoint.Driver.class, ApexSimulation.PINPOINT)).setClock(clock::get);
-            Follower follower = new Follower(new Constants(), hardware.hardwareMap, false, clock::get);
+            Follower follower = Follower.create(new Constants(), hardware.hardwareMap, false, clock::get);
             ExampleAutoPath auto = new ExampleAutoPath(follower, GeometryFactory.PoseMirror.NONE);
 
             follower.follow(auto.testPath);
@@ -401,7 +401,7 @@ public class ApexSimulationTest {
     private static void runVelocityFeedbackTranslationTrial(double gain) throws Exception {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         configureKnownFollowerConstants();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         follower.setVelocityFeedback(gain, 0.34);
 
         GeometryFactory factory = new GeometryFactory(follower)
@@ -446,7 +446,7 @@ public class ApexSimulationTest {
     public void exportProfiledTurnVelocityResponse() throws Exception {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         configureKnownFollowerConstants();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         GeometryFactory factory = new GeometryFactory(follower)
                 .setDistUnit(geometry.DistUnit.IN)
                 .setAngleUnit(geometry.AngleUnit.DEG);
@@ -540,7 +540,7 @@ public class ApexSimulationTest {
         constants.angularKA = 0.05331768750185841;
         constants.angularVelLimitRad = 6.958830137809905;
         constants.angularAccelLimitRad = 17.81772699663479;
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         follower.setVelocityFeedback(0.0251, gain);
 
         GeometryFactory factory = new GeometryFactory(follower)
@@ -573,7 +573,7 @@ public class ApexSimulationTest {
     public void centripetalQuickArcsCompleteBothDirections() throws Exception {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         configureKnownFollowerConstants();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         follower.setCentripetal(0.00664954474299773);
 
         GeometryFactory factory = new GeometryFactory(follower)
@@ -638,7 +638,7 @@ public class ApexSimulationTest {
 
     private static MotionVector simulateMotion(double x, double y, double turn) throws Exception {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-        Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+        Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         follower.getDrivetrain().moveWithVectors(x, y, turn);
 
         for (int step = 0; step < 100; step++) {

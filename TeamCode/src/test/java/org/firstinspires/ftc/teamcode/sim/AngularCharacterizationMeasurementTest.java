@@ -58,7 +58,7 @@ public class AngularCharacterizationMeasurementTest {
                 AtomicLong clock = new AtomicLong(1_000_000_000L);
                 ((SimApexPinpoint) hardware.hardwareMap.get(Pinpoint.Driver.class,
                         ApexSimulation.PINPOINT)).setClock(clock::get);
-                Follower follower = new Follower(new Constants(), hardware.hardwareMap, true, clock::get);
+                Follower follower = Follower.create(new Constants(), hardware.hardwareMap, true, clock::get);
                 follower.setPose(Pose.zero()); follower.disableControllers(); follower.update(false);
                 if (warmFilter) {
                     // The angular estimator sees little motion during forward/strafe acquisition.

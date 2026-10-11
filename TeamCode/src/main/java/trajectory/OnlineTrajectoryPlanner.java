@@ -1,7 +1,7 @@
 package trajectory;
 
 import follower.FollowerConstants;
-import trajectory.generators.BaseProfileGenerator;
+import trajectory.generators.PathProfileGenerator;
 import geometry.PathSegment;
 import geometry.Vector;
 import paths.movements.Path;
@@ -13,7 +13,7 @@ import paths.movements.Path;
  */
 public final class OnlineTrajectoryPlanner {
     private final Path path;
-    private final BaseProfileGenerator generator;
+    private final PathProfileGenerator generator;
     private final double horizonIn;
     private final double previewSeconds;
     private final double pursuitSeconds;
@@ -24,6 +24,10 @@ public final class OnlineTrajectoryPlanner {
         this(path, constants, path.getPathType() == Path.PathType.HOLONOMIC ? 0 : .05, 0);
     }
 
+    public OnlineTrajectoryPlanner(Path path,FollowerConstants constants,drivetrains.models.DriveModel model) {
+        this(path,constants,path.getPathType() == Path.PathType.HOLONOMIC ? 0 : .05,0,model);
+    }
+
     /** Explicit legacy preview is available for controlled comparisons. */
     public OnlineTrajectoryPlanner(Path path,FollowerConstants constants,double previewSeconds) {
         this(path,constants,previewSeconds,0);
@@ -31,17 +35,21 @@ public final class OnlineTrajectoryPlanner {
 
     /** Explicit pursuit is retained for experimental comparisons; normal following uses current-error P control. */
     public OnlineTrajectoryPlanner(Path path,FollowerConstants constants,double previewSeconds,double pursuitSeconds) {
+        this(path,constants,previewSeconds,pursuitSeconds,path.getDriveModel(constants));
+    }
+    private OnlineTrajectoryPlanner(Path path,FollowerConstants constants,double previewSeconds,double pursuitSeconds,
+                                    drivetrains.models.DriveModel model) {
         if (!Double.isFinite(previewSeconds) || previewSeconds < 0 || previewSeconds > .05
                 || !Double.isFinite(pursuitSeconds) || pursuitSeconds < 0 || pursuitSeconds > 1)
             throw new IllegalArgumentException("Preview must be in [0, .05] and convergence time in [0, 1]");
         this.path = path;
         this.previewSeconds=previewSeconds;
         this.pursuitSeconds=pursuitSeconds;
-        generator = path.createGenerator(constants);
+        generator = path.createGenerator(constants,model);
         if (path.getBuildMode() == Path.BuildMode.MEMORY && pursuitSeconds > 0)
             generator.setVelocityPursuitReference(path.getFeedforwardLut());
         horizonIn = path.getLookaheadDistanceIn() != null ? path.getLookaheadDistanceIn()
-                : StoppingHorizon.distance(constants, path, generator.getProfilePowerLimit());
+                : StoppingHorizon.distance(constants, path, generator.getProfilePowerLimit(),model);
     }
 
     public double getHorizonIn() { return horizonIn; }
@@ -67,7 +75,7 @@ public final class OnlineTrajectoryPlanner {
         // Use the same distance-interpolated tangent that TrajectorySample publishes.
         // A second tangent from projection can create a small artificial velocity error.
         double speed = velocity.dot(segment.getFirstDerivative(segment.getTAtDistance(distance)).normalize()).getIn();
-        BaseProfileGenerator.WindowTarget target = pursuitSeconds>0
+        PathProfileGenerator.WindowTarget target = pursuitSeconds>0
                 ? generator.generatePursuitWindow(distance,horizonIn,speed,angularVelocity,dt,pursuitSeconds)
                 : generator.generateWindow(distance, horizonIn, speed, angularVelocity, dt, previewSeconds);
         goalDistanceIn=target.goalDistanceIn;goalVelocity=target.goalVelocity;currentSpeedCeiling=target.currentSpeedCeiling;

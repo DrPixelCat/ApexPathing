@@ -5,12 +5,10 @@ import java.util.Collections;
 import java.util.List;
 
 import follower.FollowerConstants;
-import drivetrains.BaseDrivetrain;
+import drivetrains.models.DriveModel;
+import drivetrains.models.DriveModels;
+import trajectory.generators.PathProfileGenerator;
 import trajectory.profile.FFLut;
-import trajectory.generators.BaseProfileGenerator;
-import trajectory.generators.MecanumProfileGenerator;
-import trajectory.generators.SwerveProfileGenerator;
-import trajectory.generators.TankProfileGenerator;
 import geometry.Angle;
 import geometry.AngleUnit;
 import geometry.Dist;
@@ -51,6 +49,7 @@ public class Path extends FollowerMovement {
     private BuildMode buildMode = BuildMode.ONLINE;
     private trajectory.TrajectoryField2D trajectoryField;
     private FollowerConstants planningConstants;
+    private DriveModel planningDriveModel;
     private Double lookaheadDistanceIn;
     private double memoryGridSpacingIn = 1.0, memoryGridPaddingIn = 12.0;
 
@@ -79,7 +78,19 @@ public class Path extends FollowerMovement {
     public void setPlanningConstants(FollowerConstants constants) {
         planningConstants = constants.forProfile(pathType == PathType.TANK
                 ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC);
+        planningDriveModel = null;
         invalidateTrajectory();
+    }
+    /** Binds physical geometry and an independent settings snapshot. */
+    public void setDriveModel(DriveModel model) {
+        if (model.isHolonomic() != (pathType == PathType.HOLONOMIC))
+            throw new IllegalArgumentException("Drive model does not match path mode");
+        planningConstants = model.getConstants();
+        planningDriveModel = model.withConstants(planningConstants);
+        invalidateTrajectory();
+    }
+    public DriveModel getDriveModel(FollowerConstants constants) {
+        return planningDriveModel == null ? DriveModels.forPath(constants,pathType) : planningDriveModel.withConstants(constants);
     }
     public FollowerConstants getPlanningConstants() {
         if (planningConstants == null) {
@@ -88,10 +99,14 @@ public class Path extends FollowerMovement {
         }
         return planningConstants.copy();
     }
-    public BaseProfileGenerator createGenerator(FollowerConstants constants) {
-        return pathType == PathType.TANK ? new TankProfileGenerator(constants, this)
-                : constants.drivetrainType == BaseDrivetrain.DrivetrainType.COAXIAL_SWERVE
-                ? new SwerveProfileGenerator(constants, this) : new MecanumProfileGenerator(constants, this);
+    public PathProfileGenerator createGenerator() { return new PathProfileGenerator(this); }
+    public PathProfileGenerator createGenerator(FollowerConstants constants) {
+        return new PathProfileGenerator(constants,this);
+    }
+    public PathProfileGenerator createGenerator(FollowerConstants constants, DriveModel model) {
+        if (model.isHolonomic() != (pathType == PathType.HOLONOMIC))
+            throw new IllegalArgumentException("Drive model does not match path mode");
+        return new PathProfileGenerator(constants,this,model);
     }
     private boolean reverseConstraintProgress;
     private Double profilePowerLimit;
@@ -296,6 +311,7 @@ public class Path extends FollowerMovement {
         result.profilePowerLimit = profilePowerLimit;
         result.lookaheadDistanceIn = lookaheadDistanceIn;
         result.planningConstants = planningConstants == null ? null : planningConstants.copy();
+        result.planningDriveModel = planningDriveModel == null ? null : planningDriveModel.withConstants(result.planningConstants);
         result.memoryGridSpacingIn = memoryGridSpacingIn;
         result.memoryGridPaddingIn = memoryGridPaddingIn;
         for (String warning : buildWarnings) { result.addWarning(warning); }

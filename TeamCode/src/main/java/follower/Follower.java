@@ -1,12 +1,14 @@
 package follower;
 
 import config.ApexConstants;
-import feedforward.HolonomicFeedforward;
+import follower.drivetrains.FollowerFactory;
+import follower.internal.FollowerMath;
+import follower.internal.FollowerRuntime;
+import follower.internal.FollowerRuntime.PathController;
 import localizers.LocalizerSet;
 
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.util.Range;
 
 import controllers.DriveController;
 import controllers.FeedbackController;
@@ -18,7 +20,6 @@ import drivetrains.DualActuated;
 import drivetrains.Mecanum;
 import geometry.AngleUnit;
 import geometry.Dist;
-import geometry.DistUnit;
 import geometry.PathSegment;
 import geometry.Pose;
 import geometry.Vector;
@@ -28,15 +29,16 @@ import paths.movements.Path;
 import paths.movements.Turn;
 
 /**
- * Apex Pathing's public movement coordinator. Execution algorithms live in dedicated collaborators
- * while this class retains lifecycle, hardware, tuning, and diagnostic APIs.
+ * Shared movement lifecycle for all Apex Pathing followers. Concrete subclasses select path
+ * tracking and pose holding while this class owns hardware, turns, tuning, and diagnostics.
+ * Use {@link #create(ApexConstants, HardwareMap)} to select a follower from robot hardware.
  *
  * @author Sohum Arora - 22985 Paraducks
  * @author Joel H
  * @author Dylan B. - 18597 RoboClovers - Delta
  * @author Xander Haemel - 31616 404 Not Found
  */
-public class Follower {
+public abstract class Follower {
     private static final FollowerDiagnostics NO_DIAGNOSTICS = new FollowerDiagnostics() {
         @Override public void recordPose(Pose pose) { }
         @Override public void recordCurrentPath(Path path) { }
@@ -44,30 +46,17 @@ public class Follower {
     };
     private static volatile FollowerDiagnostics diagnostics = NO_DIAGNOSTICS;
 
-    static final double PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES = 8.0;
-    static final double ENDPOINT_STALLED_VELOCITY_IN_PER_SECOND = 0.25;
-    private static final double PROFILED_HEADING_CAPTURE_RADIANS = Math.toRadians(10.0);
-    static final double MAX_CENTRIPETAL_POWER = HolonomicFeedforward.MAX_CENTRIPETAL_POWER;
-    private static final double SLOWED_VELOCITY_DELTA_IN_PER_SECOND = 6.0;
-    private static final double STUCK_LINEAR_VELOCITY_IN_PER_SECOND = 0.5;
-
     private final FollowerConstants constants;
     private final BaseDrivetrain<?> drivetrain;
     private BaseLocalizer<?> localizer;
     private final java.util.function.LongSupplier monotonicClock;
     private final LocalizerSet localizerSet;
-    private final double headingTolerance;
-    private final double distanceTolerance;
 
     private final FeedbackController headingController;
     private final TurnController turnController;
     private final DriveController driveController;
-    private final MovementCallbackRunner callbackRunner = new MovementCallbackRunner();
-    private final FollowerPathState pathState = new FollowerPathState();
-    private final HolonomicCommandAllocator commandAllocator;
-    private final TurnExecutor turnExecutor;
-    private final HolonomicPathFollower holonomicPathFollower;
-    private final TankPathFollower tankPathFollower;
+    private final FollowerRuntime runtime;
+    private final FollowerTelemetry telemetry;
 
     private FollowerMovement currentMovement;
     private PathSegment segment;
@@ -92,7 +81,7 @@ public class Follower {
 
     /** Raw controller demand from the most recent holonomic update, before normalization. */
     public static final class CommandDemand {
-        static final CommandDemand ZERO =
+        public static final CommandDemand ZERO =
                 new CommandDemand(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         public final boolean available;
         public final double crossTrack;
@@ -112,7 +101,7 @@ public class Follower {
         public final double feedforwardScale;
         public final double velocityScale;
 
-        CommandDemand(boolean available, double crossTrack, double tangentCorrection,
+        public CommandDemand(boolean available, double crossTrack, double tangentCorrection,
                       double headingCorrection, double centripetal,
                       double forwardVelocity, double headingVelocity,
                       double driveFeedforward, double headingFeedforward,
@@ -123,7 +112,7 @@ public class Follower {
                     correctiveTotal, velocityTotal, feedforwardTotal, total, 1.0, 1.0, 1.0);
         }
 
-        CommandDemand(boolean available, double crossTrack, double tangentCorrection,
+        public CommandDemand(boolean available, double crossTrack, double tangentCorrection,
                       double headingCorrection, double centripetal,
                       double forwardVelocity, double headingVelocity,
                       double driveFeedforward, double headingFeedforward,
@@ -149,28 +138,27 @@ public class Follower {
         }
     }
 
-    /** Compatibility wrapper retained for package tests; timing logic lives in its own class. */
-    static final class StuckWatchdog {
-        private final FollowerStuckWatchdog delegate = new FollowerStuckWatchdog();
-        boolean update(boolean stuck, long nowNanos) { return delegate.update(stuck, nowNanos); }
-        void reset() { delegate.reset(); }
+    /** Builds the hardware once and selects the follower matching its drivetrain capabilities. */
+    public static Follower create(ApexConstants constants, HardwareMap hardwareMap) {
+        return create(constants, hardwareMap, false);
     }
 
-    /** Constructs the drivetrain, localizer, and follower from the given {@link ApexConstants}. */
-    public Follower(ApexConstants constants, HardwareMap hardwareMap) {
-        this(constants, hardwareMap, false);
-    }
-
-    public Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode) {
-        this(constants,hardwareMap,tuningMode,System::nanoTime);
+    public static Follower create(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode) {
+        return create(constants, hardwareMap, tuningMode, System::nanoTime);
     }
 
     /** Simulation may supply a monotonic clock matching its sensor acquisition timestamps. */
-    public Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode,
-                    java.util.function.LongSupplier monotonicClock) {
+    public static Follower create(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode,
+                                  java.util.function.LongSupplier monotonicClock) {
+        return FollowerFactory.create(constants, hardwareMap, tuningMode, monotonicClock);
+    }
+
+    /** Initializes shared state using hardware already built and validated by a concrete follower. */
+    protected Follower(ApexConstants constants, HardwareMap hardwareMap, boolean tuningMode,
+                       java.util.function.LongSupplier monotonicClock, BaseDrivetrain<?> drivetrain) {
         this.monotonicClock=java.util.Objects.requireNonNull(monotonicClock);
-        BaseDrivetrainConstants<?> drivetrainConstants = constants.drivetrainConstants();
-        drivetrain = drivetrainConstants.build(hardwareMap);
+        this.drivetrain = java.util.Objects.requireNonNull(drivetrain);
+        BaseDrivetrainConstants<?> drivetrainConstants = drivetrain.getConstants();
         this.constants = FollowerConstants.getInstance().copy();
         this.constants.configure(drivetrain.getDrivetrainType(),
                 drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
@@ -179,8 +167,8 @@ public class Follower {
                 drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
                         : FollowerConstants.Profile.TANK);
         localizer = localizerSet.getLocalizer();
-        headingTolerance = drivetrainConstants.headingTolerance.getRad();
-        distanceTolerance = drivetrainConstants.distanceTolerance.getIn();
+        double headingTolerance = drivetrainConstants.headingTolerance.getRad();
+        double distanceTolerance = drivetrainConstants.distanceTolerance.getIn();
 
 
         headingController = new FeedbackController(this.constants.angularCoeffs,monotonicClock);
@@ -193,28 +181,23 @@ public class Follower {
                 this.constants.translationalCoeffs,
                 !tuningMode && (drivetrain instanceof Mecanum || drivetrain instanceof DualActuated),monotonicClock);
 
-        commandAllocator = new HolonomicCommandAllocator(drivetrain, driveController);
-        turnExecutor = new TurnExecutor(drivetrain, driveController, turnController,
-                commandAllocator, this.constants, headingTolerance, distanceTolerance,monotonicClock);
-        holonomicPathFollower = new HolonomicPathFollower(
-                drivetrain, driveController, headingController, commandAllocator, this.constants,
-                distanceTolerance, headingTolerance,monotonicClock);
-        tankPathFollower = new TankPathFollower(
-                drivetrain, driveController, this.constants, distanceTolerance, headingTolerance,monotonicClock);
+        runtime = new FollowerRuntime(drivetrain, driveController, headingController,
+                turnController, this.constants, distanceTolerance, headingTolerance, monotonicClock);
+        telemetry = runtime.getDiagnostics();
     }
 
     /** Must be called continuously during the active OpMode loop. */
-    public void update() {
+    public final void update() {
         update(false);
     }
 
     /** Runs one follower tick and optionally holds the last commanded pose while idle. */
-    public void update(boolean holdPose) {
+    public final void update(boolean holdPose) {
         synchronizeDriveProfile();
-        if (drivetrain instanceof DualActuated && ((DualActuated) drivetrain).isTransitioning()) {
+        if (isDriveTransitioning()) {
             drivetrain.stop();
             localizer.update();
-            turnExecutor.markTransitionTick(monotonicClock.getAsLong());
+            runtime.markTransitionTick(monotonicClock.getAsLong());
             return;
         }
 
@@ -222,12 +205,12 @@ public class Follower {
         diagnostics.recordPose(localizer.getPose());
         if (!localizer.isLastMeasurementValid()) {
             drivetrain.stop();
-            turnExecutor.markTransitionTick(monotonicClock.getAsLong());
-            pathState.pause();
+            runtime.markTransitionTick(monotonicClock.getAsLong());
+            runtime.pausePath();
             return;
         }
         if (paused) {
-            if (currentMovement instanceof Turn) { turnExecutor.observeHeading(getPose().getHeading()); }
+            if (currentMovement instanceof Turn) { runtime.observeHeading(getPose().getHeading()); }
             drivetrain.stop();
             return;
         }
@@ -239,26 +222,16 @@ public class Follower {
         }
 
         Pose current = getPose();
-        pathState.lastCommandDemand = CommandDemand.ZERO;
+        runtime.clearCommandDemand();
         MovementOutcome outcome;
         try {
             if (currentMovement instanceof Turn) {
-                outcome = turnExecutor.update((Turn) currentMovement, current, localizer,
-                        callbackRunner, pathState, driveControllerEnabled, headingControllerEnabled);
+                outcome = runtime.updateTurn((Turn) currentMovement, current, localizer,
+                        driveControllerEnabled, headingControllerEnabled);
             } else if (segment == null) {
                 outcome = MovementOutcome.COMPLETED;
-            } else if (drivetrain.isHolonomic()) {
-                outcome = holonomicPathFollower.update(
-                        (Path) currentMovement, segment, current, localizer,
-                        callbackRunner, pathState, headingControllerEnabled, driveControllerEnabled,
-                        this.constants.translationalKV, this.constants.translationalKA, this.constants.angularKV, this.constants.angularKA, this.constants.kCentripetal,
-                        this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain);
             } else {
-                outcome = tankPathFollower.update(
-                        (Path) currentMovement, segment, current, localizer,
-                        callbackRunner, pathState, this.constants.translationalKV, this.constants.translationalKA,
-                        this.constants.angularKV, this.constants.angularKA, this.constants.velocityFeedbackGain, this.constants.angularVelocityFeedbackGain,
-                        driveControllerEnabled, headingControllerEnabled);
+                outcome = updatePath((Path) currentMovement);
             }
 
         } catch (RuntimeException exception) {
@@ -268,7 +241,7 @@ public class Follower {
             diagnostics.recordTrajectoryFailure(trajectoryFailure);
             throw exception;
         }
-        if (pathState.trajectorySample != null) { latestTrajectoryTarget = pathState.trajectorySample; diagnostics.recordTrajectoryTarget(latestTrajectoryTarget); }
+        if (runtime.getTrajectoryTarget() != null) { latestTrajectoryTarget = runtime.getTrajectoryTarget(); diagnostics.recordTrajectoryTarget(latestTrajectoryTarget); }
         if (outcome != MovementOutcome.RUNNING) {
             stop();
             movementOutcome = outcome;
@@ -279,31 +252,40 @@ public class Follower {
         }
     }
 
-    private void holdPose(Pose target) {
-        double angularResponse = headingControllerEnabled ? headingController.p().d().s().calculate(
-                target.getHeading(AngleUnit.RAD) - getPose().getHeading(AngleUnit.RAD)).get() : 0.0;
-        Vector translationalResponse;
-        if (!driveControllerEnabled) {
-            translationalResponse = Vector.zero();
-        } else if (drivetrain.isHolonomic()) {
-            translationalResponse = driveController.calculatePointToPoint(
-                    target.getVec(), getPose().getVec());
-        } else {
-            Vector globalError = target.getVec().minus(getPose().getVec());
-            Vector localError = globalError.rotate(getPose().getHeading().times(-1.0));
-            translationalResponse = new Vector(
-                    Dist.fromIn(driveController.calculateEndDistance(
-                            localError.getX(DistUnit.IN))), Dist.zero());
-        }
-        if (drivetrain.isHolonomic()) {
-            translationalResponse = translationalResponse.rotate(getPose().getHeading().times(-1));
-        }
-        drivetrain.moveWithVectors(translationalResponse.getX().getIn(),
-                translationalResponse.getY().getIn(), angularResponse);
+    /** Computes one path tick; the base class processes completion and failures. */
+    protected abstract MovementOutcome updatePath(Path path);
+
+    protected abstract void holdPose(Pose target);
+
+    protected abstract void resetPathControllers();
+
+    /** Optional drivetrain hooks, called only after construction. */
+    protected void prepareMovement(FollowerMovement movement) { }
+    protected void synchronizeDriveProfile() { }
+    protected boolean isDriveTransitioning() { return false; }
+
+    protected final FollowerMovement getCurrentMovement() { return currentMovement; }
+
+    protected final PathController createHolonomicPathFollower() {
+        return runtime.createHolonomicController();
+    }
+
+    protected final PathController createTankPathFollower() {
+        return runtime.createTankController();
+    }
+
+    protected final MovementOutcome executePath(Path path, PathController controller) {
+        return controller.update(path, segment, getPose(), localizer,
+                headingControllerEnabled, driveControllerEnabled);
+    }
+
+    protected final void holdPose(Pose target, boolean holonomic) {
+        runtime.holdPose(target, getPose(), holonomic,
+                headingControllerEnabled, driveControllerEnabled);
     }
 
     /** Starts following the given movement. */
-    public void follow(FollowerMovement movement) {
+    public final void follow(FollowerMovement movement) {
         java.util.Objects.requireNonNull(movement, "Movement");
         if (movementOutcome == MovementOutcome.FAILED) {
             throw new IllegalStateException("Previous movement failed: " + trajectoryFailure
@@ -317,34 +299,19 @@ public class Follower {
         }
 
         try {
-            if (drivetrain instanceof DualActuated) {
-                FollowerConstants.Profile intended = movement instanceof Path
-                        ? ((Path) movement).getPathType() == Path.PathType.TANK
-                                ? FollowerConstants.Profile.TANK : FollowerConstants.Profile.HOLONOMIC
-                        : movement instanceof Turn && ((Turn) movement).getDriveProfile() != null
-                                ? ((Turn) movement).getDriveProfile()
-                                : drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC
-                                        : FollowerConstants.Profile.TANK;
-                constants.forProfile(intended);
-                if (intended == FollowerConstants.Profile.TANK) {
-                    ((DualActuated) drivetrain).activateTractionState();
-                } else {
-                    ((DualActuated) drivetrain).activateHolonomicState();
-                }
-                synchronizeDriveProfile();
-            }
+            prepareMovement(movement);
 
             currentMovement = movement;
             movementOutcome = MovementOutcome.RUNNING;
-            pathState.reset();
+            runtime.resetPath();
             trajectoryFailure = null; latestTrajectoryTarget = null;
-            if (movement instanceof Path) { pathState.prepare((Path) movement, this.constants); }
+            if (movement instanceof Path) { runtime.preparePath((Path) movement); }
             movement.setStarted(true);
             movement.setEnded(false);
             lastPose = movement.getEndPose();
             if (movement instanceof Turn) {
                 diagnostics.clearCurrentPath();
-                turnExecutor.start((Turn) movement, monotonicClock.getAsLong());
+                runtime.startTurn((Turn) movement, monotonicClock.getAsLong());
             } else if (movement instanceof Path) {
                 segment = ((Path) movement).getParametricPath();
                 diagnostics.recordCurrentPath((Path) movement);
@@ -353,7 +320,7 @@ public class Follower {
             synchronizeDriveProfile();
             resetControllers();
             paused = false;
-            callbackRunner.reset();
+            runtime.resetCallbacks();
         } catch (RuntimeException exception) {
             latestTrajectoryTarget = null;
             trajectoryFailure = exception.getMessage();
@@ -365,7 +332,7 @@ public class Follower {
     }
 
     /** Instantly stops the drivetrain and ends any ongoing movement. */
-    public void stop() {
+    public final void stop() {
         if (movementOutcome == MovementOutcome.RUNNING) { movementOutcome = MovementOutcome.CANCELLED; }
         if (currentMovement != null) {
             currentMovement.setEnded(true);
@@ -373,25 +340,25 @@ public class Follower {
         currentMovement = null;
         paused = false;
         segment = null;
-        turnExecutor.reset();
-        pathState.reset();
+        runtime.resetTurn();
+        runtime.resetPath();
         diagnostics.clearCurrentPath();
         drivetrain.stop();
     }
 
-    public void pause() {
+    public final void pause() {
         paused = true; latestTrajectoryTarget = null;
-        turnExecutor.pause();
-        pathState.pause();
+        runtime.pauseTurn();
+        runtime.pausePath();
         resetControllers();
         drivetrain.stop();
     }
 
-    public void resume() {
+    public final void resume() {
         if (paused) {
             paused = false;
-            turnExecutor.resume(monotonicClock.getAsLong());
-            pathState.pause();
+            runtime.resumeTurn(monotonicClock.getAsLong());
+            runtime.pausePath();
             resetControllers();
         }
     }
@@ -418,14 +385,14 @@ public class Follower {
     public boolean isBusy() { return currentMovement != null; }
 
     public boolean isSlowed() {
-        return pathStatusActive(currentMovement, paused) && pathState.velocitySampleAvailable
-                && slowedForVelocities(pathState.trackingVelocityTarget,
-                        pathState.trackingMeasuredVelocity);
+        return FollowerMath.pathStatusActive(currentMovement, paused) && telemetry.isVelocitySampleAvailable()
+                && FollowerMath.slowedForVelocities(telemetry.getTrackingVelocityTarget(),
+                        telemetry.getTrackingMeasuredVelocity());
     }
 
     public boolean isStuck() {
-        return pathStatusActive(currentMovement, paused)
-                && stuckForSpeed(localizer.getVel().getVec().getMag().getIn());
+        return FollowerMath.pathStatusActive(currentMovement, paused)
+                && FollowerMath.stuckForSpeed(localizer.getVel().getVec().getMag().getIn());
     }
 
     public void setPose(Pose pose) { localizer.setPose(pose); }
@@ -436,46 +403,43 @@ public class Follower {
                 && localizerSet.hasAcceptedFilterCalibration();
     }
 
-    public double getTrackingVelocityTarget() { return pathState.trackingVelocityTarget; }
+    /** Stable read-only view of the latest tracking values; existing getters remain supported. */
+    public final FollowerTelemetry getDiagnostics() { return telemetry; }
+
+    public double getTrackingVelocityTarget() { return telemetry.getTrackingVelocityTarget(); }
     /** Future speed goal and its path location; NaN when pursuit is inactive or recovering overspeed. */
-    public double getVelocityGoalDistanceIn() { return pathState.onlinePlanner == null ? Double.NaN
-            : pathState.onlinePlanner.getVelocityGoalDistanceIn(); }
-    public double getVelocityGoal() { return pathState.onlinePlanner == null ? Double.NaN
-            : pathState.onlinePlanner.getVelocityGoal(); }
-    public double getCurrentSpeedCeiling() { return pathState.onlinePlanner == null ? Double.NaN
-            : pathState.onlinePlanner.getCurrentSpeedCeiling(); }
+    public double getVelocityGoalDistanceIn() { return telemetry.getVelocityGoalDistanceIn(); }
+    public double getVelocityGoal() { return telemetry.getVelocityGoal(); }
+    public double getCurrentSpeedCeiling() { return telemetry.getCurrentSpeedCeiling(); }
     public trajectory.TrajectorySample getTrajectoryTarget() { return latestTrajectoryTarget; }
     public String getTrajectoryFailure() { return trajectoryFailure; }
-    public double getTrackingMeasuredVelocity() { return pathState.trackingMeasuredVelocity; }
-    public double getTrackingProgressVelocity() { return pathState.trackingProgressVelocity; }
-    public double getTrackingFeedforward() { return pathState.trackingFeedforward; }
-    public double getTrackingHeadingFeedforward() { return pathState.trackingHeadingFeedforward; }
-    public boolean isWheelFeedforwardActive() { return pathState.wheelFeedforwardActive; }
-    public double getTrackingVelocityFeedback() { return pathState.trackingVelocityFeedback; }
-    public double getTrackingAngularVelocityTarget() {
-        return pathState.trackingAngularVelocityTarget;
-    }
-    public double getTrackingEndpointBlend() { return pathState.trackingEndpointBlend; }
-    public double getBestT() { return pathState.t; }
-    public double getCrossTrackErrorIn() { return pathState.crossTrackError; }
-    public double getCentripetalErrorIn() { return pathState.centripetalError; }
-    public CommandDemand getLastCommandDemand() { return pathState.lastCommandDemand; }
-    public Vector getClosestPathPoint() { return pathState.closestPathPoint; }
-    public Vector getCrossTrackNormal() { return pathState.crossTrackNormal; }
-    public Vector getPathNormal() { return pathState.pathNormal; }
-    public Vector getCrossTrackCorrection() { return pathState.crossTrackCorrection; }
-    public Vector getCentripetalCorrection() { return pathState.centripetalCorrection; }
+    public double getTrackingMeasuredVelocity() { return telemetry.getTrackingMeasuredVelocity(); }
+    public double getTrackingProgressVelocity() { return telemetry.getTrackingProgressVelocity(); }
+    public double getTrackingFeedforward() { return telemetry.getTrackingFeedforward(); }
+    public double getTrackingHeadingFeedforward() { return telemetry.getTrackingHeadingFeedforward(); }
+    public boolean isWheelFeedforwardActive() { return telemetry.isWheelFeedforwardActive(); }
+    public double getTrackingVelocityFeedback() { return telemetry.getTrackingVelocityFeedback(); }
+    public double getTrackingAngularVelocityTarget() { return telemetry.getTrackingAngularVelocityTarget(); }
+    public double getTrackingEndpointBlend() { return telemetry.getTrackingEndpointBlend(); }
+    public double getBestT() { return telemetry.getBestT(); }
+    public double getCrossTrackErrorIn() { return telemetry.getCrossTrackErrorIn(); }
+    public double getCentripetalErrorIn() { return telemetry.getCentripetalErrorIn(); }
+    public CommandDemand getLastCommandDemand() { return telemetry.getLastCommandDemand(); }
+    public Vector getClosestPathPoint() { return telemetry.getClosestPathPoint(); }
+    public Vector getCrossTrackNormal() { return telemetry.getCrossTrackNormal(); }
+    public Vector getPathNormal() { return telemetry.getPathNormal(); }
+    public Vector getCrossTrackCorrection() { return telemetry.getCrossTrackCorrection(); }
+    public Vector getCentripetalCorrection() { return telemetry.getCentripetalCorrection(); }
 
     public boolean isHeadingControllerEnabled() { return headingControllerEnabled; }
     public boolean isDriveControllerEnabled() { return driveControllerEnabled; }
 
     public void disableHeadingController() { headingControllerEnabled = false; }
-    /** Install an explicitly calibrated forward-axis braking model for this follower only. */
+    /** Install a holonomic braking model. Has no effect on tank-only followers. */
     public void setBrakingFeedforward(feedforward.CenteredBrakingFeedforward model) {
-        holonomicPathFollower.setBrakingFeedforward(model);
     }
-    public boolean isCenteredBrakingActive() { return pathState.centeredBrakingActive; }
-    public double getCenteredBrakingMeanPower() { return pathState.centeredBrakingMeanPower; }
+    public boolean isCenteredBrakingActive() { return telemetry.isCenteredBrakingActive(); }
+    public double getCenteredBrakingMeanPower() { return telemetry.getCenteredBrakingMeanPower(); }
     public void disableDriveController() { driveControllerEnabled = false; }
     /** Calibrated mecanum paths then play an independent rest-to-rest time reference,
      * through the planned stop, without measured-motion replanning or endpoint capture. */
@@ -484,7 +448,7 @@ public class Follower {
     public void enableDriveController() { driveControllerEnabled = true; }
     public void enableControllers() { enableHeadingController(); enableDriveController(); }
 
-    public void reset() {
+    public final void reset() {
         headingController.setCoefficients(constants.angularCoeffs);
         turnController.setCoefficients(constants.angularCoeffs);
         turnController.setMotionGains(this.constants.angularKV, this.constants.angularKA, constants.angularFeedforwardKS,
@@ -499,21 +463,11 @@ public class Follower {
         headingController.reset();
         turnController.reset();
         driveController.reset();
-        holonomicPathFollower.resetBrakingFeedforward();
+        resetPathControllers();
     }
 
-    private void synchronizeDriveProfile() {
-        if (!(drivetrain instanceof DualActuated)) {
-            return;
-        }
-        FollowerConstants.Profile profile = drivetrain.isHolonomic()
-                ? FollowerConstants.Profile.HOLONOMIC : FollowerConstants.Profile.TANK;
-        if (currentMovement instanceof Path
-                && ((((Path) currentMovement).getPathType() == Path.PathType.TANK)
-                        != (profile == FollowerConstants.Profile.TANK))) {
-            stop();
-            throw new IllegalStateException("Drivetrain mode changed during an active path");
-        }
+    /** Refreshes shared controllers and localization when a subclass changes drive profile. */
+    protected final void selectDriveProfile(FollowerConstants.Profile profile) {
         if (constants.getActiveProfile() != profile) {
             try {
                 constants.selectProfile(profile);
@@ -564,132 +518,12 @@ public class Follower {
     public BaseLocalizer<?> getLocalizer() { return localizer; }
     public BaseDrivetrain<?> getDrivetrain() { return drivetrain; }
     public FollowerConstants getConstants() { return constants; }
-
-    static boolean pathStatusActive(FollowerMovement movement, boolean paused) {
-        return movement instanceof Path && !paused;
+    public drivetrains.models.DriveModel getDriveModel() {
+        return getDriveModel(drivetrain.isHolonomic() ? FollowerConstants.Profile.HOLONOMIC : FollowerConstants.Profile.TANK);
+    }
+    /** Hardware-free model snapshot for either profile; this never actuates the drivetrain. */
+    public drivetrains.models.DriveModel getDriveModel(FollowerConstants.Profile profile) {
+        return runtime.getDriveModel(profile);
     }
 
-    static boolean slowedForVelocities(double targetVelocity, double measuredVelocity) {
-        return Double.isFinite(targetVelocity) && Double.isFinite(measuredVelocity)
-                && targetVelocity - measuredVelocity >= SLOWED_VELOCITY_DELTA_IN_PER_SECOND;
-    }
-
-    static boolean stuckForSpeed(double speed) {
-        return Double.isFinite(speed) && speed >= 0.0
-                && speed <= STUCK_LINEAR_VELOCITY_IN_PER_SECOND;
-    }
-
-    static boolean pathInsideCompletionTolerance(double endpointDistance,
-                                                 double endpointHeadingError,
-                                                 double configuredDistanceTolerance,
-                                                 double configuredHeadingTolerance) {
-        return PathCompletionPolicy.isInsideTolerance(endpointDistance, endpointHeadingError,
-                configuredDistanceTolerance, configuredHeadingTolerance);
-    }
-
-    static boolean pathVelocitySettled(double linearVelocitySq, double angularVelocity) {
-        return PathCompletionPolicy.isVelocitySettled(linearVelocitySq, angularVelocity);
-    }
-
-    static double commandNormalizationScale(double x, double y, double turn,
-                                            boolean anisotropic) {
-        return HolonomicCommandAllocator.normalizationScale(x, y, turn, anisotropic);
-    }
-
-    static double pathEndpointTangentError(Vector endpoint, Vector current, Vector endTangent) {
-        return endpoint.minus(current).dot(endTangent).getIn();
-    }
-
-    static double blendProfiledEndpointPower(double profilePower, double endpointPower,
-                                              double pathDistanceRemaining) {
-        double blend = endpointCaptureBlend(pathDistanceRemaining);
-        return profilePower * (1.0 - blend) + endpointPower * blend;
-    }
-
-    static double endpointCaptureBlend(double pathDistanceRemaining) {
-        return Range.clip((PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES - pathDistanceRemaining)
-                / PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES, 0.0, 1.0);
-    }
-
-    static double ensureEndpointBreakawayPower(double requestedPower, double endpointError,
-                                               double tangentialVelocity, double staticGain,
-                                               double positionTolerance,
-                                               double pathDistanceRemaining) {
-        boolean inEndpointCapture =
-                pathDistanceRemaining < PROFILED_ENDPOINT_CAPTURE_DISTANCE_INCHES;
-        boolean outsideTolerance = Math.abs(endpointError) > positionTolerance;
-        boolean stalled = Math.abs(tangentialVelocity)
-                < ENDPOINT_STALLED_VELOCITY_IN_PER_SECOND;
-        if (!inEndpointCapture || !outsideTolerance || !stalled) {
-            return requestedPower;
-        }
-        double minimumPower = Math.min(1.0, Math.abs(staticGain));
-        if (Math.abs(requestedPower) >= minimumPower) {
-            return requestedPower;
-        }
-        return Range.clip(requestedPower + Math.copySign(minimumPower, endpointError), -1.0, 1.0);
-    }
-
-    static double ensureAngularEndpointBreakawayPower(double requestedPower, double headingError,
-                                                      double angularVelocity, double staticGain,
-                                                      double headingTolerance) {
-        boolean inEndpointCapture = Math.abs(headingError) < PROFILED_HEADING_CAPTURE_RADIANS;
-        boolean outsideTolerance = Math.abs(headingError) > headingTolerance;
-        boolean stalled = Math.abs(angularVelocity) < 0.05;
-        if (!inEndpointCapture || !outsideTolerance || !stalled) {
-            return requestedPower;
-        }
-        double minimumPower = Math.min(1.0, Math.abs(staticGain));
-        if (Math.abs(requestedPower) >= minimumPower) {
-            return requestedPower;
-        }
-        return Range.clip(requestedPower + Math.copySign(minimumPower, headingError), -1.0, 1.0);
-    }
-
-    /** Do not repeat a brake pulse while the filtered estimate lags a raw speed drop. */
-    static boolean shouldPulseBrake(double filteredSpeed, double rawSpeed,
-                                    double targetSpeed, double tolerance, int cooldown,
-                                    boolean awaitingResponse) {
-        return cooldown == 0 && Double.isFinite(filteredSpeed)
-                && filteredSpeed - targetSpeed > tolerance
-                && (!awaitingResponse || Double.isFinite(rawSpeed)
-                    && rawSpeed >= targetSpeed);
-    }
-
-    static Vector calculateCentripetalCorrection(Vector principalNormal,
-                                                 double tangentialVelocity,
-                                                 double signedCurvature, double gain) {
-        double magnitude = gain * tangentialVelocity * tangentialVelocity * Math.abs(signedCurvature);
-        return principalNormal.times(Math.min(magnitude, MAX_CENTRIPETAL_POWER));
-    }
-
-    static double calculatePathHeadingFeedback(FeedbackController controller, double headingError,
-                                               double targetRate, double measuredRate,
-                                               boolean applyStatic) {
-        return controller.p().d(targetRate - measuredRate)
-                .s(applyStatic ? Math.signum(headingError) : 0.0)
-                .calculate(headingError).get();
-    }
-
-    static double feedforwardMotionSign(double targetVelocity, double targetAcceleration) {
-        return MotionFeedforward.motionSign(targetVelocity, targetAcceleration);
-    }
-
-    static double headingFeedforwardTimeScale(double targetTangentialVelocity,
-                                              double measuredTangentialVelocity) {
-        return MotionFeedforward.timeScale(targetTangentialVelocity, measuredTangentialVelocity);
-    }
-
-    static double scaleBrakingAcceleration(double targetVelocity, double targetAcceleration,
-                                           double measuredVelocity) {
-        return MotionFeedforward.scaleBrakingAcceleration(
-                targetVelocity, targetAcceleration, measuredVelocity);
-    }
-
-    static double calculateTranslationFeedforward(double targetVelocity,
-                                                  double targetAcceleration,
-                                                  double kV, double kA, double kS) {
-        double motionSign = MotionFeedforward.motionSign(targetVelocity, targetAcceleration);
-        return kV * targetVelocity + kA * targetAcceleration + motionSign * kS;
-    }
 }

@@ -1,6 +1,7 @@
 package geometry;
 
 import follower.Follower;
+import follower.FollowerConstants;
 import paths.builders.HolonomicPathBuilder;
 import paths.builders.TankPathBuilder;
 import paths.builders.TurnBuilder;
@@ -107,14 +108,14 @@ public class GeometryFactory {
     /** Builds a tank path; following it selects traction mode on a dual-actuated drive. */
     public TankPathBuilder tankPath(Pose... poses) {
         TankPathBuilder builder = new TankPathBuilder(poses);
-        if (follower != null) { builder.setPlanningConstants(follower.getConstants()); }
+        if (follower != null) { builder.setDriveModel(follower.getDriveModel(FollowerConstants.Profile.TANK)); }
         return builder;
     }
 
     /** Builds a holonomic path; following it selects holonomic mode on a dual-actuated drive. */
     public HolonomicPathBuilder holonomicPath(Pose... poses) {
         HolonomicPathBuilder builder = new HolonomicPathBuilder(poses);
-        if (follower != null) { builder.setPlanningConstants(follower.getConstants()); }
+        if (follower != null) { builder.setDriveModel(follower.getDriveModel(FollowerConstants.Profile.HOLONOMIC)); }
         return builder;
     }
 

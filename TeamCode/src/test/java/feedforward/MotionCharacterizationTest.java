@@ -1,11 +1,11 @@
 package feedforward;
 
+import trajectory.generators.PathProfileGenerator;
+
 import follower.FollowerConstants;
 import storage.ApexStorage;
 
 import trajectory.profile.MotionParameters;
-import trajectory.generators.MecanumProfileGenerator;
-import trajectory.generators.TankProfileGenerator;
 import geometry.*;
 import org.json.JSONObject;
 import org.junit.Test;
@@ -82,7 +82,7 @@ public class MotionCharacterizationTest {
         GeometryFactory geometry = new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
         Path path = geometry.holonomicPath(geometry.pose(0, 0, 0), geometry.pose(120, 0, 0))
                 .interpolateWith(InterpolationStyle.CONSTANT_START_HEADING).quickBuild();
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(c, path);
+        PathProfileGenerator generator = new PathProfileGenerator(c, path, drivetrains.models.DriveModels.mecanum(c));
         MotionParameters[] states = generator.generate();
         assertTrue(generator.getLastDebugReport().converged);
         boolean highSpeedRamp = false;
@@ -121,7 +121,7 @@ public class MotionCharacterizationTest {
         GeometryFactory geometry = new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
         Path path = geometry.holonomicPath(geometry.pose(0, 0, 0), geometry.pose(70, 30, 90))
                 .interpolateWith(InterpolationStyle.SMOOTH_START_TO_END).quickBuild();
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(c, path);
+        PathProfileGenerator generator = new PathProfileGenerator(c, path, drivetrains.models.DriveModels.mecanum(c));
         for (MotionParameters state : generator.generate()) {
             assertTrue(state.getMotorPower() <= c.profilePowerLimit() + .002);
             assertTrue(Math.abs(state.getAngularVel()) <= c.angularVelLimitRad + .001);
@@ -136,8 +136,8 @@ public class MotionCharacterizationTest {
                 .interpolateWith(InterpolationStyle.TANGENT_FORWARD).quickBuild();
         Path holonomic = g.holonomicPath(g.pose(0, 0, 0), g.pose(80, 20, 45))
                 .interpolateWith(InterpolationStyle.SMOOTH_START_TO_END).quickBuild();
-        for (trajectory.generators.BaseProfileGenerator generator : new trajectory.generators.BaseProfileGenerator[]{
-                new TankProfileGenerator(c, tank), new trajectory.generators.SwerveProfileGenerator(c, holonomic)}) {
+        for (trajectory.generators.PathProfileGenerator generator : new trajectory.generators.PathProfileGenerator[]{
+                new PathProfileGenerator(c, tank, drivetrains.models.DriveModels.tank(c)), new PathProfileGenerator(c, holonomic, drivetrains.models.DriveModels.swerve(c))}) {
             MotionParameters[] states = generator.generate();
             assertTrue(generator.getLastDebugReport().converged);
             for (MotionParameters s : states) {

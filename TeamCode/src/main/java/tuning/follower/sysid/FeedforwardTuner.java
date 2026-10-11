@@ -10,6 +10,7 @@ import geometry.GeometryFactory;
 import geometry.Pose;
 import tuning.TuningCsvWriter;
 import tuning.follower.TunerContext;
+import tuning.follower.TuningMeasurements;
 import tuning.follower.TuningPhase;
 
 /**
@@ -352,8 +353,9 @@ public final class FeedforwardTuner extends TuningPhase {
         double command = (run % 2 == 0 ? 1 : -1) * (run < 2 ? Math.min(.9, .1 * time) : .5);
         f.getDrivetrain().moveWithVectors(axis == Axis.DRIVE ? command : 0, 0,
                 axis == Axis.HEADING ? command : 0);
-        double delivered = Math.max(Math.max(Math.abs(f.getDrivetrain().getLastFlPower()), Math.abs(f.getDrivetrain().getLastFrPower())),
-                Math.max(Math.abs(f.getDrivetrain().getLastBlPower()), Math.abs(f.getDrivetrain().getLastBrPower())));
+        double delivered = TuningMeasurements.axisCommandPower(f.getDrivetrain(),
+                axis == Axis.DRIVE ? feedforward.MotionCharacterization.Axis.FORWARD
+                        : feedforward.MotionCharacterization.Axis.ANGULAR);
         previousPower = Math.copySign(delivered, command);
     }
     static double breakawayCrossingPower(int run, double before, double after,

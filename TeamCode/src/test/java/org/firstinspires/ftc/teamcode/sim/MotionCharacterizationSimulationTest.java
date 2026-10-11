@@ -43,7 +43,7 @@ public class MotionCharacterizationSimulationTest {
             System.setProperty(ApexSimulation.TANK_SIMULATION_PROPERTY, Boolean.toString(tank));
             ApexSimulation.Hardware hardware = tank ? ApexSimulation.createTankHardware() : ApexSimulation.createHardware();
             config.ApexConstants robot = tank ? new TankSimulationConstants() : new Constants();
-            Follower seed = new Follower(robot, hardware.hardwareMap, true);
+            Follower seed = Follower.create(robot, hardware.hardwareMap, true);
             LocalizationConstants localization = LocalizationConstants.empty();
             localization.capture("DEFAULT", robot.localizerConstants(), seed.getLocalizer(),
                     LocalizationConstants.Status.ACCEPTED, LocalizationConstants.Status.ACCEPTED);
@@ -58,7 +58,7 @@ public class MotionCharacterizationSimulationTest {
             LinearOpMode op = new LinearOpMode() {
                 @Override public void runOpMode() {
                     TunerContext context = new TunerContext(this);
-                    context.setFollower(new Follower(robot, hardwareMap, true));
+                    context.setFollower(Follower.create(robot, hardwareMap, true));
                     tuned.set(context.constants);
                     waitForStart(); accepted.set(new MotionCharacterizationPhase(context).run(this));
                 }

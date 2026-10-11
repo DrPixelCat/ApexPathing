@@ -14,7 +14,7 @@ import paths.movements.Path;
 import java.lang.reflect.Field;
 import java.io.File;
 import java.io.PrintWriter;
-import feedforward.HolonomicFeedforward;
+import drivetrains.models.DriveModels;
 import static org.junit.Assert.*;
 
 /** Traces the real tuner's centripetal vector through both traversal directions. */
@@ -31,7 +31,7 @@ public class CentripetalVectorSimulationTest {
             FollowerConstants constants = FollowerConstants.fromJson(new JSONObject().put("drivetrainType", "MECANUM"));
             singleton.set(null, constants);
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
-            Follower follower = new Follower(new Constants(), hardware.hardwareMap);
+            Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
             constants = follower.getConstants();
             SimulatorTuning.apply(constants);
             // This test isolates the legacy centripetal term; wheel characterization includes it.
@@ -73,9 +73,9 @@ public class CentripetalVectorSimulationTest {
                         double alignment = inward.dot(correction.normalize()).getIn();
                         minimumAlignment = Math.min(minimumAlignment, alignment);
                         assertTrue("Centripetal command points away from center: " + correction, alignment > .99);
-                        Vector axisPower = HolonomicFeedforward.translation(constants,
+                        Vector axisPower = DriveModels.mecanum(constants).powerCalculator().calculate(
                                 target.tangent.rotate(target.heading.times(-1)), target.tangentialVelocity(),
-                                target.tangentialAcceleration(), constants.translationalKV).rotate(target.heading);
+                                target.tangentialAcceleration(), 0, 0, 0).translation().rotate(target.heading);
                         assertEquals("Axis feedforward must not push across the centripetal test arc",
                                 0, axisPower.dot(inward).getIn(), .001);
                         double fl = follower.getDrivetrain().getLastFlPower(), fr = follower.getDrivetrain().getLastFrPower();

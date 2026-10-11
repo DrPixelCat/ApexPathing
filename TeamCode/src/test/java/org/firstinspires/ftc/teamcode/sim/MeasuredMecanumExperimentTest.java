@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import trajectory.generators.PathProfileGenerator;
+
 import geometry.*;
 import follower.FollowerConstants;
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
@@ -8,7 +10,6 @@ import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
-import trajectory.generators.MecanumProfileGenerator;
 import trajectory.profile.FFLut;
 import trajectory.profile.MotionParameters;
 
@@ -168,7 +169,7 @@ public class MeasuredMecanumExperimentTest {
         GeometryFactory g=new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
         Path path=g.holonomicPath(g.pose(-40,0,0),g.pose(40,0,90))
                 .interpolateWith(InterpolationStyle.SMOOTH_START_TO_END).quickBuild();
-        FFLut lut=new FFLut(new MecanumProfileGenerator(c,path).generateRestToRest());
+        FFLut lut=new FFLut(new PathProfileGenerator(c, path, drivetrains.models.DriveModels.mecanum(c)).generateRestToRest());
         feedforward.MecanumWheelModel model=c.motionCharacterization.mecanumWheelModel;
         feedforward.MecanumWheelModel.Demand d=new feedforward.MecanumWheelModel.Demand();
         for(int i=0;i<2000;i++) {

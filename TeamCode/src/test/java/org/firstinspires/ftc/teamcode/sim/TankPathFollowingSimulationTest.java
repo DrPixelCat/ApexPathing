@@ -86,7 +86,7 @@ public class TankPathFollowingSimulationTest {
         try {
             singleton.set(null, tankFollowerConstants());
             ApexSimulation.Hardware hardware = ApexSimulation.createTankHardware();
-            Follower follower = new Follower(new TankSimulationConstants(), hardware.hardwareMap);
+            Follower follower = Follower.create(new TankSimulationConstants(), hardware.hardwareMap);
             GeometryFactory factory = new GeometryFactory(follower)
                     .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
             Path path = factory.tankPath(factory.pose(0, 0, 0), factory.pose(60, 0, 0))
@@ -124,7 +124,7 @@ public class TankPathFollowingSimulationTest {
             singleton.set(null, tankFollowerConstants());
             ApexSimulation.Hardware hardware = ApexSimulation.createTankHardware();
             assertTrue(hardware.drivetrain instanceof SimulatedTank);
-            Follower follower = new Follower(new TankSimulationConstants(), hardware.hardwareMap);
+            Follower follower = Follower.create(new TankSimulationConstants(), hardware.hardwareMap);
             GeometryFactory factory = new GeometryFactory(follower)
                     .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
             Pose start = factory.pose(0, 0, 0);

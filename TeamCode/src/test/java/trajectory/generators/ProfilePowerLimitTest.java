@@ -1,9 +1,6 @@
 package trajectory.generators;
 
-import trajectory.generators.BaseProfileGenerator;
-import trajectory.generators.MecanumProfileGenerator;
-import trajectory.generators.SwerveProfileGenerator;
-import trajectory.generators.TankProfileGenerator;
+import trajectory.generators.PathProfileGenerator;
 
 import storage.ApexStorage;
 import follower.FollowerConstants;
@@ -83,27 +80,27 @@ public class ProfilePowerLimitTest {
         Path full = builder().setProfilePowerLimit(1).buildToMemory();
         assertEquals(.6, lower.getProfilePowerLimit(), 0);
         assertTrue(peakVelocity(lower) < peakVelocity(full) - 20);
-        assertWithinBudget(new MecanumProfileGenerator(constants, lower), .6);
+        assertWithinBudget(new PathProfileGenerator(constants, lower, drivetrains.models.DriveModels.mecanum(constants)), .6);
         double peak = peakVelocity(lower);
         lower.precomputeTrajectory();
         assertEquals(peak, peakVelocity(lower), 1e-6);
         Path reverse = lower.reversed();
         assertEquals(.6, reverse.getProfilePowerLimit(), 0);
-        assertWithinBudget(new MecanumProfileGenerator(constants, reverse), .6);
+        assertWithinBudget(new PathProfileGenerator(constants, reverse, drivetrains.models.DriveModels.mecanum(constants)), .6);
     }
 
     @Test public void explicitGeneratorCeilingOverridesPathWithoutChangingIt() {
         Path path = builder().setProfilePowerLimit(.4).quickBuild();
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(constants, path, .7);
+        PathProfileGenerator generator = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants), .7);
         assertEquals(.7, generator.getProfilePowerLimit(), 0);
         assertWithinBudget(generator, .7);
         assertEquals(.4, path.getProfilePowerLimit(), 0);
-        assertEquals(.4, new MecanumProfileGenerator(constants, path).getProfilePowerLimit(), 0);
+        assertEquals(.4, new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).getProfilePowerLimit(), 0);
     }
 
     @Test public void lowPowerCeilingLimitsBothAccelerationAndBraking() {
         Path path = builder().setProfilePowerLimit(.2).quickBuild();
-        MotionParameters[] profile = new MecanumProfileGenerator(constants, path).generate();
+        MotionParameters[] profile = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).generate();
         boolean brakes = false;
         for (MotionParameters point : profile) {
             assertTrue(point.getMotorPower() <= .201001);
@@ -116,7 +113,7 @@ public class ProfilePowerLimitTest {
     @Test public void boostedBoundariesKeepTheirSteadyPowerBudgetAndReportTerminalPower() {
         Path path = builder().setProfilePowerLimit(.6).quickBuild();
         path.useBoostedAccel();
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(constants, path);
+        PathProfileGenerator generator = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants));
         MotionParameters[] profile = generator.generate();
         assertEquals(60, profile[0].getTangentialVel(), 1e-5);
         assertEquals(60, profile[profile.length - 1].getTangentialVel(), 1e-5);
@@ -127,11 +124,11 @@ public class ProfilePowerLimitTest {
     @Test public void defaultBudgetsRemainUnchanged() {
         Path path = builder().quickBuild();
         assertNull(path.getProfilePowerLimit());
-        assertEquals(1, new MecanumProfileGenerator(constants, path).getProfilePowerLimit(), 0);
+        assertEquals(1, new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).getProfilePowerLimit(), 0);
         constants.motionCharacterization = characterization(1);
-        assertEquals(.88, new MecanumProfileGenerator(constants, path).getProfilePowerLimit(), 0);
+        assertEquals(.88, new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).getProfilePowerLimit(), 0);
         constants.motionCharacterization = characterization(.8);
-        assertEquals(.704, new MecanumProfileGenerator(constants, path).getProfilePowerLimit(), 1e-12);
+        assertEquals(.704, new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).getProfilePowerLimit(), 1e-12);
     }
 
     @Test public void characterizedCeilingsUseRequestedPowerAboveAndBelowDefault() {
@@ -142,14 +139,14 @@ public class ProfilePowerLimitTest {
         assertTrue("Full power must escape the old 0.88 measured velocity ceiling",
                 peakVelocity(full) > peakVelocity(defaultPath) + 6);
         assertTrue(peakVelocity(defaultPath) > peakVelocity(lower) + 20);
-        assertWithinBudget(new MecanumProfileGenerator(constants, lower), .6);
-        assertWithinBudget(new MecanumProfileGenerator(constants, full), 1);
+        assertWithinBudget(new PathProfileGenerator(constants, lower, drivetrains.models.DriveModels.mecanum(constants)), .6);
+        assertWithinBudget(new PathProfileGenerator(constants, full, drivetrains.models.DriveModels.mecanum(constants)), 1);
     }
 
     @Test public void calibratedAvailablePowerStillBoundsExplicitCeiling() {
         constants.motionCharacterization = characterization(.8);
         Path path = builder().setProfilePowerLimit(1).buildToMemory();
-        MecanumProfileGenerator generator = new MecanumProfileGenerator(constants, path);
+        PathProfileGenerator generator = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants));
         assertEquals(.8, generator.getProfilePowerLimit(), 0);
         assertWithinBudget(generator, .8);
         assertTrue(peakVelocity(path) <= 80.001);
@@ -161,7 +158,7 @@ public class ProfilePowerLimitTest {
                 .addConstraint(new TranslationalConstraint(0, Type.VELOCITY, Dist.fromIn(15)))
                 .addConstraint(new TranslationalConstraint(0, Type.ACCELERATION, Dist.fromIn(5)))
                 .buildToMemory();
-        MotionParameters[] profile = new MecanumProfileGenerator(constants, path).generate();
+        MotionParameters[] profile = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants)).generate();
         double maxPower = 0;
         for (MotionParameters point : profile) {
             assertTrue(point.getTangentialVel() <= 15 + 1e-6);
@@ -173,18 +170,34 @@ public class ProfilePowerLimitTest {
 
     @Test public void sharedPathApiAlsoHonorsTankSwerveAndTankMemoryFields() {
         Path holonomic = builder().setProfilePowerLimit(.6).quickBuild();
-        assertWithinBudget(new SwerveProfileGenerator(constants, holonomic), .6);
+        assertWithinBudget(new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.swerve(constants)), .6);
         Path tank = new TankPathBuilder(geometry.pose(0, 0, 0), geometry.pose(500, 0, 0))
                 .setProfilePowerLimit(.6).buildToMemory();
-        assertWithinBudget(new TankProfileGenerator(constants, tank), .6);
+        assertWithinBudget(new PathProfileGenerator(constants, tank, drivetrains.models.DriveModels.tank(constants)), .6);
         Path quick = new TankPathBuilder(geometry.pose(0, 0, 0), geometry.pose(500, 0, 0))
                 .setProfilePowerLimit(.4).quickBuild();
         assertNull(quick.getFeedforwardLut());
         assertEquals(Path.BuildMode.ONLINE, quick.getBuildMode());
         trajectory.OnlineTrajectoryPlanner planner = new trajectory.OnlineTrajectoryPlanner(quick, constants);
         assertTrue(planner.sample(geometry.vector(0, 0), geometry.vector(40, 0), .02).tangentialVelocity() <= 40 + 1e-6);
-        assertEquals(.5, new SwerveProfileGenerator(constants, holonomic, .5).getProfilePowerLimit(), 0);
-        assertEquals(.5, new TankProfileGenerator(constants, tank, .5).getProfilePowerLimit(), 0);
+        assertEquals(.5, new PathProfileGenerator(constants, holonomic, drivetrains.models.DriveModels.swerve(constants), .5).getProfilePowerLimit(), 0);
+        assertEquals(.5, new PathProfileGenerator(constants, tank, drivetrains.models.DriveModels.tank(constants), .5).getProfilePowerLimit(), 0);
+    }
+
+    @Test public void omniProfilesHonorPowerBudgetsAndBothAxisLimits() {
+        constants.drivetrainType = DrivetrainType.OMNI;
+        Path path = builder().setProfilePowerLimit(.6).quickBuild();
+        assertEquals(drivetrains.models.HolonomicDriveModel.Metric.OMNI,
+                ((drivetrains.models.HolonomicDriveModel)path.createGenerator(constants).getDriveModel()).getMetric());
+        assertWithinBudget(new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.omni(constants)), .6);
+        assertEquals(.5, new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.omni(constants), .5).getProfilePowerLimit(), 0);
+        constants.strafeVelLimitIn = 12;
+        constants.strafeAccelLimitIn = 4;
+        MotionParameters[] profile = new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.omni(constants)).generate();
+        for (MotionParameters point : profile) {
+            assertTrue(point.getTangentialVel() <= 12 + 1e-6);
+            assertTrue(Math.abs(point.getTangentialAccel()) <= 4 + 1e-6);
+        }
     }
 
     @Test public void rejectsInvalidPowerLimitsAtPublicEntryPoints() {
@@ -193,7 +206,7 @@ public class ProfilePowerLimitTest {
                 Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
             assertThrows(IllegalArgumentException.class, () -> builder().setProfilePowerLimit(invalid));
             assertThrows(IllegalArgumentException.class, () -> path.setProfilePowerLimit(invalid));
-            assertThrows(IllegalArgumentException.class, () -> new MecanumProfileGenerator(constants, path, invalid));
+            assertThrows(IllegalArgumentException.class, () -> new PathProfileGenerator(constants, path, drivetrains.models.DriveModels.mecanum(constants), invalid));
             assertThrows(IllegalArgumentException.class, () -> characterization(1).velocityLimit(MotionCharacterization.Axis.FORWARD, invalid));
         }
     }
@@ -219,7 +232,7 @@ public class ProfilePowerLimitTest {
         return max;
     }
 
-    private void assertWithinBudget(BaseProfileGenerator generator, double budget) {
+    private void assertWithinBudget(PathProfileGenerator generator, double budget) {
         MotionParameters[] profile = generator.generate();
         double maxPower = 0;
         for (MotionParameters point : profile) {

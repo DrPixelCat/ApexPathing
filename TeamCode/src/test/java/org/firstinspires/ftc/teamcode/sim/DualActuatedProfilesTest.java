@@ -44,9 +44,20 @@ public class DualActuatedProfilesTest {
                     return new Pinpoint.Constants().setName(ApexSimulation.PINPOINT);
                 }
             };
-            Follower follower = new Follower(config, hardware.hardwareMap);
+            Follower follower = Follower.create(config, hardware.hardwareMap);
             DualActuated drive = (DualActuated) follower.getDrivetrain();
             assertEquals(0.04, follower.getConstants().translationalKV, 0);
+            GeometryFactory factory=new GeometryFactory(follower);
+            Path plannedTank=factory.tankPath(factory.pose(),factory.pose(24,0)).buildToMemory();
+            Path plannedHolo=factory.holonomicPath(factory.pose(),factory.pose(24,0)).buildToMemory();
+            assertTrue(drive.isHolonomic());
+            assertEquals(FollowerConstants.Profile.HOLONOMIC,follower.getConstants().getActiveProfile());
+            assertEquals(.02,plannedTank.createGenerator().getDriveModel().getConstants().translationalKV,0);
+            assertEquals(.04,plannedHolo.createGenerator().getDriveModel().getConstants().translationalKV,0);
+            assertFalse(plannedTank.createGenerator().getDriveModel().isHolonomic());
+            assertTrue(plannedHolo.createGenerator().getDriveModel().isHolonomic());
+            assertNotNull(plannedTank.getFeedforwardLut());
+            assertNotNull(plannedHolo.getFeedforwardLut());
             Path tankPath = new TankPathBuilder(Pose.zero(),
                     new Pose(Vector.of(24, 0, DistUnit.IN), Angle.zero())).quickBuild();
             assertNull("Constructing a follower must not change shared settings", constants.getActiveProfile());

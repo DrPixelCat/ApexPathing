@@ -18,7 +18,7 @@ import static org.junit.Assert.*;
 public class OnlineWindowRobustnessTest {
     private final GeometryFactory g = new GeometryFactory().setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
 
-    @Test public void fullGeometryWindowsSolveOnceAcrossShapesAndDrivetrainModes() {
+    @Test public void fullGeometryWindowsSolveOnceAcrossShapesAndDrivetrainModes() throws Exception {
         for (BaseDrivetrain.DrivetrainType type : BaseDrivetrain.DrivetrainType.values()) {
             for (boolean tank : new boolean[]{false, true}) {
                 if (type != BaseDrivetrain.DrivetrainType.DUAL_ACTUATED

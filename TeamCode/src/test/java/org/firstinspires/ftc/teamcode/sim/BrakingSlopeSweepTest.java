@@ -88,7 +88,7 @@ public class BrakingSlopeSweepTest {
                     FFLut lut = new FFLut(new MotionParameters[]{new MotionParameters(2,a,0,0,0),
                             new MotionParameters(2,a,0,0,LENGTH)});
                     path.setFeedforwardLut(lut);
-                    Follower follower = new Follower(robot(tank,sensor),bench.h.hardwareMap);
+                    Follower follower = Follower.create(robot(tank,sensor),bench.h.hardwareMap);
                     try {
                         follower.follow(path); follower.update();
                         assertEquals("No minimum-speed override",2,follower.getTrackingVelocityTarget(),1e-10);
@@ -276,7 +276,7 @@ public class BrakingSlopeSweepTest {
                                Policy policy, double braking, double dt, int sensor) throws Exception {
         Bench bench = new Bench(tank);
         Sensor localizer = new Sensor(bench, sensor);
-        Follower follower = new Follower(robot(tank,localizer), bench.h.hardwareMap);
+        Follower follower = Follower.create(robot(tank,localizer), bench.h.hardwareMap);
         follower.follow(path);
         TimeProfile clock = profile == null ? null : new TimeProfile(profile);
         // Convert the same power-error gain into RR's velocity correction units; kV*KvRR = Kpower.

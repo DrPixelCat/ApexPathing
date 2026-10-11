@@ -264,7 +264,7 @@ public class StraightDecelerationComparisonTest {
             }
             @Override public BaseLocalizerConstants<?> localizerConstants() { return localizer.configValue; }
         };
-        Follower follower = new Follower(robot, bench.h.hardwareMap);
+        Follower follower = Follower.create(robot, bench.h.hardwareMap);
         follower.follow(path);
         MotionParameters[] knots = knots(path);
         double[] boundaries = effectiveBoundaries(knots);

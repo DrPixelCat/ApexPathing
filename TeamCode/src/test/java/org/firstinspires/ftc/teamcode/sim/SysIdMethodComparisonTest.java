@@ -90,7 +90,7 @@ public class SysIdMethodComparisonTest {
             configureControl(h,control);
             AtomicLong clock=new AtomicLong(1_000_000_000L);
             ((SimApexPinpoint)h.hardwareMap.get(localizers.Pinpoint.Driver.class,ApexSimulation.PINPOINT)).setClock(clock::get);
-            Follower f=new Follower(new Constants(),h.hardwareMap,true,clock::get);
+            Follower f=Follower.create(new Constants(),h.hardwareMap,true,clock::get);
             f.setPose(new Pose(new geometry.Vector(geometry.Dist.fromIn(run%2==0?-55:55),geometry.Dist.fromIn(0)),geometry.Angle.zero()));
             f.disableControllers(); f.update(false);
             double startX=h.drivetrain.position.x, travel=0, lastHeading=h.drivetrain.position.theta;

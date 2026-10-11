@@ -56,7 +56,7 @@ public class DualActuatedPathFollowingSimulationTest {
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             double[] servoPosition = {Double.NaN};
             hardware.hardwareMap.register(DRIVE_MODE_SERVO, simulatedServo(servoPosition));
-            Follower follower = new Follower(new DualSimulationConstants(), hardware.hardwareMap);
+            Follower follower = Follower.create(new DualSimulationConstants(), hardware.hardwareMap);
             DualActuated drivetrain = (DualActuated) follower.getDrivetrain();
             GeometryFactory factory = new GeometryFactory(follower)
                     .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);

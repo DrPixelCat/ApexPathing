@@ -81,7 +81,7 @@ public class LinePowerSimulationTest {
                     };
                 }
             };
-            follower = new Follower(robotConstants, hardware.hardwareMap,false,clock);
+            follower = Follower.create(robotConstants, hardware.hardwareMap,false,clock);
             // Apply after construction: configure() can reload the active profile.
             SimulatorTuning.apply(constants);
             follower.reset();

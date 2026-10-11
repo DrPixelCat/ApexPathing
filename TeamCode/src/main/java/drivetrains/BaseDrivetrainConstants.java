@@ -21,7 +21,6 @@ public abstract class BaseDrivetrainConstants<T extends BaseDrivetrainConstants<
     public double maxPower = 1.0;
     public Angle headingTolerance = Angle.fromDeg(1.0);
     public Dist distanceTolerance = Dist.fromIn(0.5);
-
     public boolean robotCentric = true; // Robot/field centric
 
     /** Builds and returns an instance of the corresponding drivetrain class using this config. */

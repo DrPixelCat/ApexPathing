@@ -20,11 +20,11 @@ the result. For example, requesting 1.0 with calibrated available power 0.9 prod
 a ceiling of 0.9. Characterized profiles keep measured velocity domains as hard
 bounds and evaluate power jointly with signed acceleration, including braking.
 
-For direct generation, mecanum, tank, and swerve generators also accept an override:
+The shared path generator also accepts an override and uses the path's bound drive model:
 
 ```java
-MecanumProfileGenerator generator =
-        new MecanumProfileGenerator(constants, path, 0.95);
+PathProfileGenerator generator =
+        new PathProfileGenerator(path, follower.getDriveModel(), 0.95);
 MotionParameters[] profile = generator.generate();
 double effectiveCeiling = generator.getProfilePowerLimit();
 ```
