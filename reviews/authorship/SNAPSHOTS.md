@@ -9,10 +9,10 @@ including historical credits, session references, and source fingerprints.
 - `pre-audit-docs.json.gz`: original JavaDoc snapshots.
 - `../ai-class-review/inventory.json.gz`: detailed AI-edit review evidence.
 
-The audit tools read compressed snapshots directly and still accept legacy plain
-JSON. Snapshot generators write deterministic `.json.gz` files. The curated
-`credits.json`, `design-sources.json`, validation results, and Markdown reports
-remain readable and editable without decompression.
+Snapshots are ordinary gzip JSON; no repository-specific loader is required.
+The curated `credits.json`, `design-sources.json`, validation results, and Markdown
+reports remain readable and editable without decompression. The one-time audit
+tools are [preserved in Git history](https://github.com/DrPixelCat/ApexPathing/tree/26d84367d42c914adac61e97f9672aafdfbce199/tools).
 
 To inspect a snapshot from the repository root without changing it:
 

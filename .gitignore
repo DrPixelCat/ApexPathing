@@ -89,3 +89,6 @@ lint/tmp/
 /TeamCode/Power_Utilization.png
 /TeamCode/Translational_Kinematics.png
 /gradle/gradle-daemon-jvm.properties
+
+# Python bytecode caches from local development tools
+__pycache__/
