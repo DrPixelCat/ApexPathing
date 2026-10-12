@@ -144,7 +144,7 @@ translation/turn power budgets, lower drivetrain power caps, and profile limits.
 Tank and swerve generator coverage is numerical; their physical characterization
 still needs to be validated on the corresponding robot.
 
-The recorded velocity graph is [AutoTest velocity tracking](../TeamCode/AutoTest_Velocity_Tracking.png).
+The recorded velocity graph is [AutoTest velocity tracking](media/diagnostics/AutoTest_Velocity_Tracking.png).
 Detailed CSVs and run logs are under
 `TeamCode/build/motion-characterization-validation/withheld-workflow`.
 

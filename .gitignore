@@ -89,6 +89,12 @@ lint/tmp/
 /TeamCode/Power_Utilization.png
 /TeamCode/Translational_Kinematics.png
 /gradle/gradle-daemon-jvm.properties
+/TeamCode/AutoTest_*.png
+/TeamCode/auto-test-outbound-velocity_*.csv
+/test_output.txt
+/autotest-100-percent-output.txt
+/tmp/
+/.codex-remote-attachments/
 
 # Python bytecode caches from local development tools
 __pycache__/

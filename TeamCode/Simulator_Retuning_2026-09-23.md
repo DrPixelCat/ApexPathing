@@ -58,7 +58,7 @@ checks passed (10 tests); the heading feedforward test failed. A subsequent expa
 run passed both axis and breakaway tests. No acceptance limits were relaxed.
 
 AutoTest acceleration speed RMSE: 4.62 in/s; braking RMSE: 7.18 in/s. Peak acceleration overspeed:
-4.31 in/s. The trace `AutoTest_Velocity_Tracking.png` shows less pronounced acceleration shelves,
+4.31 in/s. The [recorded velocity graph](../doc/media/diagnostics/AutoTest_Velocity_Tracking.png) shows less pronounced acceleration shelves,
 but substantial braking dips and target-speed lag remain. These are single-run observations,
 not a controlled comparison with the older simulator snapshot.
 

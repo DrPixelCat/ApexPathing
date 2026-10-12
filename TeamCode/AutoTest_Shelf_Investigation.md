@@ -6,7 +6,7 @@ The dominant correction during the repeated speed shelves is heading correction.
 
 Analyzed the shared-feedforward allocator run recorded in `build/shelf-investigation/baseline.csv` (original `auto-test-outbound-velocity_20260922_201002_868.csv`). This run completed all movements in 15.79 s and passed the loop-timing guard. All conclusions below describe the desktop simulator, not a hardware measurement.
 
-![Time-aligned second corner](AutoTest_Shelf_Correlation.png)
+![Time-aligned second corner](../doc/media/diagnostics/AutoTest_Shelf_Correlation.png)
 
 ## What repeats
 
