@@ -95,6 +95,7 @@ lint/tmp/
 /autotest-100-percent-output.txt
 /tmp/
 /.codex-remote-attachments/
+/reviews/
 
 # Python bytecode caches from local development tools
 __pycache__/

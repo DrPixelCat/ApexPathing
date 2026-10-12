@@ -2,8 +2,6 @@
 Check out our site at https://www.apexpathing.com/ for info about the project!
 
 Class JavaDoc lists credited authors.
-See the [main-source authorship audit](reviews/authorship/AUTHORSHIP.md) for Git evidence,
-recorded AI involvement, and unresolved historical credits.
 
 ## Follower API
 
