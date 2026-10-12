@@ -5,11 +5,12 @@ import re
 import subprocess
 
 from audit_authorship import ROOT, OUT, code_only
+from audit_json import read_json
 from update_authorship_docs import offset
 
 
 def main():
-    inventory = json.loads((OUT / 'git-inventory.json').read_text(encoding='utf-8'))
+    inventory = read_json(OUT / 'git-inventory.json')
     credits = json.loads((OUT / 'credits.json').read_text(encoding='utf-8'))
     facts = {r['path']: r for r in inventory['files']}
     decisions = {r['path']: r for r in credits['files']}

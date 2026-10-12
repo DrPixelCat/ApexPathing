@@ -2,6 +2,7 @@
 import json
 
 from audit_authorship import ROOT, OUT
+from audit_json import read_json
 
 
 def file_link(path):
@@ -18,9 +19,9 @@ def guidance_ref(evidence):
 
 def main():
     credits = json.loads((OUT / 'credits.json').read_text(encoding='utf-8'))
-    inventory = json.loads((OUT / 'git-inventory.json').read_text(encoding='utf-8'))
+    inventory = read_json(OUT / 'git-inventory.json')
     facts = {r['path']: r for r in inventory['files']}
-    contributions = json.loads((OUT / 'git-contributions.json').read_text(encoding='utf-8'))
+    contributions = read_json(OUT / 'git-contributions.json')
     commit_facts = {r['path']: r for r in contributions['files']}
     rows = credits['files']
     project = [r for r in rows if r['path'].startswith('TeamCode/')]
@@ -52,7 +53,7 @@ def main():
         '## Evidence and method', '',
         '1. Inventoried every Java file under both main source trees and parsed named types with the JDK compiler API.',
         '2. Collected the original history/tag inventory, then separately reviewed normal 50% rename '
-        'history without merges and compared substantive code changes. The latter is recorded in git-contributions.json.',
+        'history without merges and compared substantive code changes. The latter is recorded in git-contributions.json.gz.',
         '3. Checked discontinuities and original non-Joel tags. Predecessor/tag lists are retained '
         'as historical leads in the inventory; they are not automatically promoted to author tags on '
         'rewritten or extracted classes. An earliest followed commit is not necessarily class creation.',
@@ -127,7 +128,7 @@ def main():
               '## Apex file-by-file ledger', '',
               '“AI recorded” means a non-package/import write call was recorded, including potentially '
               'documentation edits. “Not established” is not a human-written verdict. The full histories '
-              'and success flags are in git-inventory.json and credits.json.', '',
+              'and success flags are in git-inventory.json.gz and credits.json.', '',
               '| File | Preserved tags and Joel scope | Commit contribution evidence | AI evidence |',
               '| --- | --- | --- | --- |']
     for r in project:
@@ -182,7 +183,10 @@ def main():
               '`python tools/review_author_commits.py` refreshes the separate commit-contribution facts. '
               '`python tools/update_authorship_docs.py` applies only the targeted curated ledger without changing executable Java. '
               '`python tools/render_authorship_audit.py` renders this report. The first command replaces the '
-              'inventory snapshot; keep the original snapshot when comparing against this audit’s validation.', '']
+              'inventory snapshot; keep the original snapshot when comparing against this audit’s validation.', '',
+              'Generated evidence snapshots are compressed losslessly; the scripts read them directly. '
+              'The editable credit ledger, reports, and validation results remain plain text. '
+              'See [snapshot storage](SNAPSHOTS.md) for details.', '']
     (OUT / 'AUTHORSHIP.md').write_text('\n'.join(lines), encoding='utf-8')
     print(json.dumps(dict(report=str(OUT / 'AUTHORSHIP.md'), apex_files=len(project), sdk_files=len(sdk),
                           scoped_joel_credits=sum('Joel H' in r['authors'] for r in project),

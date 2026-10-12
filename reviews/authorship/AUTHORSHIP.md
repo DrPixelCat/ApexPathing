@@ -15,7 +15,7 @@ No new non-Joel author tags are added. Other people's original tag wording is pr
 ## Evidence and method
 
 1. Inventoried every Java file under both main source trees and parsed named types with the JDK compiler API.
-2. Collected the original history/tag inventory, then separately reviewed normal 50% rename history without merges and compared substantive code changes. The latter is recorded in git-contributions.json.
+2. Collected the original history/tag inventory, then separately reviewed normal 50% rename history without merges and compared substantive code changes. The latter is recorded in git-contributions.json.gz.
 3. Checked discontinuities and original non-Joel tags. Predecessor/tag lists are retained as historical leads in the inventory; they are not automatically promoted to author tags on rewritten or extracted classes. An earliest followed commit is not necessarily class creation.
 4. Cross-referenced the existing AI-edit inventory with direct user messages in repository-specific local sessions. Approval-review transcripts and assistant-authored suggestions were not treated as independent user design statements. Approved plans establish requested behavior, not sole invention of their algorithms.
 5. Applied Joel-specific author tags, removed authorship commentary from JavaDoc as requested, restored unrelated documentation, and checked source fingerprints and author tags with the Java parser.
@@ -85,7 +85,7 @@ Confirm a concrete contribution, such as the original API design, an algorithm, 
 
 ## Apex file-by-file ledger
 
-“AI recorded” means a non-package/import write call was recorded, including potentially documentation edits. “Not established” is not a human-written verdict. The full histories and success flags are in git-inventory.json and credits.json.
+“AI recorded” means a non-package/import write call was recorded, including potentially documentation edits. “Not established” is not a human-written verdict. The full histories and success flags are in git-inventory.json.gz and credits.json.
 
 | File | Preserved tags and Joel scope | Commit contribution evidence | AI evidence |
 | --- | --- | --- | --- |
@@ -496,3 +496,5 @@ These sources came with the SDK; the repository importer is not credited as thei
 Edit `credits.json` only when new evidence supports a changed contribution. Keep role descriptions specific. Preserve unrelated original author tags. Use independent Git contribution evidence for other people; a tag in a Joel-only new-class commit does not establish their contribution. Record AI changes and direct guidance separately; approval, review, and ownership do not by themselves prove hand-written implementation.
 
 `python tools/audit_authorship.py` collects a fresh factual snapshot without changing Java. `python tools/review_author_commits.py` refreshes the separate commit-contribution facts. `python tools/update_authorship_docs.py` applies only the targeted curated ledger without changing executable Java. `python tools/render_authorship_audit.py` renders this report. The first command replaces the inventory snapshot; keep the original snapshot when comparing against this audit’s validation.
+
+Generated evidence snapshots are compressed losslessly; the scripts read them directly. The editable credit ledger, reports, and validation results remain plain text. See [snapshot storage](SNAPSHOTS.md) for details.

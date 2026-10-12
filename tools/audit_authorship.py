@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 import subprocess
 
+from audit_json import read_json, write_snapshot
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'reviews' / 'authorship'
@@ -76,16 +78,16 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         rows = list(pool.map(inspect, paths))
     ai_path = ROOT / 'reviews/ai-class-review/inventory.json'
-    ai = json.loads(ai_path.read_text(encoding='utf-8')) if ai_path.exists() else {}
+    ai = read_json(ai_path) if ai_path.exists() or ai_path.with_name(ai_path.name + '.gz').exists() else {}
     by_path = {r['path']: r for r in ai.get('files', [])}
     for row in rows:
         row['recorded_ai_edits'] = by_path.get(row['path'], {}).get('evidence', [])
     data = dict(head=git('rev-parse', 'HEAD').strip(),
                 shallow=git('rev-parse', '--is-shallow-repository').strip(),
                 ai_inventory_snapshot=ai.get('generated'), files=rows)
-    (OUT / 'git-inventory.json').write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+    target = write_snapshot(OUT / 'git-inventory.json', data)
     print(json.dumps(dict(files=len(rows), teamcode=sum(r['path'].startswith('TeamCode/') for r in rows),
-                          output=str(OUT))))
+                          output=str(target))))
 
 
 if __name__ == '__main__':

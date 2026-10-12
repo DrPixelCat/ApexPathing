@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import subprocess
 
+from audit_json import write_snapshot
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'reviews' / 'ai-class-review'
@@ -227,7 +229,7 @@ def main():
                                  previous.read_text(encoding='utf-8'), re.M))
     data = {'generated': datetime.date.today().isoformat(), 'head': git('rev-parse', '--short', 'HEAD').strip(),
             'session_count': len(sessions), 'sessions': sessions, 'files': rows}
-    (OUT / 'inventory.json').write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+    write_snapshot(OUT / 'inventory.json', data)
     names = {1: 'Small types and helpers', 2: 'Focused logic', 3: 'Several interacting responsibilities',
              4: 'Stateful algorithms and workflows', 5: 'Largest review effort'}
     production = [r for r in rows if r['scope'] == 'production']
@@ -307,7 +309,10 @@ def main():
                   'The scanner recognizes patches and common literal Python writes, not every possible shell/editor operation. '
                   'Missing, cloud-only, other-machine, or differently located sessions and non-Codex AI edits can be missed. '
                   'Basename mapping bridges old package moves only when unambiguous. Evidence contains references only; '
-                  'the underlying private chat logs are not copied into this repository.', ''])
+                  'the underlying private chat logs are not copied into this repository.', '',
+                  'The detailed machine-readable evidence is stored losslessly in `inventory.json.gz`. '
+                  'The generator and authorship tools read compressed snapshots directly. '
+                  'See [snapshot storage](../authorship/SNAPSHOTS.md) for inspection instructions.', ''])
     # Checked status parser uses repository paths; links are relative for portability.
     markdown = '\n'.join(lines)
     previous.write_text(markdown, encoding='utf-8')

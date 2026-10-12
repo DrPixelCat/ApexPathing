@@ -9,6 +9,7 @@ import json
 import re
 
 from audit_authorship import OUT, code_only, git
+from audit_json import read_json, write_snapshot
 
 
 def canonical_account(name, email):
@@ -68,15 +69,14 @@ def inspect(path):
 
 
 def main():
-    inventory = json.loads((OUT / 'git-inventory.json').read_text(encoding='utf-8'))
+    inventory = read_json(OUT / 'git-inventory.json')
     paths = [r['path'] for r in inventory['files'] if r['path'].startswith('TeamCode/')]
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         rows = list(pool.map(inspect, paths))
-    target = OUT / 'git-contributions.json'
-    target.write_text(json.dumps(dict(head=git('rev-parse', 'HEAD').strip(),
+    target = write_snapshot(OUT / 'git-contributions.json', dict(head=git('rev-parse', 'HEAD').strip(),
                                      method='Normal 50% rename detection; no merges; comments, whitespace, package and imports ignored.',
                                      limitations='Git accounts identify committed contributions, not who typed code. Copy/predecessor attribution requires separate evidence.',
-                                     files=rows), indent=2) + '\n', encoding='utf-8')
+                                     files=rows))
     print(json.dumps(dict(files=len(rows), output=str(target))))
 
 
