@@ -29,5 +29,5 @@ public class ReviewRegressionTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void raggedMatricesFailAtConstruction() { new Matrix(new double[][]{{1, 2}, {3}}); }
+    public void raggedMatricesFailAtConstruction() { Matrix.of(new double[][]{{1, 2}, {3}}); }
 }

@@ -12,7 +12,7 @@ package geometry;
  */
 public class BSpline implements ParametricSegment {
     @SuppressWarnings({"ArrayCreationWithoutNewKeyword", "ConstantExpression"})
-    private static final Matrix BLEND_MATRIX = new Matrix(new double[][]{
+    private static final Matrix<Double> BLEND_MATRIX = Matrix.of(new double[][]{
             {-1.0 / 6.0, 3.0 / 6.0, -3.0 / 6.0, 1.0 / 6.0},
             {3.0 / 6.0, -6.0 / 6.0, 3.0 / 6.0, 0.0},
             {-3.0 / 6.0, 0.0, 3.0 / 6.0, 0.0},
@@ -80,8 +80,8 @@ public class BSpline implements ParametricSegment {
             double[] yWindow = new double[]{p0.getY().getIn(), p1.getY().getIn(), p2.getY().getIn(),
                     p3.getY().getIn()};
 
-            this.cx[i] = BLEND_MATRIX.multiply(xWindow);
-            this.cy[i] = BLEND_MATRIX.multiply(yWindow);
+            this.cx[i] = BLEND_MATRIX.multiply(Matrix.of(xWindow).transpose()).transpose().toDoubleArray()[0];
+            this.cy[i] = BLEND_MATRIX.multiply(Matrix.of(yWindow).transpose()).transpose().toDoubleArray()[0];
         }
     }
 
