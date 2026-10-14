@@ -97,6 +97,25 @@ lint/tmp/
 /.codex-remote-attachments/
 /reviews/
 
+# Generated images, graphs, and rendered reports
+/doc/media/diagnostics/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+*.bmp
+*.tif
+*.tiff
+*.pdf
+*.eps
+*.ps
+
+# Application resources and legal documents
+!**/src/main/res/**
+!/doc/legal/*.pdf
+
 # Local Python scripts and bytecode caches
 *.py
 __pycache__/
