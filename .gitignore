@@ -97,5 +97,6 @@ lint/tmp/
 /.codex-remote-attachments/
 /reviews/
 
-# Python bytecode caches from local development tools
+# Local Python scripts and bytecode caches
+*.py
 __pycache__/
