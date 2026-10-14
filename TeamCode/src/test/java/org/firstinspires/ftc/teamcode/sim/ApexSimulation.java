@@ -87,7 +87,8 @@ public final class ApexSimulation {
         config.backLeftMotorName = BACK_LEFT_MOTOR;
         config.backRightMotorName = BACK_RIGHT_MOTOR;
 
-        // Stock FTCodeSim DECODE example, pinned in doc/StockFTCodeSimValidation.md.
+        // Stock FTCodeSim Examples/src/test/java/SimulateCodeBloodedDecode.java,
+        // jjophoven/FTCodeSim commit d5e7f965a5774ee019a5c55b0c3881547127746b.
         // Change names/origin for Apex hardware only; never replace the registered motor model.
         config.wheelbase = 9.37008;
         config.trackWidth = 9.13386;
