@@ -25,6 +25,8 @@ public final class ApexStorage {
         return new File(getDirectory(), "constants.json");
     }
 
+    public static File getLogDirectory() { return new File(getDirectory(), "logs"); }
+
     /** Returns the localization calibration file used by the localization tuner. */
     public static File getLocalizationFile() {
         return new File(getDirectory(), "localization.json");

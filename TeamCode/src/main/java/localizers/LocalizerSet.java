@@ -30,6 +30,7 @@ public final class LocalizerSet {
     private final EnumMap<FollowerConstants.Profile, Boolean> savedFiltersApplied =
             new EnumMap<>(FollowerConstants.Profile.class);
     private FollowerConstants.Profile activeProfile;
+    private setup.RobotProfile guidedSetup;
 
     public LocalizerSet(ApexConstants robot, HardwareMap hardwareMap,
                         BaseDrivetrain.DrivetrainType drivetrainType,
@@ -42,7 +43,11 @@ public final class LocalizerSet {
                         FollowerConstants.Profile initialProfile,
                         LocalizationConstants calibration) {
         this.hardwareMap = hardwareMap;
-        this.calibration = calibration;
+        guidedSetup = robot instanceof setup.SavedSetup ? ((setup.SavedSetup) robot).robotProfile() : null;
+        this.calibration = guidedSetup == null ? calibration : LocalizationConstants.empty();
+        if (guidedSetup != null && guidedSetup.filter.optJSONObject("poseCalibration") != null) {
+            this.calibration.restore(guidedSetup.filter.optJSONObject("poseCalibration"));
+        }
         dualActuated = drivetrainType == BaseDrivetrain.DrivetrainType.DUAL_ACTUATED;
         shared = !dualActuated || robot.usesSharedLocalizer();
         if (shared) {
@@ -78,6 +83,20 @@ public final class LocalizerSet {
     /** Returns the calibration object shared with the tuner or runtime owner. */
     public LocalizationConstants getCalibration() { return calibration; }
 
+    /** Advanced and guided calibration share one owner when a robot setup profile is active. */
+    public void saveCalibration() throws java.io.IOException {
+        if (guidedSetup == null) { calibration.save(); return; }
+        setup.RobotProfile updated = setup.SetupConfigurations.withGeometry(guidedSetup, getConfig());
+        updated.filter = setup.SetupConfigurations.captureFilters(getLocalizer());
+        try { updated.filter.put("poseCalibration", calibration.toJson()); }
+        catch (Exception e) { throw new java.io.IOException("Could not capture localization settings", e); }
+        updated.filterMeasured = calibration.getStatus(getSetupName(), true) == LocalizationConstants.Status.ACCEPTED;
+        updated.geometryMeasured = guidedSetup.geometryMeasured || calibration.getGeometryStepStatus(getSetupName(), "ROTATION") == LocalizationConstants.Status.ACCEPTED;
+        updated.sensorsChecked = guidedSetup.sensorsChecked || calibration.getGeometryStepStatus(getSetupName(), "DIRECTIONS") == LocalizationConstants.Status.ACCEPTED;
+        new setup.SetupStore(storage.ApexStorage.getDirectory()).save(updated);
+        guidedSetup = updated;
+    }
+
     /** True only when an accepted saved filter was valid and applied to the active localizer. */
     public boolean hasAcceptedFilterCalibration() {
         FollowerConstants.Profile key = storageProfile(activeProfile);
@@ -112,9 +131,13 @@ public final class LocalizerSet {
         FollowerConstants.Profile key = storageProfile(profile);
         BaseLocalizerConstants<?> config = configs.get(key);
         if (config == null) { throw new IllegalStateException("Missing localizer configuration for " + key); }
-        if (applySavedCalibration) { calibration.applyGeometry(key.name(), config); }
+        if (applySavedCalibration && guidedSetup == null) { calibration.applyGeometry(key.name(), config); }
         BaseLocalizer<?> localizer = config.build(hardwareMap);
         boolean filterApplied = calibration.applyFilter(key.name(), config, localizer);
+        if (guidedSetup != null) {
+            setup.SetupConfigurations.applyFilters(guidedSetup, localizer);
+            filterApplied = guidedSetup.filterMeasured;
+        }
         if (restorePose) { localizer.setPose(pose); }
         localizers.put(key, localizer);
         savedFiltersApplied.put(key, filterApplied);

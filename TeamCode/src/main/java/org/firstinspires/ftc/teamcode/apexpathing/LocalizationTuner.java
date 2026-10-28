@@ -22,7 +22,7 @@ import tuning.localizer.TuningPhase;
  *
  * @author Joel H
  */
-@TeleOp(name = "Localization Tuner", group = "Apex Pathing")
+@TeleOp(name = "Localization Tuner (Advanced)", group = "Apex Pathing")
 public class LocalizationTuner extends LinearOpMode {
     private enum Phase {
         DIRECTIONS(DirectionsPhase::new),

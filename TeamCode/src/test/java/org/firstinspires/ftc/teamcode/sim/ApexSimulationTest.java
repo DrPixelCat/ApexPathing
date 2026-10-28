@@ -73,6 +73,7 @@ public class ApexSimulationTest {
         assertTrue(registeredClasses.contains(TeleOpTest.class));
         assertTrue(registeredClasses.contains(FollowerTuner.class));
         assertTrue(registeredClasses.contains(LocalizationTuner.class));
+        assertTrue(registeredClasses.contains(org.firstinspires.ftc.teamcode.apexpathing.RobotSetup.class));
     }
 
     @Test

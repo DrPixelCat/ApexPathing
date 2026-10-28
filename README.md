@@ -1,6 +1,8 @@
 # Apex Pathing
 Check out our site at https://www.apexpathing.com/ for info about the project!
 
+For first-time configuration, run **Robot Setup**. See the [guided setup workflow](doc/RobotSetup.md).
+
 ## Run the OpModes in FTCodeSim
 
 The shared simulator setup is in `TeamCode/src/test/java/org/firstinspires/ftc/teamcode/sim`.

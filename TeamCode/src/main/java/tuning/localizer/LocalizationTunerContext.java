@@ -90,7 +90,7 @@ public final class LocalizationTunerContext extends tuning.TunerContext {
                     priorFilter == LocalizationConstants.Status.UNCALIBRATED
                             ? priorFilter : LocalizationConstants.Status.NEEDS_VALIDATION);
             localizers.getCalibration().markGeometryStepAccepted(getSetupName(), step);
-            localizers.getCalibration().save();
+            localizers.saveCalibration();
             lastSaveError = "";
             return true;
         } catch (Exception failure) {
@@ -113,7 +113,7 @@ public final class LocalizationTunerContext extends tuning.TunerContext {
             localizers.getCalibration().capture(getSetupName(), getConfig(), getLocalizer(),
                     localizers.getCalibration().getStatus(getSetupName(), false),
                     LocalizationConstants.Status.ACCEPTED);
-            localizers.getCalibration().save();
+            localizers.saveCalibration();
             lastSaveError = "";
             return true;
         } catch (Exception failure) {
