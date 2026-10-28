@@ -139,6 +139,11 @@ public class FeedforwardTuner extends TuningPhase {
     private double manualPeakVelocity;
     private final LowPassFilter commandPowerFilter = new LowPassFilter();
     private double lastAppliedCharacterizationPower;
+    private int attempt;
+    private static final String[] SAMPLE_HEADER = {"time_s", "attempt", "run", "axis", "excitation", "direction",
+            "run_time_s", "state", "aligned_interval_power", "next_requested_power", "next_applied_power",
+            "raw_velocity", "filtered_velocity", "raw_acceleration", "filtered_acceleration", "directed_velocity",
+            "directed_acceleration", "included_in_regression", "exclusion_reason", "battery_v"};
 
     public FeedforwardTuner(TunerContext context) {
         super(context);
@@ -169,6 +174,8 @@ public class FeedforwardTuner extends TuningPhase {
 
     @Override
     protected void init() {
+        context.getFollower().stop();
+        context.getFollower().disableControllers();
         // Target half of the physical limits to avoid motor saturation during tuning.
         angularProfile = new TrapezoidProfile(
                 context.constants.angularVelLimitRad / 2,
@@ -193,6 +200,7 @@ public class FeedforwardTuner extends TuningPhase {
     }
 
     private void restartAutomaticCharacterization() {
+        attempt++;
         context.getFollower().stop();
         angularObservations.clear();
         translationalObservations.clear();
@@ -429,7 +437,7 @@ public class FeedforwardTuner extends TuningPhase {
 
         Pose velocity = context.getFollower().getVelocity();
         double angularVel = velocity.getHeading(AngleUnit.RAD);
-        double driveVel = Math.abs(velocity.getX().getIn());
+        double driveVel = TuningMeasurements.forward(velocity, context.getFollower().getPose());
 
         double time_sec = timer.seconds();
         boolean working = manualState == ManualState.ANGULAR &&
@@ -493,10 +501,10 @@ public class FeedforwardTuner extends TuningPhase {
                         angularPow, appliedAngularPower);
                 break;
             case DRIVE:
-                targetVel = driveProfile.getVel(time_sec);
+                targetVel = driveProfile.getVel(time_sec) * (isForward ? 1 : -1);
                 currentVel = driveVel;
                 double drivePow =
-                        context.constants.translationalKV * targetVel +
+                        context.constants.translationalKV * driveProfile.getVel(time_sec) +
                                 context.constants.translationalKA * driveProfile.getAccel(time_sec) +
                                 context.constants.translationalCoeffs.kS;
                 double direction = isForward ? 1.0 : -1.0;
@@ -558,6 +566,12 @@ public class FeedforwardTuner extends TuningPhase {
 
     private void recordManualFeedforwardSample(double targetVelocity, double actualVelocity,
                                                double rawPower, double appliedPower) {
+        if (context.getLog() != null) {
+            context.getLog().write("feedforward_manual", new String[]{"time_s", "axis", "run_time_s",
+                            "target_velocity", "measured_velocity", "next_requested_power", "next_clipped_power"},
+                    context.getLog().seconds(), manualState, timer.seconds(), targetVelocity, actualVelocity,
+                    rawPower, appliedPower);
+        }
         if (!Double.isFinite(targetVelocity) || !Double.isFinite(actualVelocity)) { return; }
         double error = targetVelocity - actualVelocity;
         manualSamples++;
@@ -611,6 +625,10 @@ public class FeedforwardTuner extends TuningPhase {
 
             boolean angularValid = angularFit.isValid();
             boolean translationalValid = translationalFit.isValid();
+            logFit(Axis.ANGULAR, angularFit, angularObservations, Math.abs(context.constants.angularCoeffs.kS),
+                    angularValid && translationalValid);
+            logFit(Axis.TRANSLATIONAL, translationalFit, translationalObservations,
+                    Math.abs(context.constants.translationalCoeffs.kS), angularValid && translationalValid);
             if (angularValid && translationalValid) {
                 context.constants.angularKV = angularFit.kV;
                 context.constants.angularKA = angularFit.kA;
@@ -657,6 +675,8 @@ public class FeedforwardTuner extends TuningPhase {
                 lastAppliedCharacterizationPower = 0.0;
                 timer.reset();
                 autoStage = AutoStage.RUNNING;
+                if (context.getLog() != null) { context.getLog().event(getPhaseName(), "run_start",
+                        "attempt=" + attempt + "; run=" + autoRunIndex + "; " + run.axis + "; " + run.excitation + "; forward=" + run.forward); }
             }
             return false;
         }
@@ -689,34 +709,42 @@ public class FeedforwardTuner extends TuningPhase {
                     context.getFollower().getDrivetrain().moveWithVectors(
                             signedPower, 0.0, 0.0);
                 }
-                lastAppliedCharacterizationPower = power;
+                lastAppliedCharacterizationPower = Math.abs(TuningMeasurements.appliedEffort(
+                        context.getFollower().getDrivetrain(), run.axis == Axis.ANGULAR, signedPower));
 
                 Pose velocity = context.getFollower().getVelocity();
                 Pose acceleration = context.getFollower().getAcceleration();
-                double rawVelocity = run.axis == Axis.ANGULAR
+                double measuredSignedVelocity = run.axis == Axis.ANGULAR
                         ? velocity.getHeading(AngleUnit.RAD)
-                        : velocity.getX().getIn();
-                double rawAcceleration = run.axis == Axis.ANGULAR
+                        : TuningMeasurements.forward(velocity, context.getFollower().getPose());
+                double measuredSignedAcceleration = run.axis == Axis.ANGULAR
                         ? acceleration.getHeading(AngleUnit.RAD)
-                        : acceleration.getX().getIn();
-                if (elapsed >= MIN_SAMPLE_TIME && Double.isFinite(rawAcceleration)) {
-                    double measuredVelocity = Math.abs(rawVelocity);
-                    // Project acceleration along the measured direction of travel. This remains
-                    // correct even when a localizer's positive axis is opposite motor power, and
-                    // unlike abs(acceleration), preserves real deceleration samples.
-                    double measuredAcceleration = rawAcceleration * Math.signum(rawVelocity);
-                    double velocityFloor = run.axis == Axis.ANGULAR ? 0.02 : 0.25;
-                    if (measuredVelocity >= velocityFloor) {
-                        Observation observation = new Observation(
-                                alignedPower, measuredVelocity, measuredAcceleration,
-                                autoRunIndex % 4, elapsed);
-                        (run.axis == Axis.ANGULAR
-                                ? angularObservations : translationalObservations).add(observation);
-                    }
+                        : TuningMeasurements.forward(acceleration, context.getFollower().getPose());
+                double measuredVelocity = Math.abs(measuredSignedVelocity);
+                // Preserve deceleration by projecting along the measured direction of travel.
+                double measuredAcceleration = measuredSignedAcceleration * Math.signum(measuredSignedVelocity);
+                double velocityFloor = run.axis == Axis.ANGULAR ? 0.02 : 0.25;
+                double kS = Math.abs(run.axis == Axis.ANGULAR ? context.constants.angularCoeffs.kS
+                        : context.constants.translationalCoeffs.kS);
+                String excluded = elapsed < MIN_SAMPLE_TIME ? "startup" :
+                        !Double.isFinite(measuredAcceleration) || !Double.isFinite(measuredVelocity) ? "nonfinite" :
+                        measuredVelocity < velocityFloor ? "low_velocity" : alignedPower <= kS ? "below_kS" : "";
+                boolean included = excluded.isEmpty();
+                if (included) {
+                    Observation observation = new Observation(
+                            alignedPower, measuredVelocity, measuredAcceleration,
+                            autoRunIndex % 4, elapsed);
+                    (run.axis == Axis.ANGULAR
+                            ? angularObservations : translationalObservations).add(observation);
                 }
+                logCharacterization(run, elapsed, "running", alignedPower, signedPower,
+                        Math.copySign(lastAppliedCharacterizationPower, signedPower), measuredSignedVelocity,
+                        measuredSignedAcceleration, measuredVelocity, measuredAcceleration, included, excluded);
             }
         } else if (autoStage == AutoStage.SETTLING) {
             context.getFollower().stop();
+            logCharacterization(run, elapsed, "settling", 0, 0, 0,
+                    Double.NaN, Double.NaN, Double.NaN, Double.NaN, false, "settling");
             if (elapsed >= AUTO_SETTLE_TIME) {
                 autoRunIndex++;
                 autoStage = autoRunIndex >= AUTO_RUNS.length
@@ -741,6 +769,38 @@ public class FeedforwardTuner extends TuningPhase {
     private boolean usesMovingAverageVelocity() {
         return context.getFollower().getLocalizer().getVelocityFilterMode()
                 == BaseLocalizer.VelocityFilterMode.MOVING_AVERAGE;
+    }
+
+    private void logCharacterization(AutoRun run, double elapsed, String state, double alignedPower,
+                                     double requested, double applied, double velocity, double acceleration,
+                                     double directedVelocity, double directedAcceleration, boolean included, String reason) {
+        if (context.getLog() == null) { return; }
+        Pose rawV = context.getFollower().getLocalizer().getRawVel();
+        Pose rawA = context.getFollower().getLocalizer().getRawAccel();
+        Pose p = context.getFollower().getPose();
+        context.getLog().write("feedforward_samples", SAMPLE_HEADER, context.getLog().seconds(), attempt,
+                autoRunIndex, run.axis, run.excitation, run.forward ? 1 : -1, elapsed, state, alignedPower,
+                requested, applied, run.axis == Axis.ANGULAR ? rawV.getHeading().getRad() : TuningMeasurements.forward(rawV, p),
+                velocity, run.axis == Axis.ANGULAR ? rawA.getHeading().getRad() : TuningMeasurements.forward(rawA, p),
+                acceleration, directedVelocity, directedAcceleration, included, reason, context.batteryVoltage());
+    }
+
+    private void logFit(Axis axis, FitResult fit, List<Observation> samples, double kS, boolean applied) {
+        if (context.getLog() == null) { return; }
+        context.getLog().write("feedforward_fits", new String[]{"time_s", "attempt", "axis", "model", "kS",
+                        "kV", "kA", "rmse_power", "leave_run_out_rmse_power", "uncentered_r_squared", "samples", "applied"},
+                context.getLog().seconds(), attempt, axis, "power=kS+kV*abs(velocity)+kA*directed_acceleration",
+                kS, fit.kV, fit.kA, fit.rmse, fit.crossValidationRmse, fit.rSquared, fit.sampleCount, applied);
+        for (Observation sample : samples) {
+            double predicted = kS + fit.kV * sample.velocity + fit.kA * sample.acceleration;
+            context.getLog().write("feedforward_regression", new String[]{"attempt", "axis", "run_within_axis",
+                            "run_time_s", "aligned_power", "abs_velocity", "directed_acceleration", "power_minus_kS_kA_a",
+                            "kV_times_velocity", "predicted_power", "residual_power", "kS", "kV", "kA"},
+                    attempt, axis, sample.run, sample.elapsedSeconds, sample.power, sample.velocity, sample.acceleration,
+                    sample.power - kS - fit.kA * sample.acceleration, fit.kV * sample.velocity,
+                    predicted, sample.power - predicted, kS, fit.kV, fit.kA);
+        }
+        context.getLog().flush();
     }
 
     private String feedforwardActionDescription(AutoRun run) {

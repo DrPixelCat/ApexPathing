@@ -16,6 +16,7 @@ import java.util.Locale;
 import core.ApexStorage;
 import core.Follower;
 import core.FollowerConstants;
+import tuning.logging.TuningLog;
 
 /**
  * Provides a context for the tuner phases to operate in, including access th the OpMode, telemetry,
@@ -35,6 +36,34 @@ public class TunerContext {
     private boolean debugMode;
     private boolean debugHoldHandled;
     private long debugHoldStartedNanos;
+    private TuningLog log;
+
+    public void openLog(String name) {
+        closeLog();
+        log = new TuningLog(ApexStorage.getLogDirectory(), name);
+        log.event("session", "start", "CSV schema 1; power is normalized duty cycle; distances in inches, angles in radians");
+    }
+
+    public TuningLog getLog() { return log; }
+
+    public double batteryVoltage() {
+        double voltage = Double.POSITIVE_INFINITY;
+        for (com.qualcomm.robotcore.hardware.VoltageSensor sensor : opMode.hardwareMap.voltageSensor) {
+            double reading = sensor.getVoltage();
+            if (Double.isFinite(reading) && reading > 0) { voltage = Math.min(voltage, reading); }
+        }
+        return Double.isFinite(voltage) ? voltage : Double.NaN;
+    }
+
+    public void sample(String phase, String mode) {
+        if (log != null) { log.sample(follower, phase, mode, batteryVoltage()); }
+    }
+
+    public void closeLog() {
+        if (log != null) {
+            try { log.close(); } finally { log = null; }
+        }
+    }
 
     public TunerContext(LinearOpMode opMode) { this.opMode = opMode; }
 
@@ -87,6 +116,7 @@ public class TunerContext {
 
     /** Adds controls which must remain visible independently of the current phase. */
     public void addInterfaceHeader() {
+        if (log != null) { getTelemetry().addData("CSV folder", log.getDirectory().getAbsolutePath()); }
         if (debugMode) {
             getTelemetry().addLine("DEBUG MODE");
             getTelemetry().addLine("Hold Right Stick Button to exit debug mode.");

@@ -3,20 +3,17 @@ package localizers;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import geometry.Angle;
-import geometry.GeometryFactory;
 import geometry.Pose;
 import geometry.Vector;
 import geometry.DistUnit;
 
 /**
- * A localizer that uses 3 dead wheel odometry pods (1 parallel and 2 perpendicular)
+ * A localizer that uses 3 dead wheel odometry pods (2 parallel and 1 perpendicular)
  *
  * @author Topher F. - 23571 alum
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
-    private final static GeometryFactory factory = new GeometryFactory()
-            .setDistUnit(DistUnit.IN).setAngleUnit(geometry.AngleUnit.RAD);
     private final OdometryPod forwardLeftPod, forwardRightPod, strafePod;
     private final double forwardOffsetIn, strafeOffsetIn;
 
@@ -24,13 +21,13 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
         super(constants);
 
         this.strafePod = new OdometryPod(
-                hardwareMap, constants.strafePodName, constants.ticksPerInch
+                hardwareMap, constants.strafePodName, constants.ticksPerInch, constants.strafePodReversed
         );
         this.forwardLeftPod = new OdometryPod(
-                hardwareMap, constants.forwardLeftPodName, constants.ticksPerInch
+                hardwareMap, constants.forwardLeftPodName, constants.ticksPerInch, constants.forwardLeftPodReversed
         );
         this.forwardRightPod = new OdometryPod(
-                hardwareMap, constants.forwardRightPodName, constants.ticksPerInch
+                hardwareMap, constants.forwardRightPodName, constants.ticksPerInch, constants.forwardRightPodReversed
         );
 
         this.forwardOffsetIn = constants.offsets.getX(DistUnit.IN);
@@ -39,20 +36,16 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
 
     @Override
     public void update() {
+        forwardLeftPod.update();
+        forwardRightPod.update();
+        strafePod.update();
         double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double deltaYaw = (forwardLeftPod.getDeltaInches() - forwardRightPod.getDeltaInches()) /
                 forwardOffsetIn;
         double yaw = Angle.normalize(oldYaw + deltaYaw);
-        double avgYaw = oldYaw + deltaYaw / 2.0;
-
-        double deltaX = strafePod.getDeltaInches() - deltaYaw * strafeOffsetIn;
-        double deltaY = (forwardLeftPod.getDeltaInches() + forwardRightPod.getDeltaInches()) / 2.0;
-
-        factory.pose(
-                pose.getX(DistUnit.IN) + (deltaX * Math.cos(avgYaw) - deltaY * Math.sin(avgYaw)),
-                pose.getY(DistUnit.IN) + (deltaX * Math.sin(avgYaw) + deltaY * Math.cos(avgYaw)),
-                yaw
-        );
+        double forward = (forwardLeftPod.getDeltaInches() + forwardRightPod.getDeltaInches()) / 2.0;
+        double strafe = strafePod.getDeltaInches() - deltaYaw * strafeOffsetIn;
+        pose = integrateArc(pose, forward, strafe, deltaYaw, yaw);
 
         calculate(UpdateType.BOTH);
     }
@@ -68,12 +61,26 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
         resetKinematicEstimate(newPose);
     }
 
+    @Override public PodCalibrationReading[] getPodCalibrationReadings() {
+        return new PodCalibrationReading[]{
+                new PodCalibrationReading("parallel_separation", forwardLeftPod.getInches() -
+                        forwardRightPod.getInches(), forwardOffsetIn, 1),
+                new PodCalibrationReading("strafe_offset", strafePod.getInches(), strafeOffsetIn, 1)};
+    }
+
+    public int[] getPodTicks() { return new int[]{forwardLeftPod.getTicks(), forwardRightPod.getTicks(), strafePod.getTicks()}; }
+
     public static class Constants implements BaseLocalizerConstants<Constants> {
         public String forwardLeftPodName;
         public String forwardRightPodName;
         public String strafePodName;
         public Vector offsets = Vector.zero();
         public double ticksPerInch = 1.0;
+        public boolean forwardLeftPodReversed, forwardRightPodReversed, strafePodReversed;
+
+        public Constants setEncoderDirections(boolean left, boolean right, boolean strafe) {
+            forwardLeftPodReversed = left; forwardRightPodReversed = right; strafePodReversed = strafe; return this;
+        }
 
         @Override
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {

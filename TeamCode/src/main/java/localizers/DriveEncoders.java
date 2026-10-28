@@ -6,8 +6,6 @@ import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import geometry.Angle;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
 import geometry.Pose;
 
 /**
@@ -17,8 +15,6 @@ import geometry.Pose;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants> {
-    private final static GeometryFactory factory = new GeometryFactory()
-            .setDistUnit(DistUnit.IN).setAngleUnit(geometry.AngleUnit.RAD);
     private final OdometryPod frontLeft, frontRight, backLeft, backRight;
     private final IMU imu;
 
@@ -43,6 +39,9 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants> {
 
     @Override
     public void update() {
+        frontLeft.update();
+        frontRight.update();
+        if (backLeft != null) { backLeft.update(); backRight.update(); }
         double blDelta = 0;
         double brDelta = 0;
         if (backLeft != null) {
@@ -50,23 +49,18 @@ public class DriveEncoders extends BaseLocalizer<DriveEncoders.Constants> {
             brDelta = backRight.getDeltaInches();
         }
 
-        double deltaY = (frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
-                blDelta + brDelta) / 4.0;
-        double deltaX = (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
-                blDelta - brDelta) / 4.0;
+        int encoderCount = backLeft == null ? 2 : 4;
+        double forward = (frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
+                blDelta + brDelta) / encoderCount;
+        double strafe = backLeft == null ? 0.0 :
+                (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() + blDelta - brDelta) / 4.0;
 
         double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
                 imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction
         );
-        double deltaYaw = Angle.normalize(currentYaw - oldYaw);
-        double avgYaw = oldYaw + deltaYaw / 2.0;
-
-        factory.pose(
-                pose.getX(DistUnit.IN) + (deltaX * Math.cos(avgYaw) - deltaY * Math.sin(avgYaw)),
-                pose.getY(DistUnit.IN) + (deltaX * Math.sin(avgYaw) + deltaY * Math.cos(avgYaw)),
-                currentYaw
-        );
+        double deltaYaw = Angle.wrap(currentYaw - oldYaw);
+        pose = integrateArc(pose, forward, strafe, deltaYaw, currentYaw);
 
         calculate(UpdateType.BOTH);
     }

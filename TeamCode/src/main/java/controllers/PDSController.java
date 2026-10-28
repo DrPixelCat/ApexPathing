@@ -116,8 +116,12 @@ public class PDSController {
             firstRun = false;
         }
 
+        double errorDelta = actualError - lastError;
+        // Wrapping the error itself is insufficient: crossing +/-pi otherwise
+        // produces a nearly full-revolution jump in the derivative term.
+        if (angularController) { errorDelta = Angle.wrap(errorDelta); }
         double p = this.coeffs.kP * actualError;
-        double d = this.coeffs.kD * (timeAnomaly ? 0.0 : (actualError - lastError) / deltaTime);
+        double d = this.coeffs.kD * (timeAnomaly ? 0.0 : errorDelta / deltaTime);
         double s = this.coeffs.kS * (actualError / (Math.abs(actualError) + smoothingConstant));
 
         lastTimestamp = currentNano;

@@ -11,6 +11,7 @@ import geometry.Pose;
 import tuning.CentripetalPhase;
 import tuning.DrivePhase;
 import tuning.FeedforwardTuner;
+import tuning.FeedforwardVerificationPhase;
 import tuning.HeadingPhase;
 import tuning.LimitsPhase;
 import tuning.TunerContext;
@@ -40,6 +41,7 @@ public class FollowerTuner extends LinearOpMode {
         FEEDFORWARD(FeedforwardTuner.class, (FollowerConstants constants) ->
                 constants.angularKV != 0.0 && constants.angularKA != 0.0 &&
                         constants.translationalKV != 0.0 && constants.translationalKA != 0.0),
+        FEEDFORWARD_VERIFICATION(FeedforwardVerificationPhase.class, constants -> true),
         CENTRIPETAL(CentripetalPhase.class, (FollowerConstants constants) ->
                 constants.kCentripetal != 0.0),
         VELOCITY_FEEDBACK(VelocityFeedbackPhase.class, (FollowerConstants constants) ->
@@ -71,9 +73,25 @@ public class FollowerTuner extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        try {
+            runTuner();
+        } finally {
+            if (context != null) {
+                try {
+                    if (context.getFollower() != null) { context.getFollower().stop(); }
+                } finally {
+                    context.closeLog();
+                    resetPhaseSelection();
+                }
+            }
+        }
+    }
+
+    private void runTuner() {
         resetPhaseSelection();
         context = new TunerContext(this);
         context.setFollower(new Follower(new Constants(), hardwareMap, true));
+        context.openLog("follower-tuning");
         context.constants.drivetrainType = context.getFollower().getDrivetrain().getDrivetrainType();
         
         for (Phase phase : phases) { phase.updateTunedStatus(context.constants); }
@@ -147,6 +165,7 @@ public class FollowerTuner extends LinearOpMode {
     }
 
     private String phaseStatus(Phase phase) {
+        if (phase == Phase.FEEDFORWARD_VERIFICATION) { return "[LOG ONLY]"; }
         if (phase.tuned) { return "[DONE]"; }
         return phaseAvailable(phase) ? "[READY]" : "[LOCKED]";
     }

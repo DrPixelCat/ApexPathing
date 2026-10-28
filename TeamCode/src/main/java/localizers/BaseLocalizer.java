@@ -2,6 +2,7 @@ package localizers;
 
 import geometry.Angle;
 import geometry.Dist;
+import geometry.DistUnit;
 import geometry.Pose;
 import geometry.Vector;
 import localizers.util.AdaptiveKalmanFilter;
@@ -100,6 +101,19 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
     public VelocityFilterMode getVelocityFilterMode() { return velocityFilterMode; }
 
+    /** Raw pod channels for an operator-measured rotation; empty for localizers without pods. */
+    public PodCalibrationReading[] getPodCalibrationReadings() {
+        return new PodCalibrationReading[0];
+    }
+
+    /** Diagnostics are snapshots of the last update; reading them never advances a filter. */
+    public AdaptiveKalmanFilter.Diagnostics[] getKalmanDiagnostics() {
+        return new AdaptiveKalmanFilter.Diagnostics[]{
+                kalman(xFilter) == null ? null : kalman(xFilter).getDiagnostics(),
+                kalman(yFilter) == null ? null : kalman(yFilter).getDiagnostics(),
+                kalman(headingFilter) == null ? null : kalman(headingFilter).getDiagnostics()};
+    }
+
     /**
      * Selects the canonical public velocity estimator. Changing modes clears only kinematic
      * history; the current pose is preserved.
@@ -141,6 +155,18 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
      */
     public abstract void setPose(Pose newPose);
 
+    /** Integrates a body-frame displacement as a constant-curvature arc. */
+    protected static Pose integrateArc(Pose start, double forward, double strafe,
+                                       double deltaHeading, double finalHeading) {
+        double half = deltaHeading / 2.0;
+        double scale = Math.abs(half) < 1e-6 ? 1.0 - half * half / 6.0 : Math.sin(half) / half;
+        double heading = start.getHeading().getRad() + half;
+        double cos = Math.cos(heading), sin = Math.sin(heading);
+        return new Pose(Vector.of(start.getX().getIn() + scale * (forward * cos - strafe * sin),
+                start.getY().getIn() + scale * (forward * sin + strafe * cos), DistUnit.IN),
+                Angle.fromRad(finalHeading));
+    }
+
     /**
      * Calculates the current velocity and/or acceleration for localizers that don't natively
      * support it
@@ -157,7 +183,9 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         double dt = (currentTimeNs - prevTimeNs) / 1_000_000_000.0;
         if (dt <= 1e-6) { return; }
 
-        applyVelocityMeasurement(pose.minus(prevPose).div(dt), updateType, dt);
+        Pose delta = new Pose(pose.getVec().minus(prevPose.getVec()),
+                Angle.fromRad(Angle.wrap(pose.getHeading().getRad() - prevPose.getHeading().getRad())));
+        applyVelocityMeasurement(delta.div(dt), updateType, dt);
         prevPose = pose;
         prevTimeNs = currentTimeNs;
     }

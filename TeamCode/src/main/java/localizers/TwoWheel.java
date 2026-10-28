@@ -7,7 +7,6 @@ import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import geometry.Angle;
-import geometry.GeometryFactory;
 import geometry.Pose;
 import geometry.Vector;
 import geometry.DistUnit;
@@ -19,8 +18,6 @@ import geometry.DistUnit;
  * @author Dylan B. - 18597 RoboClovers - Delta
  */
 public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
-    private final static GeometryFactory factory = new GeometryFactory()
-            .setDistUnit(DistUnit.IN).setAngleUnit(geometry.AngleUnit.RAD);
     private final OdometryPod forwardPod, strafePod;
     private final IMU imu;
     private final double forwardOffsetIn, strafeOffsetIn;
@@ -30,10 +27,10 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
         super(constants);
 
         this.strafePod = new OdometryPod(
-                hardwareMap, constants.strafePodName, constants.ticksPerInch
+                hardwareMap, constants.strafePodName, constants.ticksPerInch, constants.strafePodReversed
         );
         this.forwardPod = new OdometryPod(
-                hardwareMap, constants.forwardPodName, constants.ticksPerInch
+                hardwareMap, constants.forwardPodName, constants.ticksPerInch, constants.forwardPodReversed
         );
         this.imu = hardwareMap.get(IMU.class, constants.imuName);
         this.imu.initialize(new IMU.Parameters(constants.hubOrientation));
@@ -44,19 +41,16 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
 
     @Override
     public void update() {
+        forwardPod.update();
+        strafePod.update();
         double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
                 imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) - correction
         );
-        double deltaYaw = Angle.normalize(currentYaw - oldYaw);
-        double avgYaw = oldYaw + deltaYaw / 2.0;
+        double deltaYaw = Angle.wrap(currentYaw - oldYaw);
         double deltaX = forwardPod.getDeltaInches() - forwardOffsetIn * deltaYaw;
         double deltaY = strafePod.getDeltaInches() - strafeOffsetIn * deltaYaw;
-        factory.pose(
-                pose.getX(DistUnit.IN) + (deltaX * Math.cos(avgYaw) - deltaY * Math.sin(avgYaw)),
-                pose.getY(DistUnit.IN) + (deltaX * Math.sin(avgYaw) + deltaY * Math.cos(avgYaw)),
-                currentYaw
-        );
+        pose = integrateArc(pose, deltaX, deltaY, deltaYaw, currentYaw);
 
         calculate(UpdateType.BOTH);
     }
@@ -72,6 +66,14 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
         resetKinematicEstimate(newPose);
     }
 
+    @Override public PodCalibrationReading[] getPodCalibrationReadings() {
+        return new PodCalibrationReading[]{
+                new PodCalibrationReading("forward_offset", forwardPod.getInches(), forwardOffsetIn, 1),
+                new PodCalibrationReading("strafe_offset", strafePod.getInches(), strafeOffsetIn, 1)};
+    }
+
+    public int[] getPodTicks() { return new int[]{forwardPod.getTicks(), strafePod.getTicks()}; }
+
     public static class Constants implements BaseLocalizerConstants<Constants> {
         public String forwardPodName;
         public String strafePodName;
@@ -79,6 +81,11 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
         public RevHubOrientationOnRobot hubOrientation;
         public Vector offsets = Vector.zero();
         public double ticksPerInch = 1.0;
+        public boolean forwardPodReversed, strafePodReversed;
+
+        public Constants setEncoderDirections(boolean forward, boolean strafe) {
+            forwardPodReversed = forward; strafePodReversed = strafe; return this;
+        }
 
         @Override
         public BaseLocalizer<?> build(HardwareMap hardwareMap) {

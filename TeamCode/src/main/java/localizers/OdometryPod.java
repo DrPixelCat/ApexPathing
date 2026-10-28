@@ -1,6 +1,5 @@
 package localizers;
 
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
@@ -15,15 +14,26 @@ public class OdometryPod {
 
     private final double ticksPerInch;
     private final DcMotorEx odometry;
+    private final double direction;
 
     private int lastTicks;
     private int currentTicks;
+    private int resetTicks;
     private double deltaTicks;
 
     public OdometryPod(HardwareMap hardwareMap, String name, double ticksPerInch) {
+        this(hardwareMap, name, ticksPerInch, false);
+    }
+
+    public OdometryPod(HardwareMap hardwareMap, String name, double ticksPerInch, boolean reversed) {
+        if (!Double.isFinite(ticksPerInch) || ticksPerInch <= 0) {
+            throw new IllegalArgumentException("Encoder ticks per inch must be finite and positive");
+        }
         this.name = name;
         this.odometry = hardwareMap.get(DcMotorEx.class, this.name);
         this.ticksPerInch = ticksPerInch;
+        this.direction = reversed ? -1 : 1;
+        reset();
     }
 
     public String getName() { return this.name; }
@@ -35,15 +45,19 @@ public class OdometryPod {
     }
 
     public void reset() {
-        lastTicks = 0;
-        currentTicks = 0;
-        odometry.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        // A drive encoder can share its motor with propulsion. Rebase the software
+        // reading without changing that motor's run mode or its hardware counter.
+        currentTicks = odometry.getCurrentPosition();
+        lastTicks = resetTicks = currentTicks;
+        deltaTicks = 0;
     }
 
     /** @return the amount of inches the encoder has moved since the last reset */
-    public double getInches() { return currentTicks / ticksPerInch; }
+    public double getInches() { return direction * (currentTicks - resetTicks) / ticksPerInch; }
 
     /** @return the amount of inches the encoder has moved since the last loop. */
-    public double getDeltaInches() { return deltaTicks / ticksPerInch; }
+    public double getDeltaInches() { return direction * deltaTicks / ticksPerInch; }
+
+    public int getTicks() { return currentTicks; }
 }
 

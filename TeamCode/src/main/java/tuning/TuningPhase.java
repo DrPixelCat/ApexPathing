@@ -48,11 +48,16 @@ public abstract class TuningPhase {
                     }
                     if (opMode.gamepad1.aWasPressed()) {
                         init();
+                        if (context.getLog() != null) {
+                            context.getLog().event(getPhaseName(), "phase_start", manualMode ? "manual" : "automatic");
+                            context.getLog().coefficients(context.constants, getPhaseName(), "phase_start");
+                        }
                         state = TuningState.TUNING;
                     }
                     break;
                 case TUNING:
                     context.getFollower().update();
+                    context.sample(getPhaseName(), manualMode ? "manual" : "automatic");
                     boolean complete;
                     if (manualMode) {
                         complete = manualTuned();
@@ -61,6 +66,10 @@ public abstract class TuningPhase {
                     }
                     if (complete) {
                         context.getFollower().stop();
+                        if (context.getLog() != null) {
+                            context.getLog().coefficients(context.constants, getPhaseName(), "phase_complete");
+                            context.getLog().event(getPhaseName(), "phase_complete", "");
+                        }
                         state = TuningState.RESULTS;
                     }
                     break;
@@ -80,6 +89,7 @@ public abstract class TuningPhase {
         }
 
         context.getFollower().stop();
+        if (context.getLog() != null) { context.getLog().event(getPhaseName(), "phase_aborted", "OpMode stopped"); }
         return false;
     }
 

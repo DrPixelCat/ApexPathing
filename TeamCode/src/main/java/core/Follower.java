@@ -101,6 +101,10 @@ public class Follower {
 
         this.drivetrain = drivetrainConstants.build(hardwareMap);
         this.localizer = constants.localizerConstants().build(hardwareMap);
+        if (constants instanceof setup.SavedSetup) {
+            setup.RobotProfile profile = ((setup.SavedSetup) constants).robotProfile();
+            if (profile != null) { setup.SetupConfigurations.applyFilters(profile, localizer); }
+        }
         this.constants = FollowerConstants.getInstance();
 
         this.headingTol = drivetrainConstants.headingTolerance.getRad();

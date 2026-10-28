@@ -51,6 +51,40 @@ public class AdaptiveKalmanFilter implements DataFilter {
     private int sameDirectionGateCount;
     private int previousGateDirection;
     private boolean previousMeasurementWasUsable;
+    private double lastInnovation = Double.NaN;
+    private double lastInnovationVariance = Double.NaN;
+    private double lastNis = Double.NaN;
+    private boolean lastInsideGate;
+    private long sampleCount;
+
+    /** No convergence decision is made here; expose the estimator's own state for offline tuning. */
+    public static final class Diagnostics {
+        public final boolean initialized, adapting, bootstrapComplete, tuned, insideGate, timeAnomaly;
+        public final long samples;
+        public final double dt, measurementVariance, processVariance, innovation, innovationVariance,
+                nis, smoothedNis, velocityVariance, accelerationVariance;
+
+        private Diagnostics(AdaptiveKalmanFilter f) {
+            initialized = f.initialized;
+            adapting = f.isAutoTuning;
+            bootstrapComplete = f.bootstrapSamples >= BOOTSTRAP_SAMPLES;
+            tuned = f.isTuned();
+            insideGate = f.lastInsideGate;
+            timeAnomaly = f.timeAnomalyDetected;
+            samples = f.sampleCount;
+            dt = f.lastDt;
+            measurementVariance = f.measurementVariance;
+            processVariance = f.processVariance;
+            innovation = f.lastInnovation;
+            innovationVariance = f.lastInnovationVariance;
+            nis = f.lastNis;
+            smoothedNis = f.smoothedNis;
+            velocityVariance = f.P == null ? Double.NaN : f.P.get(0, 0);
+            accelerationVariance = f.P == null ? Double.NaN : f.P.get(1, 1);
+        }
+    }
+
+    public Diagnostics getDiagnostics() { return new Diagnostics(this); }
 
     /**
      * A container for extracting and injecting tuned variance parameters.
@@ -102,6 +136,8 @@ public class AdaptiveKalmanFilter implements DataFilter {
         if (!Double.isFinite(measurement)) {
             return new FilterState(x != null ? x.get(0, 0) : 0, x != null ? x.get(1, 0) : 0);
         }
+
+        sampleCount++;
 
         // Time Anomaly Protection
         if (dt > MAXIMUM_DT || dt < MINIMUM_DT) {
@@ -177,6 +213,10 @@ public class AdaptiveKalmanFilter implements DataFilter {
         double gateSquared = outlierSigma * outlierSigma;
 
         boolean insideGate = nis <= gateSquared;
+        lastInnovation = innovation;
+        lastInnovationVariance = innovationVariance;
+        lastNis = nis;
+        lastInsideGate = insideGate;
         updateGatePersistence(innovation, insideGate);
 
         if (isAutoTuning) {
@@ -427,6 +467,9 @@ public class AdaptiveKalmanFilter implements DataFilter {
     @Override
     public void reset() {
         initialized = false;
+        sampleCount = 0;
+        lastInnovation = lastInnovationVariance = lastNis = Double.NaN;
+        lastInsideGate = false;
 
         x = new Matrix(new double[][]{{0.0}, {0.0}});
         P = new Matrix(new double[][]{{0.0, 0.0}, {0.0, 0.0}});

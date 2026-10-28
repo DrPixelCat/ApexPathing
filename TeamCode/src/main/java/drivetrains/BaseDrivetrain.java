@@ -134,23 +134,29 @@ public abstract class BaseDrivetrain<T extends BaseDrivetrainConstants<T>> {
             if (brMotor != null) { newBrPower = brPower / max * constants.maxPower; }
         }
 
-        // Write to motors only if the change exceeds the tolerance
-        if (Math.abs(newFlPower - lastFlPower) > POWER_TOLERANCE) {
+        // Always honor zero commands and lowered limits, even inside the write tolerance.
+        if (shouldWritePower(newFlPower, lastFlPower)) {
             flMotor.setPower(newFlPower);
             lastFlPower = newFlPower;
         }
-        if (Math.abs(newFrPower - lastFrPower) > POWER_TOLERANCE) {
+        if (shouldWritePower(newFrPower, lastFrPower)) {
             frMotor.setPower(newFrPower);
             lastFrPower = newFrPower;
         }
-        if (blMotor != null && Math.abs(newBlPower - lastBlPower) > POWER_TOLERANCE) {
+        if (blMotor != null && shouldWritePower(newBlPower, lastBlPower)) {
             blMotor.setPower(newBlPower);
             lastBlPower = newBlPower;
         }
-        if (brMotor != null && Math.abs(newBrPower - lastBrPower) > POWER_TOLERANCE) {
+        if (brMotor != null && shouldWritePower(newBrPower, lastBrPower)) {
             brMotor.setPower(newBrPower);
             lastBrPower = newBrPower;
         }
+    }
+
+    private boolean shouldWritePower(double requested, double previous) {
+        return Math.abs(requested - previous) > POWER_TOLERANCE
+                || requested == 0.0 && previous != 0.0
+                || Math.abs(previous) > constants.maxPower;
     }
 
     /** Stop all drivetrain actuators */

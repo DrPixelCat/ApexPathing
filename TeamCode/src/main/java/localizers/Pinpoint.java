@@ -61,6 +61,23 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         resetKinematicEstimate(newPose);
     }
 
+    public int[] getPodTicks() { return new int[]{pinpoint.encoderX, pinpoint.encoderY}; }
+    public boolean isSetupSampleValid() { return pinpoint.deviceStatus == 1; }
+
+    @Override public PodCalibrationReading[] getPodCalibrationReadings() {
+        double ticksPerMm = config.customEncoderResolution.getIn() == 0
+                ? (config.encoderResolution == GoBildaPods.goBILDA_SWINGARM_POD ? 13.26291192 : 19.89436789)
+                : config.customEncoderResolution.getMm();
+        // Encoder registers are raw; apply the configured directions before converting travel.
+        double xSign = config.xPodDirection == EncoderDirection.REVERSED ? -1 : 1;
+        double ySign = config.yPodDirection == EncoderDirection.REVERSED ? -1 : 1;
+        return new PodCalibrationReading[]{
+                new PodCalibrationReading("x_pod_offset", pinpoint.encoderX * xSign / ticksPerMm / 25.4,
+                        config.offsets.getX().getIn(), -1),
+                new PodCalibrationReading("y_pod_offset", pinpoint.encoderY * ySign / ticksPerMm / 25.4,
+                        config.offsets.getY().getIn(), 1)};
+    }
+
     /** Configuration class for goBILDA Pinpoint localizer. */
     public static class Constants implements BaseLocalizerConstants<Constants> {
         public String name;
@@ -141,7 +158,8 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
     public static class Driver extends I2cDeviceSynchDevice<I2cDeviceSynchSimple> {
         final int POSITION_CORRUPT_THRESHOLD = 5000; // Millimeters (bigger than standard and CRI field)
         final int HEADING_CORRUPT_THRESHOLD = 120; // Rad
-        final int VELOCITY_CORRUPT_THRESHOLD = 1000; // Millimeters/s (a robot can't move this fast.... right?)
+        // 1000 mm/s is only 39.4 in/s and rejects ordinary characterization speeds.
+        final int VELOCITY_CORRUPT_THRESHOLD = 10000; // Millimeters/s; generous corruption guard
         final int HEADING_VELOCITY_CORRUPT_THRESHOLD = 15; // Rad/s
 
         private final GeometryFactory geometryFactory = new GeometryFactory()
@@ -151,6 +169,8 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         private Pose velocity = geometryFactory.pose();
 
         private int loopTime = 0;
+        private int encoderX, encoderY;
+        private int deviceStatus;
 
         private static final float goBILDA_SWINGARM_POD = 13.26291192f; // goBILDA Swingarm Pod TPM
         private static final float goBILDA_4_BAR_POD = 19.89436789f; // goBILDA 4 Bar Pod TPM
@@ -293,7 +313,10 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
         public void update() {
 
             byte[] bArr = deviceClient.read(Register.BULK_READ.bVal, 40);
+            deviceStatus = byteArrayToInt(Arrays.copyOfRange(bArr, 0, 4), ByteOrder.LITTLE_ENDIAN);
             loopTime = byteArrayToInt(Arrays.copyOfRange(bArr, 4, 8), ByteOrder.LITTLE_ENDIAN);
+            encoderX = byteArrayToInt(Arrays.copyOfRange(bArr, 8, 12), ByteOrder.LITTLE_ENDIAN);
+            encoderY = byteArrayToInt(Arrays.copyOfRange(bArr, 12, 16), ByteOrder.LITTLE_ENDIAN);
 
             pose = geometryFactory.pose(
                     isPositionCorrupt(
@@ -339,8 +362,8 @@ public class Pinpoint extends BaseLocalizer<Pinpoint.Constants> {
          * @param offset a Vector containing the X and Y offsets of the odometry pods
          */
         public void setOffsets(Vector offset) {
-            writeFloat(Register.X_POD_OFFSET, (float) offset.getX().getM());
-            writeFloat(Register.Y_POD_OFFSET, (float) offset.getY().getM());
+            writeFloat(Register.X_POD_OFFSET, (float) offset.getX().getMm());
+            writeFloat(Register.Y_POD_OFFSET, (float) offset.getY().getMm());
         }
 
         /**
