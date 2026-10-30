@@ -9,7 +9,7 @@ import config.ApexConstants;
 import drivetrains.BaseDrivetrain;
 import drivetrains.DualActuated;
 import feedforward.CenteredBrakingFeedforward;
-import geometry.Pose;
+import paths.geometry.Pose;
 import java.util.function.LongSupplier;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;

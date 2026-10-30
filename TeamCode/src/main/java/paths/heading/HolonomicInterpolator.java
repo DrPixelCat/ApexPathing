@@ -1,8 +1,8 @@
 package paths.heading;
 
-import geometry.Angle;
-import geometry.CubicSpline1D;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.CubicSpline1D;
+import paths.geometry.Vector;
 
 /**
  * Calculates heading profiles allowing independent rotational control.

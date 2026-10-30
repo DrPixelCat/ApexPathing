@@ -1,8 +1,6 @@
 package paths;
 
-import com.qualcomm.robotcore.util.Range;
-
-import geometry.Angle;
+import paths.geometry.Angle;
 
 /**
  * A unified callback container capable of handling either distance-based progress triggers

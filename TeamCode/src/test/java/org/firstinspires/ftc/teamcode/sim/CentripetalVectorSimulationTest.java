@@ -2,13 +2,16 @@ package org.firstinspires.ftc.teamcode.sim;
 
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.Vector;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.json.JSONObject;
 import org.junit.Test;
-import tuning.follower.TunerContext;
-import tuning.follower.centripetal.CentripetalPhase;
+
+import paths.geometry.Angle;
+import setup.follower.TunerContext;
+import setup.follower.centripetal.CentripetalPhase;
 import trajectory.TrajectorySample;
 import paths.movements.Path;
 import java.lang.reflect.Field;
@@ -49,8 +52,8 @@ public class CentripetalVectorSimulationTest {
                 Field field = CentripetalPhase.class.getDeclaredField(name); field.setAccessible(true);
                 Path arc = (Path) field.get(phase);
                 for (double t : new double[]{0, .25, .5, .75, .95, 1}) {
-                    geometry.PathPoint point = arc.getParametricPath().getPointAtDistance(t * arc.getParametricPath().getLengthIn());
-                    geometry.Angle heading = arc.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(),
+                    PathPoint point = arc.getParametricPath().getPointAtDistance(t * arc.getParametricPath().getLengthIn());
+                    Angle heading = arc.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(),
                             point.getFirstDerivative(), arc.getParametricPath().getFirstDerivative(1));
                     Vector body = point.getFirstDerivative().normalize().rotate(heading.times(-1));
                     assertEquals("Tuner heading must stay aligned with travel on " + name, 0, body.getY().getIn(), 1e-9);

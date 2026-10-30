@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode.sim;
 
 import feedforward.MecanumWheelModel;
+import paths.geometry.Angle;
+
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.junit.Test;
 import java.io.*;
@@ -114,7 +116,7 @@ public class VelocityFeedbackExperimentTest {
                 double correction=(mode==3?model.gain*continuous.powerGain(RATE/model.gain,model.gain):RATE)*error;
                 double ax=nominal[2]+correction;
                 double ay=-8*vy;
-                double alpha=nominal[4]+4*geometry.Angle.wrap(nominal[5]-heading)+8*(nominal[3]-omega);
+                double alpha=nominal[4]+4* Angle.wrap(nominal[5]-heading)+8*(nominal[3]-omega);
                 double lead=Math.max(0,dt/2-.0025);
                 double h=heading+omega*lead,c=Math.cos(h),s=Math.sin(h);
                 double vxPreview=v+ax*lead,vyPreview=vy+ay*lead;

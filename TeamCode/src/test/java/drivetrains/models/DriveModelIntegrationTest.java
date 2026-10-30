@@ -4,10 +4,15 @@ import feedforward.MotionPowerCalculator;
 import feedforward.MotionCharacterization;
 import feedforward.MotorPowerModel;
 import follower.FollowerConstants;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import paths.builders.HolonomicPathBuilder;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import trajectory.generators.PathProfileGenerator;
@@ -37,7 +42,7 @@ public class DriveModelIntegrationTest {
             for(DriveModel model:new DriveModel[]{DriveModels.mecanum(c),DriveModels.swerve(c),DriveModels.omni(c)}) {
                 for(int i=0;i<300;i++) {
                     double theta=random.nextDouble()*2*Math.PI;
-                    Vector body=Vector.of(Math.cos(theta),Math.sin(theta),DistUnit.IN);
+                    Vector body=Vector.of(Math.cos(theta),Math.sin(theta), DistUnit.IN);
                     double v=random.nextDouble()*100-50,a=random.nextDouble()*160-80;
                     double omega=random.nextDouble()*6-3,alpha=random.nextDouble()*20-10,curvature=random.nextDouble()*.08-.04;
                     MotionPowerCalculator.Output power=model.powerCalculator().calculate(body,v,a,omega,alpha,curvature*v*v);

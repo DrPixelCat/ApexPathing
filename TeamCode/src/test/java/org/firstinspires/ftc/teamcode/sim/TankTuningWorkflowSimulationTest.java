@@ -12,8 +12,8 @@ import org.junit.Test;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import tuning.follower.TunerContext;
-import tuning.follower.sysid.FeedforwardTuner;
+import setup.follower.TunerContext;
+import setup.follower.sysid.FeedforwardTuner;
 import static org.junit.Assert.*;
 
 /** Runs actual tuner state machines in sequence, then validates their output on the tank route. */

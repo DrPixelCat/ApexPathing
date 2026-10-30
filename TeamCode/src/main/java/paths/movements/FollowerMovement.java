@@ -3,7 +3,7 @@ package paths.movements;
 import java.util.ArrayList;
 import java.util.List;
 
-import geometry.Pose;
+import paths.geometry.Pose;
 import paths.Callback;
 
 /**

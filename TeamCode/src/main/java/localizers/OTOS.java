@@ -11,10 +11,10 @@ import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
 
-import geometry.Pose;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 
 /**
  * SparkFun OTOS (Optical Tracking Odometry Sensor) localizer with a custom driver class

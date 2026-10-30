@@ -2,9 +2,9 @@ package drivetrains.models;
 
 import drivetrains.Mecanum;
 import follower.FollowerConstants;
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 
 /** Direction is robot-relative: zero is forward, positive pi/2 is left.
  * Providers must be hardware-independent. Recreate them for each settings snapshot. */

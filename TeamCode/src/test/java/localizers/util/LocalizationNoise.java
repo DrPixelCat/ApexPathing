@@ -1,9 +1,9 @@
 package localizers.util;
 
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import java.util.Random;
 
 /** Test-only seeded sensor noise. Simulator ground truth and production localizers remain untouched. */

@@ -4,7 +4,7 @@ import config.ApexConstants;
 import drivetrains.BaseDrivetrainConstants;
 import drivetrains.Motor;
 import drivetrains.Tank;
-import geometry.DistUnit;
+import paths.geometry.DistUnit;
 import localizers.BaseLocalizerConstants;
 import localizers.Pinpoint;
 

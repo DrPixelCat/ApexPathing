@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.Angle;
 import util.DeltaTime;
 
 import static org.junit.Assert.assertEquals;
@@ -38,15 +39,15 @@ import drivetrains.DualActuated;
 import drivetrains.Mecanum;
 import drivetrains.Motor;
 import drivetrains.Tank;
-import geometry.DistUnit;
-import geometry.Pose;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import localizers.Pinpoint;
 import localizers.util.LocalizationNoise;
 import localizers.util.PoseEstimator;
-import tuning.localizer.calibration.CalibrationCandidate;
-import tuning.localizer.LocalizationTunerContext;
+import setup.localization.calibration.CalibrationCandidate;
+import setup.localization.LocalizationTunerContext;
 
 /** End-to-end simulator coverage for every phase of the localization-tuning workflow. */
 public class LocalizationTunerWorkflowTest {
@@ -217,7 +218,7 @@ public class LocalizationTunerWorkflowTest {
             assertEquals("ACCEPTED", steps.getString("FORWARD"));
             assertEquals("ACCEPTED", steps.getString("STRAFE"));
             assertEquals("ACCEPTED", steps.getString("ROTATION"));
-            JSONObject geometry = setup.getJSONObject("geometry");
+            JSONObject geometry = setup.getJSONObject("paths/geometry");
             assertEquals(Pinpoint.EncoderDirection.FORWARD.name(),
                     geometry.getString("xPodDirection"));
             assertEquals(Pinpoint.EncoderDirection.FORWARD.name(),
@@ -368,7 +369,7 @@ public class LocalizationTunerWorkflowTest {
                     "Could not record Device 'imu' stopped returning orientation", 3_000L);
             assertContains(latestFrame(frames),
                     "Could not record Device 'imu' stopped returning orientation",
-                    "Stop the OpMode and run the phase again.");
+                    setup.WorkflowText.STOP_HINT);
             assertMotorsStopped(hardware);
             assertTrue("a failed recording must not create calibration",
                     !new File(storage, "localization.json").exists());
@@ -410,8 +411,8 @@ public class LocalizationTunerWorkflowTest {
             JSONObject setup = readSavedSetup(storage);
             assertEquals("ACCEPTED",
                     setup.getJSONObject("geometrySteps").getString("ROTATION"));
-            assertTrue(setup.getJSONObject("geometry").getDouble("xIn") > 0.0);
-            assertTrue(setup.getJSONObject("geometry").getDouble("yIn") < 0.0);
+            assertTrue(setup.getJSONObject("paths/geometry").getDouble("xIn") > 0.0);
+            assertTrue(setup.getJSONObject("paths/geometry").getDouble("yIn") < 0.0);
         } finally {
             SimLinearOpModeBridge.stop(session);
             restoreProperty(ApexStorage.DIRECTORY_PROPERTY, oldStorage);
@@ -620,7 +621,7 @@ public class LocalizationTunerWorkflowTest {
             assertEquals("Calibrated X", hardware.drivetrain.position.x - physicalX, measured.getX().getIn() - initial.getX().getIn(), 1.0);
             assertEquals("Calibrated Y", hardware.drivetrain.position.y - physicalY, measured.getY().getIn() - initial.getY().getIn(), 1.0);
             assertEquals("Calibrated heading", 0.0,
-                    geometry.Angle.wrap(measured.getHeading().getRad() - initial.getHeading().getRad()
+                    Angle.wrap(measured.getHeading().getRad() - initial.getHeading().getRad()
                             - hardware.drivetrain.position.theta + physicalHeading), .1);
         } finally { context.stop(); }
     }

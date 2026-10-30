@@ -1,6 +1,8 @@
 package follower;
 
 import feedforward.MotionCharacterization;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 import storage.ApexStorage;
 
 import org.json.JSONObject;
@@ -43,14 +45,14 @@ public class FollowerConstants {
                 Math.abs(characterizedPower(axis, -velocity, -acceleration, -legacy)));
     }
     /** Robot-relative axis powers; braking and legacy profiles keep their original vector. */
-    public geometry.Vector characterizedTranslation(geometry.Vector unitDirection, double velocity,
-                                                    double acceleration, geometry.Vector legacy) {
+    public Vector characterizedTranslation(Vector unitDirection, double velocity,
+                                           double acceleration, Vector legacy) {
         if (motionCharacterization == null || velocity * acceleration < -1e-6) { return legacy; }
         double x = unitDirection.getX().getIn(), y = unitDirection.getY().getIn();
-        return geometry.Vector.of(
+        return Vector.of(
                 characterizedPower(MotionCharacterization.Axis.FORWARD, velocity * x, acceleration * x, legacy.getX().getIn()),
                 characterizedPower(MotionCharacterization.Axis.STRAFE, velocity * y, acceleration * y, legacy.getY().getIn()),
-                geometry.DistUnit.IN);
+                DistUnit.IN);
     }
     /** Legacy pulse/coast settings retained for constants.json compatibility; profiled paths
      * now use signed acceleration feedforward and velocityFeedbackGain instead. */

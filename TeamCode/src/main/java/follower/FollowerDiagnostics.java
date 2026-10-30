@@ -1,6 +1,6 @@
 package follower;
 
-import geometry.Pose;
+import paths.geometry.Pose;
 import paths.movements.Path;
 
 /**

@@ -3,8 +3,8 @@ package paths.movements;
 import follower.FollowerConstants;
 import trajectory.profile.FFLut;
 import trajectory.generators.TurnProfileGenerator;
-import geometry.Angle;
-import geometry.Pose;
+import paths.geometry.Angle;
+import paths.geometry.Pose;
 import paths.Callback;
 
 /**

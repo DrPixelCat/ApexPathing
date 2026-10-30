@@ -9,11 +9,11 @@ import org.codeblooded.ftcodesim.hardware.drivetrain.SimulatedDrivetrain;
 import java.lang.reflect.Array;
 import java.lang.reflect.Proxy;
 
-import geometry.Angle;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import localizers.Pinpoint;
 import localizers.util.LocalizationNoise;
 

@@ -2,14 +2,16 @@ package trajectory;
 
 import follower.FollowerConstants;
 import drivetrains.BaseDrivetrain;
+import paths.geometry.BSpline;
+import paths.geometry.PathPoint;
 import trajectory.profile.CoupledMotionProfile;
 import trajectory.profile.MotionParameters;
-import geometry.AngleUnit;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
-import geometry.PathSegment;
-import geometry.Vector;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathSegment;
+import paths.geometry.Vector;
 import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
@@ -92,7 +94,7 @@ public class TrajectoryTest {
                 geometry.arcPose(30, -30, 7), geometry.pose(-30, -30)).quickBuild();
         OnlineTrajectoryPlanner planner = new OnlineTrajectoryPlanner(path, constants);
         for (double distance : new double[]{24.1, 27.7, 30.3, 52.8, 58.4}) {
-            geometry.PathPoint point = path.getParametricPath().getPointAtDistance(distance);
+            PathPoint point = path.getParametricPath().getPointAtDistance(distance);
             Vector tangent = point.getFirstDerivative().normalize();
             Vector normal = PathSegment.calculateLeftNormal(tangent);
             Vector measured = tangent.times(12).plus(normal.times(7));
@@ -127,9 +129,9 @@ public class TrajectoryTest {
             int reconstructedPoints;
             boolean reconstructedConstraint;
             CountingSegment() {
-                super(new geometry.BSpline(new Vector[]{vec(0, 0), vec(100, 0)}));
+                super(new BSpline(new Vector[]{vec(0, 0), vec(100, 0)}));
             }
-            @Override public geometry.PathPoint getPointAtDistance(double distance) {
+            @Override public PathPoint getPointAtDistance(double distance) {
                 reconstructedPoints++;
                 if (Math.abs(distance - .31 * getLengthIn()) < 1e-6) { reconstructedConstraint = true; }
                 return super.getPointAtDistance(distance);
@@ -145,7 +147,7 @@ public class TrajectoryTest {
             segment.reconstructedConstraint = false;
             TrajectorySample target = planner.sample(vec(progress, 0), vec(20, 0), .02);
             int expected = 4; // Exact start, midpoint, end, and the authored transition at 31 inches.
-            for (geometry.PathPoint point : segment.getPointLUT()) {
+            for (PathPoint point : segment.getPointLUT()) {
                 double distance = segment.getLengthIn() - point.getDistanceToEndIn();
                 if (distance > progress + 1e-6 && distance < progress + 20 - 1e-6
                         && Math.abs(distance - (progress + 10)) > 1e-9 && Math.abs(distance - 31) > 1e-9) { expected++; }

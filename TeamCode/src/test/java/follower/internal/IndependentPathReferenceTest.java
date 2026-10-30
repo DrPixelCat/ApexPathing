@@ -2,8 +2,12 @@ package follower.internal;
 
 import follower.FollowerConstants;
 
-import geometry.*;
 import org.junit.Test;
+
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Vector;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import trajectory.TrajectorySample;
@@ -23,7 +27,7 @@ public class IndependentPathReferenceTest {
                 new MotionParameters(4,-4,0,0,2).setTimeSeconds(1),
                 new MotionParameters(0,0,0,0,4).setTimeSeconds(2)}));
         FollowerPathState state=new FollowerPathState();state.prepare(path, path.getPlanningConstants());
-        state.target(path,Vector.zero(),Vector.zero(),0,1_000_000_000L,true);
+        state.target(path, Vector.zero(),Vector.zero(),0,1_000_000_000L,true);
         // Exercise the time reference with valid loop intervals; DeltaTime rejects gaps over .1s.
         TrajectorySample moved = null;
         for (int tick = 1; tick <= 5; tick++) moved = state.target(path,

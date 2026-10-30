@@ -1,7 +1,7 @@
 package paths.heading;
 
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /**
  * Calculates heading profiles strictly constrained to the path tangent.

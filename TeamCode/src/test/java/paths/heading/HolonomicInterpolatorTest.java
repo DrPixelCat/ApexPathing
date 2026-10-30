@@ -4,9 +4,9 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 
 public class HolonomicInterpolatorTest {
     @Test

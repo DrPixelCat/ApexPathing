@@ -2,10 +2,10 @@ package localizers;
 
 import org.json.JSONObject;
 
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 
 /** Package-private JSON helpers shared by built-in localizer configurations. */
 final class CalibrationJson {

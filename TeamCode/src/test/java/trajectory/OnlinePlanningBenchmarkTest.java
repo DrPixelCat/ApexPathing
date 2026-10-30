@@ -2,12 +2,18 @@ package trajectory;
 
 import follower.FollowerConstants;
 import drivetrains.BaseDrivetrain;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import paths.builders.HolonomicPathBuilder;
 import paths.constraint.PathConstraint;
 import paths.constraint.TranslationalConstraint;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import java.nio.charset.StandardCharsets;

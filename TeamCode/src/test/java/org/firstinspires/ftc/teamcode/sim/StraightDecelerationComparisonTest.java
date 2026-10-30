@@ -5,6 +5,8 @@ import static org.junit.Assert.assertTrue;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import config.ApexConstants;
+import paths.geometry.DistUnit;
+import paths.geometry.PathPoint;
 import storage.ApexStorage;
 import follower.Follower;
 import follower.FollowerConstants;
@@ -12,11 +14,11 @@ import drivetrains.BaseDrivetrainConstants;
 import drivetrains.Mecanum;
 import drivetrains.Motor;
 import trajectory.profile.MotionParameters;
-import geometry.Angle;
-import geometry.Dist;
-import geometry.GeometryFactory;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
@@ -349,7 +351,7 @@ public class StraightDecelerationComparisonTest {
     }
 
     private static MotionParameters[] knots(Path path) {
-        geometry.PathPoint[] points = path.getGeneratedPoints();
+        PathPoint[] points = path.getGeneratedPoints();
         MotionParameters[] knots = new MotionParameters[points.length];
         for (int i = 0; i < knots.length; i++) knots[i] = path.getFeedforwardLut().getFFParams(
                 path.getParametricPath().getLengthIn() - points[i].getDistanceToEndIn());
@@ -512,9 +514,9 @@ public class StraightDecelerationComparisonTest {
         void sample(double dt, int frame) {
             double measured = bench.speed() + (sensorCase == 2 ? .2 * Math.sin(frame * 1.71) : 0);
             filtered += (sensorCase == 0 ? 1 : 1 - Math.exp(-dt / .04)) * (measured - filtered);
-            pose = new Pose(Vector.of(bench.x, 0, geometry.DistUnit.IN), Angle.zero());
-            velocity = new Pose(Vector.of(filtered, 0, geometry.DistUnit.IN), Angle.zero());
-            rawVelocity = new Pose(Vector.of(measured, 0, geometry.DistUnit.IN), Angle.zero());
+            pose = new Pose(Vector.of(bench.x, 0, DistUnit.IN), Angle.zero());
+            velocity = new Pose(Vector.of(filtered, 0, DistUnit.IN), Angle.zero());
+            rawVelocity = new Pose(Vector.of(measured, 0, DistUnit.IN), Angle.zero());
         }
         @Override public void update() { }
         @Override public void setPose(Pose newPose) { bench.x = newPose.getX().getIn(); pose = newPose; }

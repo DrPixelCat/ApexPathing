@@ -1,8 +1,8 @@
 package follower.internal;
 
 import feedforward.MecanumWheelModel;
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 import trajectory.TrajectorySample;
 
 /** Stateful inverse-wheel preview and pulse compensation, isolated from path tracking feedback. */

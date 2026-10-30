@@ -1,12 +1,10 @@
 package localizers;
 
-import util.DeltaTime;
-
-import geometry.Angle;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import localizers.util.AdaptiveKalmanFilter;
 import localizers.util.DataFilter;
 import localizers.util.FilterState;
@@ -60,7 +58,6 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     /** History shared by pose-derived and native-velocity localizers. */
     private Pose prevPose = Pose.zero();
     private Pose prevRawVelocity = Pose.zero();
-    private final DeltaTime timing = new DeltaTime();
     private long lastMeasurementTimeNanos = -1;
     private boolean lastMeasurementValid;
 
@@ -222,23 +219,23 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
 
     /** Uses one acquisition timestamp for pose and derivative filters. */
     protected void calculate(UpdateType updateType, long currentTimeNs) {
+        long previousTimeNs = lastMeasurementTimeNanos;
         if (!acceptPoseSample(currentTimeNs, null)) { return; }
         markMeasurementValid(currentTimeNs);
 
-        if (!timing.isInitialized()) {
-            timing.reset(currentTimeNs);
+        if (previousTimeNs < 0) {
             prevPose = pose;
             return;
         }
 
-        double dt = timing.elapsed(currentTimeNs);
-        if (dt <= 1e-6) { return; }
+        // Sensor derivatives use the actual acquisition interval, including long gaps.
+        // A clamped controller interval can otherwise freeze raw velocity after a pause.
+        double dt = (currentTimeNs - previousTimeNs) * 1e-9;
 
         Pose delta = new Pose(pose.getVec().minus(prevPose.getVec()),
                 Angle.fromRad(Angle.wrap(pose.getHeading().getRad() - prevPose.getHeading().getRad())));
         applyVelocityMeasurement(delta.div(dt), updateType, dt, currentTimeNs);
         prevPose = pose;
-        timing.reset(currentTimeNs);
     }
 
     /**
@@ -251,25 +248,23 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
     }
 
     protected void calculate(Pose measuredVelocity, long currentTimeNs) {
+        long previousTimeNs = lastMeasurementTimeNanos;
         if (!PoseEstimator.finite(measuredVelocity)) { markMeasurementInvalid(); return; }
         if (!acceptPoseSample(currentTimeNs, measuredVelocity)) { return; }
         markMeasurementValid(currentTimeNs);
-        if (!timing.isInitialized()) {
+        if (previousTimeNs < 0) {
             rawVelocity = measuredVelocity;
             rawAcceleration = Pose.zero();
             applyFilterState(UpdateType.BOTH, currentTimeNs);
             prevPose = pose;
             prevRawVelocity = measuredVelocity;
-            timing.reset(currentTimeNs);
             return;
         }
 
-        double dt = timing.elapsed(currentTimeNs);
-        if (dt <= 1e-6) { return; }
+        double dt = (currentTimeNs - previousTimeNs) * 1e-9;
 
         applyVelocityMeasurement(measuredVelocity, UpdateType.BOTH, dt, currentTimeNs);
         prevPose = pose;
-        timing.reset(currentTimeNs);
     }
 
     private void applyVelocityMeasurement(Pose measuredVelocity, UpdateType updateType,
@@ -343,7 +338,6 @@ public abstract class BaseLocalizer<T extends BaseLocalizerConstants<T>> {
         rawAcceleration = Pose.zero();
         prevPose = newPose;
         prevRawVelocity = Pose.zero();
-        timing.reset();
         lastMeasurementTimeNanos = -1;
         lastMeasurementValid = false;
         xFilter.reset();

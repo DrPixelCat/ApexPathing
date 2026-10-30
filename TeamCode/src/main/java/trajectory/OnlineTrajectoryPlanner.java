@@ -2,8 +2,8 @@ package trajectory;
 
 import follower.FollowerConstants;
 import trajectory.generators.PathProfileGenerator;
-import geometry.PathSegment;
-import geometry.Vector;
+import paths.geometry.PathSegment;
+import paths.geometry.Vector;
 import paths.movements.Path;
 
 /**

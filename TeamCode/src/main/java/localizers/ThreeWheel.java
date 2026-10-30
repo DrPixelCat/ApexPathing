@@ -4,10 +4,11 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.json.JSONObject;
 
-import geometry.Angle;
-import geometry.Pose;
-import geometry.Vector;
-import geometry.DistUnit;
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
+import paths.geometry.DistUnit;
 
 /**
  * A localizer that uses three dead-wheel odometry pods (two parallel and one perpendicular).
@@ -44,7 +45,7 @@ public class ThreeWheel extends BaseLocalizer<ThreeWheel.Constants> {
         forwardLeftPod.update();
         forwardRightPod.update();
         strafePod.update();
-        double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
+        double oldYaw = pose.getHeading(AngleUnit.RAD);
         double deltaYaw = (forwardLeftPod.getDeltaInches() - forwardRightPod.getDeltaInches()) /
                 forwardOffsetIn;
         double yaw = Angle.normalize(oldYaw + deltaYaw);

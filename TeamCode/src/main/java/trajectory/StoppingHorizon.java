@@ -3,6 +3,7 @@ package trajectory;
 import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
 import drivetrains.models.DriveModel;
+import paths.geometry.Vector;
 import trajectory.profile.DynamicMotionProfile;
 import paths.movements.Path;
 
@@ -26,7 +27,7 @@ public final class StoppingHorizon {
             // Include custom directional acceleration limits and every circular wheel layout.
             for (int degrees=0;degrees<360;degrees++) {
                 double x=Math.cos(Math.toRadians(degrees)), y=Math.sin(Math.toRadians(degrees));
-                geometry.Vector body=TrajectorySample.vector(x,y);
+                Vector body=TrajectorySample.vector(x,y);
                 double speed=driveModel.maximumVelocity(body,0,0,c.angularVelLimitRad);
                 double acceleration=driveModel.maximumTangentialAcceleration(body);
                 double factor=driveModel.translationDemand(x,y);

@@ -19,8 +19,8 @@ import java.util.List;
 
 import storage.ApexStorage;
 import follower.Follower;
-import tuning.follower.TunerContext;
-import tuning.follower.acceleration.AccelerationFeedforwardPhase;
+import setup.follower.TunerContext;
+import setup.follower.acceleration.AccelerationFeedforwardPhase;
 
 import static org.junit.Assert.assertTrue;
 

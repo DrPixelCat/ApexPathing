@@ -3,7 +3,9 @@ package drivetrains.models;
 import feedforward.MotionPowerCalculator;
 import feedforward.MotionCharacterization.Axis;
 import follower.FollowerConstants;
-import geometry.Vector;
+import paths.geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
 
 /** Hardware-independent physical limits and reference power. Feedback and actuator state stay in followers.
  * Models bind to one settings object; use withConstants to take an independent planning snapshot. */
@@ -20,8 +22,8 @@ public abstract class DriveModel {
     public abstract double maximumVelocity(Vector bodyDirection, double curvature, double headingPrime, double maxAngularVelocity);
     public abstract double maximumTangentialAcceleration(Vector bodyDirection);
     /** Optional direct capability query for runtime tools and custom followers. */
-    public DirectionalLimits directionalLimits(geometry.Angle direction) {
-        Vector body = Vector.of(Math.cos(direction.getRad()),Math.sin(direction.getRad()),geometry.DistUnit.IN);
+    public DirectionalLimits directionalLimits(Angle direction) {
+        Vector body = Vector.of(Math.cos(direction.getRad()),Math.sin(direction.getRad()), DistUnit.IN);
         return new DirectionalLimits(maximumVelocity(body,0,0,constants.angularVelLimitRad),maximumTangentialAcceleration(body));
     }
     public abstract PowerEvaluator powerEvaluator(Vector bodyDirection, double curvature);

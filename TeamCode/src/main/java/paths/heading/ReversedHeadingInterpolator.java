@@ -1,7 +1,7 @@
 package paths.heading;
 
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /** Replays another heading interpolator over the same path in reverse traversal order. */
 public final class ReversedHeadingInterpolator implements HeadingInterpolator {

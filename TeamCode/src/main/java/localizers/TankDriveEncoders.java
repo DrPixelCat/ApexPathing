@@ -15,7 +15,7 @@ import java.util.function.IntSupplier;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import geometry.Pose;
+import paths.geometry.Pose;
 
 /**
  * Tank odometry using one or more drive encoders per side and IMU heading.

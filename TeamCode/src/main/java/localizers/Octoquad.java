@@ -19,12 +19,12 @@ import java.util.Locale;
 
 import org.json.JSONObject;
 
-import geometry.Angle;
-import geometry.AngleUnit;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 
 /**
  * Digital Chicken Labs Octoquad localizer

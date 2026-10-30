@@ -1,7 +1,7 @@
 package follower.internal;
 
 
-import geometry.Angle;
+import paths.geometry.Angle;
 import paths.Callback;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;

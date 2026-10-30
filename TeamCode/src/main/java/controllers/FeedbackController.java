@@ -6,8 +6,8 @@ import java.util.EnumSet;
 import java.util.Objects;
 import java.util.function.LongSupplier;
 
-import geometry.Angle;
-import geometry.Scalar;
+import paths.geometry.Angle;
+import paths.geometry.Scalar;
 
 /**
  * A composable feedback controller whose terms are selected with a fluent API.

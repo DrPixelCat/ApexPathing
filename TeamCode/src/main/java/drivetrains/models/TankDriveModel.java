@@ -3,7 +3,7 @@ package drivetrains.models;
 import follower.FollowerConstants;
 import feedforward.MotionPowerCalculator;
 import feedforward.MotionCharacterization.Axis;
-import geometry.Vector;
+import paths.geometry.Vector;
 
 /** Differential traction limits and signed forward/turn feedforward. */
 public final class TankDriveModel extends DriveModel {

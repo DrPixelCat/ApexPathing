@@ -4,8 +4,8 @@ import follower.FollowerConstants;
 import feedforward.MotionPowerCalculator;
 import feedforward.MecanumWheelModel;
 import feedforward.MotionCharacterization.Axis;
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /** Body-axis feedforward shared by mecanum, swerve, and circular omni drives. */
 public final class HolonomicDriveModel extends DriveModel {

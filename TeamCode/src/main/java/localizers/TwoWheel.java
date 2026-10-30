@@ -7,10 +7,10 @@ import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.json.JSONObject;
 
-import geometry.Angle;
-import geometry.Pose;
-import geometry.Vector;
-import geometry.DistUnit;
+import paths.geometry.Angle;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
+import paths.geometry.DistUnit;
 
 /**
  * A localizer that uses 2 dead wheel odometry pods (1 parallel and 1 perpendicular)
@@ -50,7 +50,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
         if (!Double.isFinite(imuYaw)) { markMeasurementInvalid(); return; }
         forwardPod.update();
         strafePod.update();
-        double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
+        double oldYaw = pose.getHeading(paths.geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
                 imuYaw - correction
         );
@@ -69,7 +69,7 @@ public class TwoWheel extends BaseLocalizer<TwoWheel.Constants> {
     @Override
     public void setPose(Pose newPose) {
         correction = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) -
-                newPose.getHeading(geometry.AngleUnit.RAD);
+                newPose.getHeading(paths.geometry.AngleUnit.RAD);
         pose = newPose;
         strafePod.reset();
         forwardPod.reset();

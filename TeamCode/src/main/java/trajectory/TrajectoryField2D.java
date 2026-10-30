@@ -2,8 +2,8 @@ package trajectory;
 
 import trajectory.profile.FFLut;
 import trajectory.profile.MotionParameters;
-import geometry.PathSegment;
-import geometry.Vector;
+import paths.geometry.PathSegment;
+import paths.geometry.Vector;
 import paths.movements.Path;
 
 /**

@@ -1,5 +1,9 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import util.DeltaTime;
 
 import static org.junit.Assert.assertFalse;
@@ -18,8 +22,8 @@ import storage.ApexStorage;
 import follower.Follower;
 import localizers.LocalizationConstants;
 import controllers.FeedbackController.Coefficients;
-import tuning.follower.sysid.FeedforwardTuner;
-import tuning.follower.TunerContext;
+import setup.follower.sysid.FeedforwardTuner;
+import setup.follower.TunerContext;
 
 /** Exercises four-test SysId identification and acceptance through the real tuner UI. */
 public class FeedforwardPhaseSimulationTest {
@@ -188,9 +192,9 @@ public class FeedforwardPhaseSimulationTest {
                 SimLinearOpModeBridge.stop(session);
                 session = null;
                 Follower follower = context.getFollower();
-                geometry.GeometryFactory factory = new geometry.GeometryFactory(follower)
-                        .setDistUnit(geometry.DistUnit.IN).setAngleUnit(geometry.AngleUnit.DEG);
-                geometry.Pose start = factory.pose(0, 0, 0);
+                GeometryFactory factory = new GeometryFactory(follower)
+                        .setDistUnit(DistUnit.IN).setAngleUnit(AngleUnit.DEG);
+                Pose start = factory.pose(0, 0, 0);
                 follower.setPose(start);
                 paths.movements.Path curve = factory.tankPath(start, factory.pose(18, 0),
                                 factory.pose(30, 6), factory.pose(36, 18, 45))

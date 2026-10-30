@@ -7,7 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import config.ApexConstants;
 import drivetrains.BaseDrivetrain;
 import drivetrains.DualActuated;
-import geometry.Pose;
+import paths.geometry.Pose;
 import java.util.function.LongSupplier;
 import paths.movements.Path;
 

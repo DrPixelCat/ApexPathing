@@ -2,12 +2,16 @@ package org.firstinspires.ftc.teamcode.sim;
 
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.AngleUnit;
-import geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.Pose;
 import drivetrains.BaseDrivetrain;
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
+
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 import storage.ApexStorage;
 import java.lang.reflect.*;
 import java.nio.file.*;
@@ -91,7 +95,7 @@ public class SysIdMethodComparisonTest {
             AtomicLong clock=new AtomicLong(1_000_000_000L);
             ((SimApexPinpoint)h.hardwareMap.get(localizers.Pinpoint.Driver.class,ApexSimulation.PINPOINT)).setClock(clock::get);
             Follower f=Follower.create(new Constants(),h.hardwareMap,true,clock::get);
-            f.setPose(new Pose(new geometry.Vector(geometry.Dist.fromIn(run%2==0?-55:55),geometry.Dist.fromIn(0)),geometry.Angle.zero()));
+            f.setPose(new Pose(new Vector(Dist.fromIn(run%2==0?-55:55), Dist.fromIn(0)), Angle.zero()));
             f.disableControllers(); f.update(false);
             double startX=h.drivetrain.position.x, travel=0, lastHeading=h.drivetrain.position.theta;
             double prevN=velocity(f.getLocalizer().getRawVel(),f.getLocalizer().getRawPose(),heading);
@@ -126,7 +130,7 @@ public class SysIdMethodComparisonTest {
         return heading?velocity.getHeading(AngleUnit.RAD):velocity.getVec().rotate(pose.getHeading().times(-1)).getX().getIn();
     }
     private static Gains joint(List<Window> data,boolean filtered,boolean heading) throws Exception {
-        Class<?> type=Class.forName("tuning.follower.sysid.SysIdRegression");
+        Class<?> type=Class.forName("setup.follower.sysid.SysIdRegression");
         Constructor<?> constructor=type.getDeclaredConstructor(); constructor.setAccessible(true);
         Object regression=constructor.newInstance();
         Method add=type.getDeclaredMethod("add",int.class,double.class,double.class,double.class,double.class); add.setAccessible(true);

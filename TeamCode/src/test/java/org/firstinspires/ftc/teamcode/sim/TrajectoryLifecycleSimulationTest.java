@@ -3,11 +3,12 @@ package org.firstinspires.ftc.teamcode.sim;
 import follower.Follower;
 import follower.FollowerConstants;
 import follower.FollowerDiagnostics;
+import paths.geometry.Pose;
 import trajectory.profile.CoupledMotionProfile;
-import geometry.AngleUnit;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.json.JSONObject;
 import org.junit.After;
@@ -77,7 +78,7 @@ public class TrajectoryLifecycleSimulationTest {
                 .setLookaheadDistance(Dist.fromIn(10)).setProfilePowerLimit(.01).quickBuild();
         final String[] failure = {null};
         Follower.setDiagnostics(new FollowerDiagnostics() {
-            @Override public void recordPose(geometry.Pose pose) { }
+            @Override public void recordPose(Pose pose) { }
             @Override public void recordCurrentPath(Path current) { }
             @Override public void clearCurrentPath() { }
             @Override public void recordTrajectoryFailure(String message) { failure[0] = message; }

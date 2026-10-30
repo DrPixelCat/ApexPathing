@@ -4,9 +4,9 @@ import trajectory.generators.PathProfileGenerator;
 
 import feedforward.MotionCharacterization;
 import follower.FollowerConstants;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
 import org.junit.Test;

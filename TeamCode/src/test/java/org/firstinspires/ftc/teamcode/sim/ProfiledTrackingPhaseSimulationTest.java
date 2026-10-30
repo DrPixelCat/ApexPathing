@@ -1,5 +1,8 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import util.DeltaTime;
 
 import com.qualcomm.robotcore.eventloop.opmode.SimLinearOpModeBridge;
@@ -21,8 +24,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import tuning.follower.TunerContext;
-import tuning.follower.tracking.ProfiledTrackingPhase;
+import setup.follower.TunerContext;
+import setup.follower.tracking.ProfiledTrackingPhase;
 
 import static org.junit.Assert.assertTrue;
 
@@ -88,8 +91,8 @@ public class ProfiledTrackingPhaseSimulationTest {
             assertTrue("A must not accept before new measurements", !complete.get());
 
             // The unlocked simulator stages the first trial at this field pose.
-            geometry.Pose courseStart = new geometry.GeometryFactory()
-                    .setDistUnit(geometry.DistUnit.IN).pose(-20.0, 20.0, 0.0);
+            Pose courseStart = new GeometryFactory()
+                    .setDistUnit(DistUnit.IN).pose(-20.0, 20.0, 0.0);
             runManualCourse(session, opMode, telemetry, hardware, frames,
                     "Single-corner path measured");
             assertTrue("First run should leave the starting point",
@@ -103,7 +106,9 @@ public class ProfiledTrackingPhaseSimulationTest {
                     "Single-corner path measured");
             assertTrue("Return run should end at the original starting point",
                     follower[0].getPose().getVec().minus(courseStart.getVec()).getMag().getIn() < 3.0);
-            assertTrue("Return run should preserve the original heading",
+            assertTrue("Return run should preserve the original heading; actual="
+                            + follower[0].getPose().getHeading().getDeg()
+                            + ", expected=" + courseStart.getHeading().getDeg(),
                     Math.abs(follower[0].getPose().getHeading()
                             .getShortestAngleTo(courseStart.getHeading()).getDeg()) < 5.0);
             File[] measuredCsv = directory.listFiles((dir, name) ->
@@ -202,19 +207,16 @@ public class ProfiledTrackingPhaseSimulationTest {
                                         LinearOpMode opMode, ApexSimTelemetry telemetry,
                                         ApexSimulation.Hardware hardware, List<String> frames,
                                         String measured) throws Exception {
-        for (int attempt = 0; attempt < 3; attempt++) {
-            opMode.gamepad1.x = true;
-            pump(session, opMode, telemetry, hardware, 40);
-            opMode.gamepad1.x = false;
-            pump(session, opMode, telemetry, hardware, 40);
-            long deadline = System.nanoTime() + 20_000_000_000L;
-            while (System.nanoTime() < deadline) {
-                String frame = latest(frames);
-                if (frame.contains(measured)) { return; }
-                if (frame.contains("No usable braking/corner samples")
-                        || frame.contains("Trial timed out")) { break; }
-                pump(session, opMode, telemetry, hardware, 20);
-            }
+        opMode.gamepad1.x = true;
+        pump(session, opMode, telemetry, hardware, 40);
+        opMode.gamepad1.x = false;
+        pump(session, opMode, telemetry, hardware, 40);
+        long deadline = System.nanoTime() + 20_000_000_000L;
+        while (System.nanoTime() < deadline) {
+            String frame = latest(frames);
+            if (frame.contains(measured)) { return; }
+            if (frame.contains("Tuning stopped")) { break; }
+            pump(session, opMode, telemetry, hardware, 20);
         }
         assertTrue("Timed out waiting for " + measured + ": " + latest(frames),
                 latest(frames).contains(measured));

@@ -4,11 +4,11 @@ package follower.internal;
 import controllers.DriveController;
 import controllers.FeedbackController;
 import drivetrains.BaseDrivetrain;
-import geometry.AngleUnit;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 
 /** Shared pose-holding math; the concrete follower selects the active kinematics. */
 final class PoseHoldController {

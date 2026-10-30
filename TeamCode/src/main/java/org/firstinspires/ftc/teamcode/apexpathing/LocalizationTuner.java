@@ -9,12 +9,12 @@ import config.ApexConstants;
 import localizers.LocalizationConstants;
 import drivetrains.DualActuated;
 import drivetrains.TranslationAxis;
-import tuning.localizer.phases.DistancePhase;
-import tuning.localizer.phases.DirectionsPhase;
-import tuning.localizer.phases.FilterPhase;
-import tuning.localizer.LocalizationTunerContext;
-import tuning.localizer.phases.SpinPhase;
-import tuning.localizer.TuningPhase;
+import setup.localization.phases.DistancePhase;
+import setup.localization.phases.DirectionsPhase;
+import setup.localization.phases.FilterPhase;
+import setup.localization.LocalizationTunerContext;
+import setup.localization.phases.SpinPhase;
+import setup.localization.TuningPhase;
 
 /**
  * Tunes localizer geometry and derivative filtering independently from follower control gains.
@@ -22,7 +22,7 @@ import tuning.localizer.TuningPhase;
  *
  * @author Joel H
  */
-@TeleOp(name = "Localization Tuner (Advanced)", group = "Apex Pathing")
+@TeleOp(name = "Localization Tuner", group = "Apex Pathing")
 public class LocalizationTuner extends LinearOpMode {
     private enum Phase {
         DIRECTIONS(DirectionsPhase::new),
@@ -51,10 +51,11 @@ public class LocalizationTuner extends LinearOpMode {
                 sleep(20);
             }
             while (opModeInInit()) {
-                telemetry.clearAll();
+                context.getView().clearAll();
                 context.addInterfaceHeader();
-                telemetry.addLine("Press Start to run the selected phase.");
-                telemetry.update();
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
+                context.getView().addLine("Press Start to run the selected phase.");
+                context.getView().update();
                 sleep(20);
             }
             while (opModeIsActive()) {
@@ -84,20 +85,21 @@ public class LocalizationTuner extends LinearOpMode {
 
     private void selectPhase() {
         context.update();
-        telemetry.clearAll();
+        context.getView().clearAll();
         context.addInterfaceHeader();
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
         if (context.getDrivetrain() instanceof DualActuated) {
-            telemetry.addLine("Dpad Left/Right: switch drivetrain mode.");
+            context.getView().addLine("Dpad Left/Right: switch drivetrain mode.");
             if (gamepad1.dpadLeftWasPressed() || gamepad1.dpadRightWasPressed()) {
                 context.toggleDualActuatedMode();
                 selectFirstApplicable();
             }
         }
-        telemetry.addLine("Choose a test");
-        telemetry.addLine("Dpad Up/Down: choose   A: select");
+        context.getView().addLine("Choose a test");
+        context.getView().addLine("Dpad Up/Down: choose   A: select");
         Phase[] phases = Phase.values();
-        telemetry.addLine(status(phases[selected]) + " " + display(phases[selected]) + " <");
-        telemetry.update();
+        context.getView().addLine(status(phases[selected]) + " " + display(phases[selected]) + " <");
+        context.getView().update();
 
         if (gamepad1.dpadUpWasPressed()) {
             selected = (selected - 1 + phases.length) % phases.length;

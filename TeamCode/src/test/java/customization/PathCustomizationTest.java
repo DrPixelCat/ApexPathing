@@ -2,11 +2,11 @@ package customization;
 
 import drivetrains.models.DriveModel;
 import follower.FollowerConstants;
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
-import geometry.ParametricSegment;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.ParametricSegment;
+import paths.geometry.Vector;
 import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;

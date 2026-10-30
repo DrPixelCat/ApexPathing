@@ -81,11 +81,11 @@ public class FollowerTunerTelemetryTest {
             assertTrue(idleFrame, !idleFrame.contains("Profile:"));
             assertTrue(idleFrame, idleFrame.trim().split("\\R").length <= 10);
             for (org.codeblooded.ftcodesim.hardware.devices.SimMotor motor : StockSimTestSupport.motors(hardware)) {
-                org.junit.Assert.assertEquals(-12, motor.config.motorModel.terms[1].calculate(12, .3, 13), 0);
+                org.junit.Assert.assertEquals(-12 * .3, motor.config.motorModel.terms[1].calculate(12, .3, 13), 1e-12);
             }
             java.lang.reflect.Field field = FollowerTuner.class.getDeclaredField("context");
             field.setAccessible(true);
-            tuning.follower.TunerContext context = (tuning.follower.TunerContext) field.get(tuner);
+            setup.follower.TunerContext context = (setup.follower.TunerContext) field.get(tuner);
             context.constants.translationalFeedforwardKS = .06;
             context.constants.translationalKV = .94 / 75;
             context.constants.translationalKA = .94 / 150;
@@ -138,7 +138,7 @@ public class FollowerTunerTelemetryTest {
             SimLinearOpModeBridge.stop(session); session = null;
             org.codeblooded.ftcodesim.hardware.devices.SimMotor[] motors = StockSimTestSupport.motors(hardware);
             for (int i = 0; i < motors.length; i++) {
-                org.junit.Assert.assertSame("Stop must restore the upstream motor term", originalTerms[i], motors[i].config.motorModel.terms[1]);
+                org.junit.Assert.assertSame("Tuning must preserve the upstream motor term", originalTerms[i], motors[i].config.motorModel.terms[1]);
             }
             org.junit.Assert.assertArrayEquals(saved,
                     java.nio.file.Files.readAllBytes(ApexStorage.getConstantsFile().toPath()));
@@ -214,7 +214,7 @@ public class FollowerTunerTelemetryTest {
             pump(session, tuner, telemetry, hardware, 80);
             java.lang.reflect.Field contextField = FollowerTuner.class.getDeclaredField("context");
             contextField.setAccessible(true);
-            tuning.follower.TunerContext pending = (tuning.follower.TunerContext) contextField.get(tuner);
+            setup.follower.TunerContext pending = (setup.follower.TunerContext) contextField.get(tuner);
             assertTrue("Manual edit should change the pending gain", pending.constants.translationalCoeffs.kP > 0.0);
             org.junit.Assert.assertEquals("Pending changes must not leak into shared settings",
                     0.0, constants.translationalCoeffs.kP, 0.0);
@@ -337,8 +337,8 @@ public class FollowerTunerTelemetryTest {
             // concurrently from the gamepad pump can expose partially updated sensor poses.
             java.lang.reflect.Field contextField = FollowerTuner.class.getDeclaredField("context");
             contextField.setAccessible(true);
-            tuning.follower.TunerContext original = (tuning.follower.TunerContext) contextField.get(tuner);
-            tuning.follower.TunerContext synchronizedContext = new tuning.follower.TunerContext(tuner) {
+            setup.follower.TunerContext original = (setup.follower.TunerContext) contextField.get(tuner);
+            setup.follower.TunerContext synchronizedContext = new setup.follower.TunerContext(tuner) {
                 private long previousPhysics = System.nanoTime();
                 @Override public void beginFrame() {
                     long now = System.nanoTime();

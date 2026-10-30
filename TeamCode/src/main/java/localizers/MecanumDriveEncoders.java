@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.json.JSONObject;
 
-import geometry.Angle;
-import geometry.Pose;
+import paths.geometry.Angle;
+import paths.geometry.Pose;
 
 /**
  * A localizer that uses 4 drive encoders and an IMU
@@ -68,7 +68,7 @@ public class MecanumDriveEncoders extends BaseLocalizer<MecanumDriveEncoders.Con
                 (-frontLeft.getDeltaInches() + frontRight.getDeltaInches() +
                         blDelta - brDelta) / 4.0;
 
-        double oldYaw = pose.getHeading(geometry.AngleUnit.RAD);
+        double oldYaw = pose.getHeading(paths.geometry.AngleUnit.RAD);
         double currentYaw = Angle.normalize(
                 imuYaw - correction
         );
@@ -88,7 +88,7 @@ public class MecanumDriveEncoders extends BaseLocalizer<MecanumDriveEncoders.Con
     @Override
     public void setPose(Pose newPose) {
         correction = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS) -
-                newPose.getHeading(geometry.AngleUnit.RAD);
+                newPose.getHeading(paths.geometry.AngleUnit.RAD);
         pose = newPose;
         frontLeft.reset();
         frontRight.reset();

@@ -2,9 +2,10 @@ package drivetrains.models;
 
 import drivetrains.Mecanum;
 import follower.FollowerConstants;
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Vector;
 import org.json.JSONObject;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -80,7 +81,7 @@ public class DirectionalKinematicsTest {
         FollowerConstants c=settings(); c.translationalKV=.01; c.translationalKA=.001;
         DriveModel model=DriveModels.swerve(c).withDirectionalKinematics(snapshot -> direction ->
                 new DirectionalLimits(60,Math.cos(direction.getRad()-Math.PI/4)>.999 ? 5 : 100));
-        geometry.GeometryFactory g=new geometry.GeometryFactory();
+        GeometryFactory g=new GeometryFactory();
         paths.movements.Path path=g.holonomicPath(g.pose(),g.pose(100,0)).setDriveModel(model).quickBuild();
         assertTrue(trajectory.StoppingHorizon.distance(c,path,1,model)>=1.5*60*60/(2*5)+.05*60-1e-5);
     }

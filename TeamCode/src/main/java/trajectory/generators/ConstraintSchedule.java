@@ -4,8 +4,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import paths.constraint.PathConstraint;
 import paths.movements.Path;
-import geometry.PathPoint;
-import geometry.PathSegment;
+import paths.geometry.PathPoint;
+import paths.geometry.PathSegment;
 
 /** Stable authored ordering and prefix limits, rebuilt only after a constraint mutation. */
 final class ConstraintSchedule {

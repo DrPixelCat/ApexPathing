@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.sim;
 import controllers.FeedbackController;
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.GeometryFactory;
+import paths.geometry.GeometryFactory;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import storage.ApexStorage;

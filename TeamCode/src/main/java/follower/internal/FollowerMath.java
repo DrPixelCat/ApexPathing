@@ -3,7 +3,7 @@ package follower.internal;
 import com.qualcomm.robotcore.util.Range;
 import controllers.FeedbackController;
 import feedforward.MotionPowerCalculator;
-import geometry.Vector;
+import paths.geometry.Vector;
 import paths.movements.FollowerMovement;
 import paths.movements.Path;
 

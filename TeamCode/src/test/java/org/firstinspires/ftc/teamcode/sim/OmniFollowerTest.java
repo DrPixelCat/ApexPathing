@@ -14,9 +14,9 @@ import drivetrains.Omni;
 import follower.Follower;
 import follower.FollowerConstants;
 import follower.drivetrains.OmniFollower;
-import geometry.Angle;
-import geometry.GeometryFactory;
-import geometry.Pose;
+import paths.geometry.Angle;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicLong;
@@ -25,6 +25,8 @@ import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import paths.geometry.Vector;
 import paths.movements.Path;
 import paths.movements.Turn;
 import storage.ApexStorage;
@@ -217,13 +219,13 @@ public class OmniFollowerTest {
             return new ReservedModel(settings,(drivetrains.models.HolonomicDriveModel)delegate.withConstants(settings));
         }
         @Override public boolean isHolonomic() { return true; }
-        @Override public double maximumVelocity(geometry.Vector body,double curvature,double prime,double angular) {
+        @Override public double maximumVelocity(Vector body, double curvature, double prime, double angular) {
             return delegate.maximumVelocity(body,curvature,prime,angular);
         }
-        @Override public double maximumTangentialAcceleration(geometry.Vector body) { return delegate.maximumTangentialAcceleration(body); }
+        @Override public double maximumTangentialAcceleration(Vector body) { return delegate.maximumTangentialAcceleration(body); }
         @Override public double translationDemand(double x,double y) { return 2*delegate.translationDemand(x,y); }
         @Override public double commandDemand(double x,double y,double turn) { return 2*delegate.commandDemand(x,y,turn); }
-        @Override public PowerEvaluator powerEvaluator(geometry.Vector body,double curvature) { return new PowerEvaluator(body,curvature) {}; }
+        @Override public PowerEvaluator powerEvaluator(Vector body, double curvature) { return new PowerEvaluator(body,curvature) {}; }
     }
 
     private static void assertStopped(Follower follower) {

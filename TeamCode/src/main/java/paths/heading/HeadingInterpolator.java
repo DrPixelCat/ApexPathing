@@ -1,7 +1,7 @@
 package paths.heading;
 
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /**
  * Defines the contract for calculating target heading profiles across different drivetrain

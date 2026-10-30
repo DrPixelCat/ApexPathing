@@ -13,16 +13,15 @@ import com.qualcomm.robotcore.util.TypeConversion;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
 
 import org.json.JSONObject;
 
-import geometry.Dist;
-import geometry.Pose;
-import geometry.Vector;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.Dist;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 
 /**
  * goBILDA Pinpoint Odometry Computer localizer (uses custom driver class)

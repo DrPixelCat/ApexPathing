@@ -2,8 +2,8 @@ package feedforward;
 
 import feedforward.MotionCharacterization.Axis;
 import follower.FollowerConstants;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 
 /** Pure reference-power calculation. Callers own the output; no sensors, feedback, or motor writes. */
 public final class MotionPowerCalculator {

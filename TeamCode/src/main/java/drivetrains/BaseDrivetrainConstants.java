@@ -2,8 +2,8 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import geometry.Angle;
-import geometry.Dist;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
 
 /**
  * Abstract class implemented by all drivetrain configuration classes

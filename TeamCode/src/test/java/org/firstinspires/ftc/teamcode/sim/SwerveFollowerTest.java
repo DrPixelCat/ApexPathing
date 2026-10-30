@@ -16,7 +16,7 @@ import follower.Follower;
 import follower.FollowerConstants;
 import follower.drivetrains.MecanumFollower;
 import follower.drivetrains.SwerveFollower;
-import geometry.GeometryFactory;
+import paths.geometry.GeometryFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;

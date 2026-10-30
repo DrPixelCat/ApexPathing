@@ -9,12 +9,10 @@ import org.junit.Test;
 
 import drivetrains.BaseDrivetrain;
 import drivetrains.BaseDrivetrainConstants;
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
-import localizers.BaseLocalizer;
-import localizers.BaseLocalizerConstants;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;

@@ -3,9 +3,10 @@ package follower.internal;
 import follower.Follower;
 import follower.FollowerConstants;
 
+import paths.geometry.PathPoint;
 import util.DeltaTime;
 
-import geometry.Vector;
+import paths.geometry.Vector;
 
 /** Mutable path-execution state shared by the path executors and Follower diagnostics. */
 final class FollowerPathState implements follower.FollowerTelemetry {
@@ -56,7 +57,7 @@ final class FollowerPathState implements follower.FollowerTelemetry {
     }
     private trajectory.TrajectorySample independentSample(paths.movements.Path path,Vector position,double seconds) {
             trajectory.profile.MotionParameters motion=independentReference.getKinematicParamsByTime(seconds);
-            geometry.PathPoint point=path.getParametricPath().getPointAtDistance(motion.getProgression());
+            PathPoint point=path.getParametricPath().getPointAtDistance(motion.getProgression());
             Vector end=path.getParametricPath().getFirstDerivative(1);
             double prime=path.getInterpolator().getHeadingFirstDerivative(point.getDistanceToEndIn(),point.getSignedCurvature(),end);
             double second=path.getInterpolator().getHeadingSecondDerivative(point.getDistanceToEndIn(),point.getCurvatureDerivative(),end);

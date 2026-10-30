@@ -1,6 +1,6 @@
 package paths.constraint;
 
-import geometry.Dist;
+import paths.geometry.Dist;
 
 /**
  * A constraint that applies to the robot's translational movement along a path, such as

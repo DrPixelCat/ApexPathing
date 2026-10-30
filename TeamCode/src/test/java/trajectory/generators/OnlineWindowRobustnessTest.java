@@ -2,12 +2,18 @@ package trajectory.generators;
 
 import drivetrains.BaseDrivetrain;
 import follower.FollowerConstants;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import paths.builders.PathBuilder;
 import paths.constraint.PathConstraint;
 import paths.constraint.TranslationalConstraint;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Pose;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import trajectory.OnlineTrajectoryPlanner;

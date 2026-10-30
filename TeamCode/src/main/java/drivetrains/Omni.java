@@ -1,7 +1,7 @@
 package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import geometry.Angle;
+import paths.geometry.Angle;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;

@@ -1,10 +1,14 @@
 package drivetrains.models;
 
 import follower.FollowerConstants;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import paths.builders.HolonomicPathBuilder;
+import paths.geometry.Angle;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 import trajectory.profile.MotionParameters;

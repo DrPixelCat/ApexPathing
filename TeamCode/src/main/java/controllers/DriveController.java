@@ -1,8 +1,8 @@
 package controllers;
 
-import geometry.Angle;
-import geometry.Dist;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.Vector;
 
 /**
  * Shared translational controller and holonomic power allocator.

@@ -2,8 +2,8 @@ package follower.internal;
 
 import follower.Follower;
 
-import geometry.PathSegment;
-import geometry.Pose;
+import paths.geometry.PathSegment;
+import paths.geometry.Pose;
 import localizers.BaseLocalizer;
 import paths.movements.Path;
 

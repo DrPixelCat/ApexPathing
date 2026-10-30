@@ -3,6 +3,8 @@ package localizers.util;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+import paths.geometry.Matrix;
+
 public class KalmanFilterTest {
 
     @Test public void covarianceValidationHandlesThreeStatePivotsAndRankDeficiency() {
@@ -60,10 +62,10 @@ public class KalmanFilterTest {
     }
 
     @Test public void acceptsRoundoffAsymmetryFromExternalCovariancePropagation() {
-        geometry.Matrix<Double> p = geometry.Matrix.of(new double[][] {
+        Matrix<Double> p = Matrix.of(new double[][] {
                 {1.7275636800328682, 0.06832234717598455},
                 {0.06832234717598455, 1.3087194553326598}});
-        geometry.Matrix<Double> f = geometry.Matrix.of(new double[][] {
+        Matrix<Double> f = Matrix.of(new double[][] {
                 {1, 0.27707849007413665}, {-0.246745923929066, 1}});
         double[][] propagated = f.multiply(p).multiply(f.transpose()).toDoubleArray();
         KalmanFilter filter = new KalmanFilter(2);

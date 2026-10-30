@@ -6,8 +6,8 @@ import controllers.DriveController;
 import controllers.DriveController.AllocatedCommand;
 import drivetrains.BaseDrivetrain;
 import drivetrains.Mecanum;
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /**
  * Allocates holonomic correction, propulsion, and velocity commands into one motor-power budget.

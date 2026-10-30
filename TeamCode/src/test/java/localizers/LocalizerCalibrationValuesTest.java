@@ -3,14 +3,14 @@ package localizers;
 import org.json.JSONObject;
 import org.junit.Test;
 
-import geometry.Angle;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import drivetrains.TranslationAxis;
-import tuning.localizer.LocalizerAdapter;
-import tuning.localizer.LocalizerAdapters;
+import setup.localization.LocalizerAdapter;
+import setup.localization.LocalizerAdapters;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

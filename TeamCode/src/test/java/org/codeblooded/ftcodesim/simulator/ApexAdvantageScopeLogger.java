@@ -7,12 +7,12 @@ import org.psilynx.psikit.core.wpi.math.Rotation2d;
 import java.util.concurrent.atomic.AtomicReference;
 
 import follower.FollowerDiagnostics;
-import geometry.Angle;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.PathPoint;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.PathPoint;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import paths.movements.Path;
 
 /** Publishes Apex follower geometry in AdvantageScope's FTC center/rotated coordinates. */

@@ -17,6 +17,7 @@ public final class FakeHardware extends HardwareMap {
     public double yaw;
 
     public FakeHardware() { super(null, null); }
+    public void register(String name, Object device) { devices.put(name, device); }
 
     @Override public <T> T get(Class<? extends T> type, String name) {
         return type.cast(devices.get(name));

@@ -12,17 +12,18 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.Arrays;
 
+import paths.geometry.Angle;
 import storage.ApexStorage;
 import config.ApexConstants;
 import follower.Follower;
 import follower.FollowerConstants;
 import trajectory.profile.MotionParameters;
-import geometry.GeometryFactory;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.PathSegment;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.GeometryFactory;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.PathSegment;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import paths.movements.Path;
 import paths.heading.InterpolationStyle;
 
@@ -479,7 +480,7 @@ public class AutoTest extends LinearOpMode {
         double kalmanVelocity = follower.getVelocity().getVec().dot(tangent).getIn();
         double targetHeading = sample.heading.getRad();
         double headingError = follower.getPose().getHeading().getShortestAngleTo(
-                geometry.Angle.fromRad(targetHeading)).getRad();
+                Angle.fromRad(targetHeading)).getRad();
         double crossTrackError = follower.getCrossTrackErrorIn();
         double curvature = segment.getSignedCurvature(t);
         Follower.CommandDemand demand = follower.getLastCommandDemand();

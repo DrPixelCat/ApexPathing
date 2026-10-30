@@ -9,17 +9,17 @@ import java.util.function.Predicate;
 import follower.Follower;
 import config.ApexConstants;
 import follower.FollowerConstants;
-import geometry.Pose;
-import tuning.follower.centripetal.CentripetalPhase;
+import paths.geometry.Pose;
+import setup.follower.centripetal.CentripetalPhase;
 
-import tuning.follower.feedback.DrivePhase;
-import tuning.follower.sysid.FeedforwardTuner;
-import tuning.follower.characterization.MotionCharacterizationPhase;
-import tuning.follower.feedback.HeadingPhase;
-import tuning.follower.limits.LimitsPhase;
-import tuning.follower.tracking.ProfiledTrackingPhase;
-import tuning.follower.TunerContext;
-import tuning.follower.TuningPhase;
+import setup.follower.feedback.DrivePhase;
+import setup.follower.sysid.FeedforwardTuner;
+import setup.follower.characterization.MotionCharacterizationPhase;
+import setup.follower.feedback.HeadingPhase;
+import setup.follower.limits.LimitsPhase;
+import setup.follower.tracking.ProfiledTrackingPhase;
+import setup.follower.TunerContext;
+import setup.follower.TuningPhase;
 
 /**
  * This OpMode is used to tune the Apex Pathing Follower. It allows the user to select a tuning
@@ -107,9 +107,10 @@ public class FollowerTuner extends LinearOpMode {
 
             while (opModeInInit() && isPhaseSelected) {
                 context.updateDebugMode(false);
-                telemetry.clearAll();
+                context.getView().clearAll();
                 context.addInterfaceHeader();
-                telemetry.addLine("Press Start to run the tuner.");
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
+                context.getView().addLine("Press Start to run the tuner.");
                 context.publishFrame(false);
                 sleep(20);
             }
@@ -165,21 +166,15 @@ public class FollowerTuner extends LinearOpMode {
     protected ApexConstants createConstants() { return new Constants(); }
 
     private boolean saveCurrentProfile() {
-        while (opModeIsActive()) {
-            context.beginFrame();
-            if (context.saveConstants()) { return true; }
-            context.getFollower().stop();
-            telemetry.addLine("Press A to retry saving. Stop to discard unsaved changes.");
-            context.publishFrame(false);
-            while (opModeIsActive()) {
-                if (gamepad1.aWasPressed()) { break; }
-                sleep(20);
-            }
-        }
+        context.beginFrame();
+        if (context.saveConstants()) { return true; }
+        context.getFollower().stop();
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
+        context.publishFrame(false);
+        while (opModeIsActive() && !isStopRequested()) { sleep(20); }
         return false;
     }
 
-    /** A reused simulator OpMode instance must always reopen at the phase picker. */
     private void resetPhaseSelection() {
         selectedPhaseOrdinal = null;
         phase = null;
@@ -212,10 +207,11 @@ public class FollowerTuner extends LinearOpMode {
     }
 
     private boolean phaseSelector() {
-        telemetry.clearAll();
+        context.getView().clearAll();
         context.addInterfaceHeader();
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
         if (context.getFollower().getDrivetrain() instanceof drivetrains.DualActuated) {
-            telemetry.addLine("Dpad Left/Right: choose TANK or HOLONOMIC profile.");
+            context.getView().addLine("Dpad Left/Right: choose TANK or HOLONOMIC profile.");
             if (gamepad1.dpadLeftWasPressed() || gamepad1.dpadRightWasPressed()) {
                 context.getFollower().stop();
                 drivetrains.DualActuated drive = (drivetrains.DualActuated) context.getFollower().getDrivetrain();
@@ -226,7 +222,7 @@ public class FollowerTuner extends LinearOpMode {
                 selectFirstIncompletePhase();
             }
             if (context.constants.hasUnassignedLegacy()) {
-                telemetry.addLine("Y: assign legacy values to " + context.constants.getActiveProfile());
+                context.getView().addLine("Y: assign legacy values to " + context.constants.getActiveProfile());
                 if (gamepad1.yWasPressed()) {
                     context.constants.assignLegacyToActiveProfile();
                     context.getFollower().reset();
@@ -236,12 +232,12 @@ public class FollowerTuner extends LinearOpMode {
                 }
             }
         }
-        telemetry.addLine("Select a tuning phase");
-        telemetry.addLine("Use Dpad Up and Down to choose a phase, then press A to select it.");
+        context.getView().addLine("Select a tuning phase");
+        context.getView().addLine("Use Dpad Up and Down to choose a phase, then press A to select it.");
 
         for (int i = 0; i < phaseAmount; i++) {
             String cursor = i == selectedPhaseOrdinal.ordinal() ? " <" : "";
-            telemetry.addLine(phaseStatus(phases[i]) + " " +
+            context.getView().addLine(phaseStatus(phases[i]) + " " +
                     phaseDisplayName(phases[i]) + cursor);
         }
 
@@ -288,18 +284,19 @@ public class FollowerTuner extends LinearOpMode {
     }
 
     private void finishTuningWorkflow() {
-        telemetry.clearAll();
+        context.getView().clearAll();
         context.addInterfaceHeader();
-        telemetry.addLine("Follower tuning complete for " + context.constants.getActiveProfile() + ".");
+        context.getView().addLine(setup.WorkflowText.STOP_HINT);
+        context.getView().addLine("Follower tuning complete for " + context.constants.getActiveProfile() + ".");
         if (context.getFollower().getDrivetrain() instanceof drivetrains.DualActuated) {
-            telemetry.addLine("Run this tuner again and select the other mode to tune it separately.");
+            context.getView().addLine("Run this tuner again and select the other mode to tune it separately.");
         }
 
         // FTCodeSim does not move its Driver Station out of RUNNING when a LinearOpMode calls
         // requestOpModeStop(). Keep the final lifecycle alive until the red Stop button is used.
         if (Boolean.getBoolean(UNLOCK_PHASES_PROPERTY)) {
-            telemetry.addLine("Press the red STOP button to finish this simulation.");
-            telemetry.update();
+            context.getView().addLine("Press the red STOP button to finish this simulation.");
+            context.getView().update();
             while (opModeIsActive()) {
                 context.updateDebugMode(false);
                 sleep(50);
@@ -307,7 +304,7 @@ public class FollowerTuner extends LinearOpMode {
             return;
         }
 
-        telemetry.update();
+        context.getView().update();
         requestOpModeStop();
     }
 }

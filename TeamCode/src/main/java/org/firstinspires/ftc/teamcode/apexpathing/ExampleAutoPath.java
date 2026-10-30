@@ -1,15 +1,15 @@
 package org.firstinspires.ftc.teamcode.apexpathing;
 
 import follower.Follower;
-import geometry.Angle;
-import geometry.Pose;
+import paths.geometry.Angle;
+import paths.geometry.Pose;
 import paths.heading.InterpolationStyle;
 import paths.builders.TurnBuilder;
 import paths.movements.Path;
 import paths.movements.Turn;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 
 public class ExampleAutoPath {
     private static final Pose startPose = Pose.zero();

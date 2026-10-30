@@ -6,12 +6,11 @@ import static org.junit.Assert.assertSame;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import geometry.Angle;
-import geometry.Dist;
-import geometry.GeometryFactory;
-import geometry.PathSegment;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathSegment;
+import paths.geometry.Vector;
 import org.junit.Test;
 import paths.constraint.PathConstraint;
 import paths.constraint.TranslationalConstraint;

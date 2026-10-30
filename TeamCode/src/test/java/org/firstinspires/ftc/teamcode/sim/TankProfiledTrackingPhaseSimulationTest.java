@@ -10,8 +10,8 @@ import follower.Follower;
 import follower.FollowerConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.FollowerTuner;
 import org.junit.Test;
-import tuning.follower.TunerContext;
-import tuning.follower.tracking.ProfiledTrackingPhase;
+import setup.follower.TunerContext;
+import setup.follower.tracking.ProfiledTrackingPhase;
 
 import java.io.InputStream;
 import java.nio.file.Files;

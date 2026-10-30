@@ -1,6 +1,6 @@
 package paths.heading;
 
-import geometry.Angle;
+import paths.geometry.Angle;
 
 /**
  * Represents a heading target at a specific percentage of the path.

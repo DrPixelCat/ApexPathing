@@ -9,12 +9,14 @@ import follower.FollowerConstants;
 import drivetrains.models.DriveModel;
 import drivetrains.models.DriveModel.PowerEvaluator;
 import feedforward.MotionCharacterization.Axis;
+import paths.geometry.Angle;
+import paths.geometry.PathSegment;
 import trajectory.profile.CoupledMotionProfile;
 import trajectory.profile.MotionParameters;
 import trajectory.profile.FFLut;
 import trajectory.VelocityPursuit;
-import geometry.PathPoint;
-import geometry.Vector;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import paths.constraint.PathConstraint;
 import paths.movements.Path;
 
@@ -39,10 +41,10 @@ public class PathProfileGenerator {
     private int lastWindowSampleCount;
     private ConstraintSchedule constraintSchedule;
     private long constraintRevision = Long.MIN_VALUE;
-    private geometry.PathSegment scheduledSegment;
+    private PathSegment scheduledSegment;
     private Sample[] cachedSamples;
     private final java.util.IdentityHashMap<PathPoint, Sample> cachedTransitionSamples = new java.util.IdentityHashMap<>();
-    private geometry.PathSegment cachedSegment;
+    private PathSegment cachedSegment;
     private paths.heading.HeadingInterpolator cachedInterpolator;
     private ConstraintSchedule cachedSchedule;
     private long cachedHeadingRevision;
@@ -102,7 +104,7 @@ public class PathProfileGenerator {
     }
 
     private final DriveModel driveModel;
-    private geometry.PathSegment straightSegment;
+    private PathSegment straightSegment;
     private boolean straightGeometry;
     public PathProfileGenerator(Path path) { this(path.getPlanningConstants(),path); }
     public PathProfileGenerator(Path path,DriveModel model) { this(model.getConstants(),path,model); }
@@ -121,7 +123,7 @@ public class PathProfileGenerator {
     }
     public DriveModel getDriveModel() { return driveModel; }
     private Vector bodyDirection(Path actual,PathPoint point) {
-        geometry.Angle heading=actual.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(),point.getFirstDerivative(),
+        Angle heading=actual.getInterpolator().getHeadingTarg(point.getDistanceToEndIn(),point.getFirstDerivative(),
                 actual.getParametricPath().getFirstDerivative(1));
         return point.getFirstDerivative().normalize().rotate(heading.times(-1));
     }
@@ -267,7 +269,7 @@ public class PathProfileGenerator {
     private WindowTarget generateWindowInternal(double startIn, double horizonIn, double measuredVelocity, double measuredOmega, double dt,
                                                 double previewSeconds, double pursuitSeconds) {
         Path actualPath = path;
-        geometry.PathSegment segment = actualPath.getParametricPath();
+        PathSegment segment = actualPath.getParametricPath();
         ConstraintSchedule schedule = constraints(actualPath);
         double start = Math.max(0, Math.min(segment.getLengthIn(), startIn));
         double end = Math.min(segment.getLengthIn(), start + horizonIn);
@@ -342,8 +344,8 @@ public class PathProfileGenerator {
     }
 
     /** Handle the degenerate window at the endpoint without entering the spatial solver. */
-    private WindowTarget endpointRecovery(Path actualPath, geometry.PathSegment segment, double start,
-            double measuredVelocity, double measuredOmega, double previewSeconds) {
+    private WindowTarget endpointRecovery(Path actualPath, PathSegment segment, double start,
+                                          double measuredVelocity, double measuredOmega, double previewSeconds) {
         lastWindowSampleCount = 1;
         if (Math.abs(measuredVelocity) < 1e-6 && (!Double.isFinite(measuredOmega) || Math.abs(measuredOmega) < 1e-6)) {
             return new WindowTarget(new MotionParameters(0, 0, 0, 0, start), false);
@@ -359,8 +361,8 @@ public class PathProfileGenerator {
     }
 
     /** Merge geometry, constraint transitions, and boundary samples into reusable window storage. */
-    private void prepareWindow(Path actualPath, geometry.PathSegment segment, ConstraintSchedule schedule,
-            double start, double end) {
+    private void prepareWindow(Path actualPath, PathSegment segment, ConstraintSchedule schedule,
+                               double start, double end) {
         PathPoint[] geometry = segment.getPointLUT();
         int low = 0, high = geometry.length;
         while (low < high) {
@@ -516,7 +518,7 @@ public class PathProfileGenerator {
         Vector finalTangent = actualPath.getParametricPath().getFirstDerivative(1);
         double length = Math.max(actualPath.getParametricPath().getLengthIn(), EPSILON);
         ConstraintSchedule schedule = constraints(actualPath);
-        geometry.PathSegment segment = actualPath.getParametricPath();
+        PathSegment segment = actualPath.getParametricPath();
         paths.heading.HeadingInterpolator interpolator = actualPath.getInterpolator();
         long headingRevision = interpolator.getConfigurationRevision();
         boolean cacheable = headingRevision >= 0 && actualPath.getConstraintRevision() >= 0 && cacheSolverSamples();

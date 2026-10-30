@@ -6,7 +6,9 @@ import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.firstinspires.ftc.teamcode.apexpathing.RobotSetup;
 import org.json.JSONObject;
 import org.junit.Test;
-import setup.*;
+
+import paths.geometry.DistUnit;
+import setup.hardware.*;
 import storage.ApexStorage;
 import localizers.BaseLocalizer;
 import localizers.LocalizationConstants;
@@ -32,7 +34,7 @@ public class RobotSetupSimulationTest {
             ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
             localizers.LocalizerSet localizers = new localizers.LocalizerSet(new Constants(), hardware.hardwareMap,
                     drivetrains.BaseDrivetrain.DrivetrainType.MECANUM, follower.FollowerConstants.Profile.DEFAULT);
-            ((localizers.Pinpoint.Constants) localizers.getConfig()).setOffsets(5, -3, geometry.DistUnit.IN);
+            ((localizers.Pinpoint.Constants) localizers.getConfig()).setOffsets(5, -3, DistUnit.IN);
             localizers.rebuildActive();
             localizers.getCalibration().capture("DEFAULT", localizers.getConfig(), localizers.getLocalizer(),
                     LocalizationConstants.Status.ACCEPTED, LocalizationConstants.Status.NEEDS_VALIDATION);
@@ -72,6 +74,14 @@ public class RobotSetupSimulationTest {
     }
 
     @Test(timeout = 20_000) public void gamepadSetupFlowRecordsDataAndStopDoesNotSaveADraft() throws Exception {
+        runSetupFlow(false);
+    }
+
+    @Test(timeout = 20_000) public void gamepadSetupRequiresANewConfirmationToSave() throws Exception {
+        runSetupFlow(true);
+    }
+
+    private void runSetupFlow(boolean save) throws Exception {
         String old = System.getProperty(ApexStorage.DIRECTORY_PROPERTY);
         File root = Files.createTempDirectory("apex-setup-ui-").toFile();
         System.setProperty(ApexStorage.DIRECTORY_PROPERTY, root.getAbsolutePath());
@@ -110,20 +120,25 @@ public class RobotSetupSimulationTest {
             opMode.gamepad1.x = false; pump(session, opMode, 80);
             assertEquals(0, motorPower[0], 0);
             for (int i = 0; i < 24 && latest(frames).contains("Setting "); i++) { pressA(session, opMode); }
-            await(session, opMode, frames, "Keep the robot still", 2000);
-            await(session, opMode, frames, "Begin movement", 5000);
-            pressA(session, opMode); await(session, opMode, frames, "Recording", 2000);
+            await(session, opMode, frames, "Save robot setup", 2000);
+            assertFalse("Finishing configuration must not save", new File(root, "robot-setup.json").exists());
+            if (save) {
+                pressA(session, opMode);
+                await(session, opMode, frames, "Robot setup saved", 2000);
+                assertNotNull(new SetupStore(root).load());
+            }
         } finally {
             SimLinearOpModeBridge.stop(session);
             restore(old);
         }
-        assertFalse(learning[0]); assertFalse(new File(root, "robot-setup.json").exists());
+        assertFalse(learning[0]); assertEquals(save, new File(root, "robot-setup.json").exists());
         assertEquals(0, motorPower[0], 0);
         File[] logs = new File(root, "logs").listFiles(); assertNotNull(logs); assertEquals(1, logs.length);
-        String motion = new String(Files.readAllBytes(new File(logs[0], "motion.csv").toPath()), StandardCharsets.UTF_8);
-        assertTrue(motion.contains("RECORDING:FORWARD"));
+        for (String table : new String[]{"motion", "pods", "kalman", "diagnostics", "measurements"}) {
+            assertFalse("Hardware setup must not collect " + table, new File(logs[0], table + ".csv").exists());
+        }
         String events = new String(Files.readAllBytes(new File(logs[0], "events.csv").toPath()), StandardCharsets.UTF_8);
-        assertTrue(events.contains("session_aborted"));
+        assertEquals(!save, events.contains("session_aborted"));
         assertTrue(events.contains("motor_test_started")); assertTrue(events.contains("motor_test_stopped"));
         for (String frame : frames) { assertFalse(frame.contains("R=")); assertFalse(frame.contains("raw_vx")); }
     }

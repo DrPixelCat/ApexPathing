@@ -3,11 +3,11 @@ package paths.builders;
 import java.util.ArrayList;
 import java.util.List;
 
-import geometry.Angle;
-import geometry.ArcPose;
-import geometry.PathSegment;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.ArcPose;
+import paths.geometry.PathSegment;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import paths.heading.InterpolationStyle;
 import paths.heading.TankInterpolator;
 import paths.movements.Path;

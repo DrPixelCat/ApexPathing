@@ -6,9 +6,10 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import drivetrains.Mecanum;
 import drivetrains.Omni;
 import drivetrains.Motor;
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
@@ -81,7 +82,7 @@ public class HolonomicCommandAllocatorTest {
     }
 
     private controllers.DriveController positionController() {
-        return new controllers.DriveController(geometry.Dist.fromIn(60), geometry.Dist.fromIn(30),
+        return new controllers.DriveController(Dist.fromIn(60), Dist.fromIn(30),
                 new controllers.FeedbackController.Coefficients(), false);
     }
 

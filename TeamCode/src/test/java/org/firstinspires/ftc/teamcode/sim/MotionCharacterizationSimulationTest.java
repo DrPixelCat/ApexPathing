@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.Pose;
 import util.DeltaTime;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -17,8 +18,8 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import tuning.follower.TunerContext;
-import tuning.follower.characterization.MotionCharacterizationPhase;
+import setup.follower.TunerContext;
+import setup.follower.characterization.MotionCharacterizationPhase;
 import static org.junit.Assert.*;
 
 /** Exercises the real acquisition phase with upstream stock motor/chassis physics. */
@@ -131,7 +132,7 @@ public class MotionCharacterizationSimulationTest {
     /** Independent imposed-speed probes use stock physics, never acquisition residual as validation. */
     private void validatePhysicalResponse(Follower follower, ApexSimulation.Hardware hardware,
                                          MotionCharacterization.Axis axis, double sign, MotorPowerModel model) {
-        follower.setPose(geometry.Pose.zero());
+        follower.setPose(Pose.zero());
         double squared = 0, peak = 0; int count = 0;
         for (double fraction : new double[]{.15, .5, .85}) {
             double speed = fraction * model.maxVelocity;

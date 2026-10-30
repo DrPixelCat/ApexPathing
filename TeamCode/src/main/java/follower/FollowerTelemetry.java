@@ -1,6 +1,6 @@
 package follower;
 
-import geometry.Vector;
+import paths.geometry.Vector;
 
 /**
  * Read-only live tracking telemetry owned by one follower. Read after update() on the OpMode thread.

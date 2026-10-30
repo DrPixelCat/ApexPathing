@@ -1,5 +1,9 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 import util.DeltaTime;
 
 import static org.junit.Assert.assertEquals;
@@ -40,8 +44,8 @@ import follower.FollowerDiagnostics;
 import trajectory.profile.MotionParameters;
 import controllers.FeedbackController.Coefficients;
 import drivetrains.BaseDrivetrain;
-import geometry.Pose;
-import geometry.GeometryFactory;
+import paths.geometry.Pose;
+import paths.geometry.GeometryFactory;
 import localizers.Pinpoint;
 import paths.movements.Path;
 
@@ -233,8 +237,8 @@ public class ApexSimulationTest {
         ApexSimulation.Hardware hardware = ApexSimulation.createHardware();
         Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         Pose requested = new Pose(
-                geometry.Vector.of(12.0, -8.0, geometry.DistUnit.IN),
-                geometry.Angle.fromDeg(30.0)
+                Vector.of(12.0, -8.0, DistUnit.IN),
+                Angle.fromDeg(30.0)
         );
 
         follower.setPose(requested);
@@ -406,8 +410,8 @@ public class ApexSimulationTest {
         follower.setVelocityFeedback(gain, 0.34);
 
         GeometryFactory factory = new GeometryFactory(follower)
-                .setDistUnit(geometry.DistUnit.IN)
-                .setAngleUnit(geometry.AngleUnit.DEG);
+                .setDistUnit(DistUnit.IN)
+                .setAngleUnit(AngleUnit.DEG);
         Pose start = factory.pose(-24, 0, 0);
         Pose end = factory.pose(24, 0, 0);
         paths.movements.Path outbound = factory.holonomicPath(start, end)
@@ -449,8 +453,8 @@ public class ApexSimulationTest {
         configureKnownFollowerConstants();
         Follower follower = Follower.create(new Constants(), hardware.hardwareMap);
         GeometryFactory factory = new GeometryFactory(follower)
-                .setDistUnit(geometry.DistUnit.IN)
-                .setAngleUnit(geometry.AngleUnit.DEG);
+                .setDistUnit(DistUnit.IN)
+                .setAngleUnit(AngleUnit.DEG);
         Pose start = factory.pose(-24, 0, 0);
         paths.movements.Turn turn = factory.turn(start)
                 .turnTo(factory.angle(90)).buildToMemory();
@@ -545,8 +549,8 @@ public class ApexSimulationTest {
         follower.setVelocityFeedback(0.0251, gain);
 
         GeometryFactory factory = new GeometryFactory(follower)
-                .setDistUnit(geometry.DistUnit.IN)
-                .setAngleUnit(geometry.AngleUnit.DEG);
+                .setDistUnit(DistUnit.IN)
+                .setAngleUnit(AngleUnit.DEG);
         Pose start = factory.pose(-24, 0, 0);
         Pose turned = factory.pose(-24, 0, 90);
         paths.movements.Turn outbound = factory.turn(start)
@@ -578,8 +582,8 @@ public class ApexSimulationTest {
         follower.setCentripetal(0.00664954474299773);
 
         GeometryFactory factory = new GeometryFactory(follower)
-                .setDistUnit(geometry.DistUnit.IN)
-                .setAngleUnit(geometry.AngleUnit.DEG);
+                .setDistUnit(DistUnit.IN)
+                .setAngleUnit(AngleUnit.DEG);
         Pose start = factory.pose(-32, -16, 0);
         Pose middle = factory.pose(32, -16, 0);
         Pose end = factory.pose(32, 16, 90);

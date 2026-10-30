@@ -25,8 +25,19 @@ public class MecanumFrictionModelTest {
                 System.out.printf("MOTOR TRANSITION: direction=%+.0f speed=%.0f "
                                 + "same=%+.2f zero=%+.2f opposite=%+.2f in/s^2%n",
                         direction, speed, same, zero, opposite);
-                assertTrue("Zero BRAKE jumps below same-direction duty", zero < same - 100);
-                assertEquals("Tiny opposing duty stays near zero BRAKE", zero, opposite, 5);
+                // Neutral/opposing braking depends on speed; it is not a fixed 100 in/s^2 jump.
+                double gain = motor.config.modelCoefficients[0]
+                        * motor.config.voltageSensor.getVoltage() * wheelRadius;
+                double speedLoss = motor.config.modelCoefficients[1];
+                double neutralLoss = motor.config.zeroPowerBrakeCoefficients[3];
+                double regenerativeLoss = motor.config.modelCoefficients[2];
+                assertEquals("Powered response uses duty-dependent back EMF",
+                        .001 * (gain - speedLoss * speed), same, 1e-8);
+                assertEquals("Neutral BRAKE response scales with speed", -neutralLoss * speed, zero, 1e-8);
+                assertEquals("Opposing duty adds regenerative braking",
+                        -.001 * gain - regenerativeLoss * speed, opposite, 1e-8);
+                assertTrue("Neutral BRAKE is stronger than tiny aligned duty", zero < same);
+                assertTrue("Opposing duty is stronger than neutral BRAKE", opposite < zero);
             }
         }
     }

@@ -1,8 +1,12 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import trajectory.generators.PathProfileGenerator;
 
-import geometry.*;
 import follower.FollowerConstants;
 import org.codeblooded.ftcodesim.ascope.boundaries.MotionVector;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
@@ -175,7 +179,7 @@ public class MeasuredMecanumExperimentTest {
         for(int i=0;i<2000;i++) {
             MotionParameters m=lut.getKinematicParamsByTime(lut.getDurationSeconds()*i/2000);
             PathPoint point=path.getParametricPath().getPointAtDistance(m.getProgression());
-            geometry.Vector end=path.getParametricPath().getFirstDerivative(1);
+            Vector end=path.getParametricPath().getFirstDerivative(1);
             double prime=path.getInterpolator().getHeadingFirstDerivative(point.getDistanceToEndIn(),point.getSignedCurvature(),end);
             double second=path.getInterpolator().getHeadingSecondDerivative(point.getDistanceToEndIn(),point.getCurvatureDerivative(),end);
             double v=m.getTangentialVel(),a=m.getTangentialAccel(),omega=prime*v,alpha=second*v*v+prime*a;

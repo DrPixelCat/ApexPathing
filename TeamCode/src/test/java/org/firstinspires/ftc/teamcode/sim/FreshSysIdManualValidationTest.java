@@ -8,14 +8,14 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.AngleUnit;
-import geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.Pose;
 import localizers.LocalizationConstants;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import storage.ApexStorage;
-import tuning.follower.TunerContext;
-import tuning.follower.sysid.FeedforwardTuner;
+import setup.follower.TunerContext;
+import setup.follower.sysid.FeedforwardTuner;
 
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +64,7 @@ public class FreshSysIdManualValidationTest {
                 TunerContext context = contextRef.get();
                 if (phaseIndex.get() < 2 || phase == null || context == null) { return; }
                 try {
-                    if (profileField.get(phase) == null || !stageField.get(phase).toString().equals("RUNNING")) { return; }
+                    if (profileField.get(phase) == null || !((Enum<?>) stageField.get(phase)).name().equals("RUNNING")) { return; }
                     double t = ((ElapsedTime) timerField.get(phase)).seconds();
                     int direction = directionField.getInt(phase);
                     boolean heading = phaseIndex.get() == 3;

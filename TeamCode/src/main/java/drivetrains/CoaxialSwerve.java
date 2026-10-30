@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import controllers.FeedbackController;
 import controllers.FeedbackController.Coefficients;
-import geometry.Angle;
-import geometry.Dist;
+import paths.geometry.Angle;
+import paths.geometry.Dist;
 
 /**
  * Coaxial swerve drivetrain controller
@@ -23,16 +23,21 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         final AnalogInput encoder;
         final FeedbackController controller;
         final double offset;
+        final double encoderSign;
 
-        Module(HardwareMap hardware, String servoName, String encoderName, Coefficients coefficients, double offset) {
+        Module(HardwareMap hardware, String servoName, String encoderName, Coefficients coefficients, double offset,
+               boolean servoReverse, boolean encoderReverse) {
             servo = hardware.get(CRServo.class, servoName);
+            servo.setDirection(servoReverse ? com.qualcomm.robotcore.hardware.DcMotorSimple.Direction.REVERSE
+                    : com.qualcomm.robotcore.hardware.DcMotorSimple.Direction.FORWARD);
             encoder = hardware.get(AnalogInput.class, encoderName);
             controller = new FeedbackController(coefficients);
             this.offset = offset;
+            encoderSign = encoderReverse ? -1 : 1;
         }
 
         double command(double forward, double strafe) {
-            double angle = encoder.getVoltage() * 2 * Math.PI / encoder.getMaxVoltage() + offset;
+            double angle = encoderSign * encoder.getVoltage() * 2 * Math.PI / encoder.getMaxVoltage() + offset;
             double error = Angle.wrap(Math.atan2(strafe, forward) - angle);
             double power = Math.hypot(forward, strafe);
             if (Math.abs(error) > Math.PI / 2) {
@@ -57,10 +62,10 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
         super(constants, hardwareMap, DrivetrainType.COAXIAL_SWERVE);
 
         double offset = constants.offsetAngle.getRad();
-        frontLeft = new Module(hardwareMap, constants.flServoName, constants.flEncoderName, constants.steeringCoefficients, offset);
-        frontRight = new Module(hardwareMap, constants.frServoName, constants.frEncoderName, constants.steeringCoefficients, offset);
-        backLeft = new Module(hardwareMap, constants.blServoName, constants.blEncoderName, constants.steeringCoefficients, offset);
-        backRight = new Module(hardwareMap, constants.brServoName, constants.brEncoderName, constants.steeringCoefficients, offset);
+        frontLeft = new Module(hardwareMap, constants.flServoName, constants.flEncoderName, constants.steeringCoefficients, offset + constants.moduleOffsets[0], constants.servoReversed[0], constants.encoderReversed[0]);
+        frontRight = new Module(hardwareMap, constants.frServoName, constants.frEncoderName, constants.steeringCoefficients, offset + constants.moduleOffsets[1], constants.servoReversed[1], constants.encoderReversed[1]);
+        backLeft = new Module(hardwareMap, constants.blServoName, constants.blEncoderName, constants.steeringCoefficients, offset + constants.moduleOffsets[2], constants.servoReversed[2], constants.encoderReversed[2]);
+        backRight = new Module(hardwareMap, constants.brServoName, constants.brEncoderName, constants.steeringCoefficients, offset + constants.moduleOffsets[3], constants.servoReversed[3], constants.encoderReversed[3]);
     }
 
     @Override
@@ -99,6 +104,9 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
     /** Configuration class for Coaxial Swerve drivetrain. */
     public static class Constants extends BaseDrivetrainConstants<Constants> {
+        /** Per-module calibration in FL, FR, BL, BR order; offsets are radians. */
+        public final double[] moduleOffsets = new double[4];
+        public final boolean[] servoReversed = new boolean[4], encoderReversed = new boolean[4];
         public String flServoName, frServoName, blServoName, brServoName;
         public String flEncoderName, frEncoderName, blEncoderName, brEncoderName;
 
@@ -114,6 +122,9 @@ public class CoaxialSwerve extends BaseDrivetrain<CoaxialSwerve.Constants> {
 
         @Override
         public CoaxialSwerve build(HardwareMap hardwareMap) {
+            for (double offset : moduleOffsets) {
+                if (!Double.isFinite(offset)) { throw new IllegalArgumentException("Module offsets must be finite"); }
+            }
             if (wheelbase == null || trackWidth == null || !Double.isFinite(wheelbase.getIn())
                     || !Double.isFinite(trackWidth.getIn()) || wheelbase.getIn() <= 0 || trackWidth.getIn() <= 0
                     || offsetAngle == null || offsetAngle.isNotFinite() || steeringCoefficients == null) {

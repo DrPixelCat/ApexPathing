@@ -10,10 +10,10 @@ import controllers.FeedbackController.Coefficients;
 import follower.FollowerConstants;
 import storage.ApexStorage;
 import trajectory.profile.MotionParameters;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
-import geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 

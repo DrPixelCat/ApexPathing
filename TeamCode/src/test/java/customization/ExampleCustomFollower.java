@@ -3,8 +3,10 @@ package customization;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import config.ApexConstants;
 import follower.drivetrains.HolonomicFollower;
-import geometry.Vector;
+import paths.geometry.Vector;
 import java.util.function.LongSupplier;
+
+import paths.geometry.DistUnit;
 import paths.movements.Path;
 import trajectory.TrajectorySample;
 
@@ -22,7 +24,7 @@ public final class ExampleCustomFollower extends HolonomicFollower {
                 .plus(target.velocity.minus(getVelocity().getVec()).times(.01));
         double headingCorrection = .8 * getPose().getHeading().getShortestAngleTo(target.heading).getRad();
         return explicitFeedforward
-                ? executeHolonomicPath(path, target, correction, headingCorrection, Vector.of(.2, 0, geometry.DistUnit.IN), .1)
+                ? executeHolonomicPath(path, target, correction, headingCorrection, Vector.of(.2, 0, DistUnit.IN), .1)
                 : executeHolonomicPath(path, target, correction, headingCorrection);
     }
 }

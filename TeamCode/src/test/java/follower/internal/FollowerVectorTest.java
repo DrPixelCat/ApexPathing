@@ -8,11 +8,11 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 import controllers.FeedbackController;
 
-import geometry.DistUnit;
-import geometry.Angle;
-import geometry.PathSegment;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.DistUnit;
+import paths.geometry.Angle;
+import paths.geometry.PathSegment;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import paths.movements.Path;
 import paths.movements.Turn;
 

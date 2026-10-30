@@ -7,10 +7,10 @@ import org.junit.Test;
 import org.psilynx.psikit.core.Logger;
 import org.psilynx.psikit.core.wpi.math.Pose2d;
 
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import paths.builders.HolonomicPathBuilder;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;

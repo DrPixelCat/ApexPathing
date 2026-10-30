@@ -5,8 +5,15 @@ import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
 import feedforward.MotorPowerModel;
 import drivetrains.Mecanum;
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.PathPoint;
+import paths.geometry.Vector;
 import trajectory.profile.MotionParameters;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.Before;

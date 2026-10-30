@@ -1,9 +1,14 @@
 package org.firstinspires.ftc.teamcode.sim;
 
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import util.DeltaTime;
 
 import follower.*;
-import geometry.*;
+
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import org.knowm.xchart.*;

@@ -4,10 +4,10 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import follower.Follower;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
-import geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import paths.heading.InterpolationStyle;
 import paths.movements.Path;
 

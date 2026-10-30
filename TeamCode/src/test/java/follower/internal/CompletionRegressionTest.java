@@ -2,13 +2,15 @@ package follower.internal;
 
 
 import org.junit.Test;
-import geometry.Angle;
+import paths.geometry.Angle;
+import paths.geometry.GeometryFactory;
+
 import static org.junit.Assert.*;
 
 public class CompletionRegressionTest {
     @Test public void callbacksFireOnceForEachExecutionOfTheSamePath() {
         java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
-        geometry.GeometryFactory geometry = new geometry.GeometryFactory();
+        GeometryFactory geometry = new GeometryFactory();
         paths.movements.Path path = geometry.holonomicPath(geometry.pose(0, 0, 0), geometry.pose(4, 0, 0))
                 .addDistanceCallback(.5, calls::incrementAndGet).quickBuild();
         MovementCallbackRunner runner = new MovementCallbackRunner();

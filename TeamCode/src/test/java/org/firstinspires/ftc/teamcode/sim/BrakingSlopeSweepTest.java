@@ -20,6 +20,7 @@ import com.acmerobotics.roadrunner.Vector2dDual;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import config.ApexConstants;
+import paths.geometry.DistUnit;
 import storage.ApexStorage;
 import follower.Follower;
 import follower.FollowerConstants;
@@ -28,10 +29,10 @@ import drivetrains.Mecanum;
 import drivetrains.Motor;
 import trajectory.profile.FFLut;
 import trajectory.profile.MotionParameters;
-import geometry.Angle;
-import geometry.GeometryFactory;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 import localizers.BaseLocalizer;
 import localizers.BaseLocalizerConstants;
 import org.codeblooded.ftcodesim.hardware.devices.SimMotor;
@@ -47,8 +48,8 @@ import paths.movements.Path;
 import paths.builders.PathBuilder;
 import paths.constraint.PathConstraint;
 import paths.constraint.TranslationalConstraint;
-import geometry.Dist;
-import geometry.PathPoint;
+import paths.geometry.Dist;
+import paths.geometry.PathPoint;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -428,9 +429,9 @@ public class BrakingSlopeSweepTest {
         void sample(double dt,int frame) {
             double measured=bench.speed()+(mode==2?.2*Math.sin(frame*1.71):0);
             filtered+=(mode==0?1:1-Math.exp(-dt/.04))*(measured-filtered);
-            pose=new Pose(Vector.of(bench.x(),0,geometry.DistUnit.IN),Angle.zero());
-            velocity=new Pose(Vector.of(filtered,0,geometry.DistUnit.IN),Angle.zero());
-            rawVelocity=new Pose(Vector.of(measured,0,geometry.DistUnit.IN),Angle.zero());
+            pose=new Pose(Vector.of(bench.x(),0, DistUnit.IN),Angle.zero());
+            velocity=new Pose(Vector.of(filtered,0, DistUnit.IN),Angle.zero());
+            rawVelocity=new Pose(Vector.of(measured,0, DistUnit.IN),Angle.zero());
         }
         @Override public void update() { }
         @Override public void setPose(Pose pose) {

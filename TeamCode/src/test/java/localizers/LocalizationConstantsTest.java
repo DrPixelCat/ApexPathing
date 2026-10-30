@@ -5,10 +5,9 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.json.JSONObject;
 import org.junit.Test;
 
-import localizers.BaseLocalizer;
-import localizers.BaseLocalizerConstants;
 import localizers.util.PoseEstimator;
 import localizers.util.AdaptiveKalmanFilter;
+import paths.geometry.Pose;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -172,6 +171,6 @@ public class LocalizationConstantsTest {
     private static final class TestLocalizer extends BaseLocalizer<TestConfig> {
         TestLocalizer(TestConfig config) { super(config); }
         @Override public void update() { calculate(UpdateType.BOTH); }
-        @Override public void setPose(geometry.Pose pose) { resetKinematicEstimate(pose); }
+        @Override public void setPose(Pose pose) { resetKinematicEstimate(pose); }
     }
 }

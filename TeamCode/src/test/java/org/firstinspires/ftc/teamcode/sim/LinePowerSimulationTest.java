@@ -4,10 +4,10 @@ import util.DeltaTime;
 
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.Angle;
-import geometry.AngleUnit;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import org.knowm.xchart.BitmapEncoder;

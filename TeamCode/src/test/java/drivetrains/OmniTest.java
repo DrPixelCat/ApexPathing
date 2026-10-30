@@ -4,10 +4,10 @@ import static org.junit.Assert.*;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import geometry.Angle;
+import paths.geometry.Angle;
 import java.lang.reflect.Proxy;
 import org.junit.Test;
-import tuning.follower.TuningMeasurements;
+import setup.follower.TuningMeasurements;
 
 public class OmniTest {
     private static final class Fixture {

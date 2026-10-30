@@ -4,7 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import follower.Follower;
-import geometry.Pose;
+import paths.geometry.Pose;
 import util.DeltaTime;
 
 /**

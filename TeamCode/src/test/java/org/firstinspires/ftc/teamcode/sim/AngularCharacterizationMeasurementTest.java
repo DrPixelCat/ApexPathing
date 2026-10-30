@@ -2,13 +2,13 @@ package org.firstinspires.ftc.teamcode.sim;
 
 import follower.Follower;
 import follower.FollowerConstants;
-import geometry.AngleUnit;
-import geometry.Pose;
+import paths.geometry.AngleUnit;
+import paths.geometry.Pose;
 import localizers.Pinpoint;
 import org.firstinspires.ftc.teamcode.apexpathing.Constants;
 import org.junit.Test;
 import storage.ApexStorage;
-import tuning.follower.characterization.ValidatedMotorAuthorityRegression;
+import setup.follower.characterization.ValidatedMotorAuthorityRegression;
 
 import java.lang.reflect.Field;
 import java.nio.file.Files;

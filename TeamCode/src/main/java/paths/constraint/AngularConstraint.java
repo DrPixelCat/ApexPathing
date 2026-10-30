@@ -1,6 +1,6 @@
 package paths.constraint;
 
-import geometry.Angle;
+import paths.geometry.Angle;
 
 /**
  * A constraint that applies to the robot's angular movement along a path, such as angular velocity

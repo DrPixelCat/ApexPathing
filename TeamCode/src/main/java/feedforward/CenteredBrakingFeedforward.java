@@ -1,7 +1,7 @@
 package feedforward;
 
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 import paths.movements.Path;
 import trajectory.TrajectorySample;
 import trajectory.profile.MotionParameters;

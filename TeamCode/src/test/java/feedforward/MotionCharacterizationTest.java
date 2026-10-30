@@ -1,12 +1,17 @@
 package feedforward;
 
+import paths.geometry.Angle;
+import paths.geometry.AngleUnit;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
+import paths.geometry.Pose;
 import trajectory.generators.PathProfileGenerator;
 
 import follower.FollowerConstants;
 import storage.ApexStorage;
 
 import trajectory.profile.MotionParameters;
-import geometry.*;
+
 import org.json.JSONObject;
 import org.junit.Test;
 import paths.heading.InterpolationStyle;

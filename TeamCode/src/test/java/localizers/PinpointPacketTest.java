@@ -1,8 +1,8 @@
 package localizers;
 
 import com.qualcomm.robotcore.hardware.I2cDeviceSynchSimple;
-import geometry.DistUnit;
-import geometry.Vector;
+import paths.geometry.DistUnit;
+import paths.geometry.Vector;
 import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

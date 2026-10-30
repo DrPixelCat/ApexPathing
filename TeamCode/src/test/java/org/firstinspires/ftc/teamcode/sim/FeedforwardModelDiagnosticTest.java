@@ -34,16 +34,18 @@ public class FeedforwardModelDiagnosticTest {
             }
         }
         assertTrue("Obsolete fit must be rejected by independent acceleration probes", Math.sqrt(squared/count)>5);
-        // Directly invert the actual loaded motor model at the same state as a control experiment.
+        // Same-direction back EMF is multiplied by duty: a = duty * (gain - speedLoss * speed).
+        // This is a motor-only control experiment; chassis drag is applied separately.
         double velocity = 30 / radius;
         double drive = motor.config.modelCoefficients[0] * motor.config.voltageSensor.getVoltage();
         double backEmf = motor.config.modelCoefficients[1];
-        // This motor-only probe excludes the chassis rolling-friction term.
-        double holdingPower = backEmf * velocity / drive;
+        double targetAcceleration = 30;
+        double command = (targetAcceleration / radius) / (drive - backEmf * velocity);
         motor.setRollVelocity(velocity);
-        motor.setPower(holdingPower);
+        motor.setPower(command);
         motor.update(0.001);
-        System.out.printf(Locale.US, "MODEL CONTROL holding power at 30 in/s = %.4f%n", holdingPower);
-        assertEquals(0, motor.getAcceleration(), 1e-8);
+        System.out.printf(Locale.US, "MODEL CONTROL v=30 in/s targetA=30 in/s^2 power=%.9f actualA=%.9f%n",
+                command, motor.getAcceleration() * radius);
+        assertEquals(targetAcceleration, motor.getAcceleration() * radius, 1e-8);
     }
 }

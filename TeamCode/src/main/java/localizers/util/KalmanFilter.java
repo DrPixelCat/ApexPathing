@@ -1,6 +1,6 @@
 package localizers.util;
 
-import geometry.Matrix;
+import paths.geometry.Matrix;
 
 /**
  * Reusable linear Kalman mathematics. The caller supplies the motion model, process covariance,

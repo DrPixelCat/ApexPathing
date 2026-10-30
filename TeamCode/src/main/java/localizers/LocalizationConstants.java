@@ -8,8 +8,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 
-import localizers.BaseLocalizer;
-import localizers.BaseLocalizerConstants;
 import localizers.util.AdaptiveKalmanFilter;
 import localizers.util.PoseEstimator;
 
@@ -55,7 +53,7 @@ public final class LocalizationConstants {
     public boolean applyGeometry(String setupName, BaseLocalizerConstants<?> config) {
         JSONObject setup = compatibleSetup(setupName, config);
         if (setup == null) { return false; }
-        JSONObject geometry = setup.optJSONObject("geometry");
+        JSONObject geometry = setup.optJSONObject("paths/geometry");
         if (geometry == null) { return false; }
         config.applyCalibrationValues(geometry);
         return true;
@@ -124,7 +122,7 @@ public final class LocalizationConstants {
         JSONObject setup = setup(setupName);
         try {
             setup.put("localizerType", config.getCalibrationType());
-            setup.put("geometry", config.getCalibrationValues());
+            setup.put("paths/geometry", config.getCalibrationValues());
             setup.put("geometryStatus", geometryStatus.name());
             setup.put("filterStatus", filterStatus.name());
             JSONObject filter = new JSONObject();

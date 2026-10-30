@@ -7,13 +7,41 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.junit.Test;
 
-import geometry.Angle;
-import geometry.DistUnit;
-import geometry.Pose;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.DistUnit;
+import paths.geometry.Pose;
+import paths.geometry.Vector;
 
 public class BaseLocalizerTest {
     private static final double EPSILON = 1e-9;
+
+    @Test public void nativeVelocityKeepsUpdatingAfterTheFirstSamplingGap() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        localizer.sample(Pose.zero(), Pose.zero(), 0);
+        localizer.sample(pose(2.5, 0, 0), pose(10, 0, 1), 250_000_000);
+        assertEquals(10, localizer.getRawVel().getX().getIn(), EPSILON);
+        localizer.sample(pose(2.74, 0, 0), pose(12, 0, 2), 270_000_000);
+        assertEquals(12, localizer.getRawVel().getX().getIn(), EPSILON);
+        assertEquals(100, localizer.getRawAccel().getX().getIn(), EPSILON);
+        assertEquals(2, localizer.getRawVel().getHeading().getRad(), EPSILON);
+        assertEquals(270_000_000, localizer.getLastMeasurementTimeNanos());
+        assertTrue(localizer.isLastMeasurementValid());
+    }
+
+    @Test public void poseDerivedVelocityUsesTheFullGapAndResumesNormalSampling() {
+        TimedLocalizer localizer = new TimedLocalizer();
+        localizer.sample(Pose.zero(), 0);
+        localizer.sample(pose(2.5, 0, 0), 250_000_000);
+        assertEquals(10, localizer.getRawVel().getX().getIn(), EPSILON);
+        localizer.sample(pose(2.74, 0, 0), 270_000_000);
+        assertEquals(12, localizer.getRawVel().getX().getIn(), EPSILON);
+        assertEquals(100, localizer.getRawAccel().getX().getIn(), EPSILON);
+        localizer.sample(pose(10.74, 0, 0), 1_270_000_000);
+        assertEquals(8, localizer.getRawVel().getX().getIn(), EPSILON);
+        localizer.sample(pose(10.94, 0, 0), 1_290_000_000);
+        assertEquals(10, localizer.getRawVel().getX().getIn(), EPSILON);
+        assertTrue(localizer.isLastMeasurementValid());
+    }
 
     @Test public void poseOnlyLocalizerPublishesVelocityAndAccelerationFromJointState() {
         TimedLocalizer localizer = new TimedLocalizer();

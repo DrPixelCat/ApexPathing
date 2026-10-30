@@ -1,17 +1,16 @@
 package trajectory.generators;
 
-import trajectory.generators.PathProfileGenerator;
-
+import paths.geometry.PathPoint;
 import storage.ApexStorage;
 import follower.FollowerConstants;
 import feedforward.MotionCharacterization;
 import feedforward.MotorPowerModel;
 import drivetrains.BaseDrivetrain.DrivetrainType;
 import trajectory.profile.MotionParameters;
-import geometry.AngleUnit;
-import geometry.Dist;
-import geometry.DistUnit;
-import geometry.GeometryFactory;
+import paths.geometry.AngleUnit;
+import paths.geometry.Dist;
+import paths.geometry.DistUnit;
+import paths.geometry.GeometryFactory;
 import org.junit.Before;
 import org.junit.Test;
 import paths.builders.HolonomicPathBuilder;
@@ -225,7 +224,7 @@ public class ProfilePowerLimitTest {
 
     private double peakVelocity(Path path) {
         double max = 0;
-        for (geometry.PathPoint point : path.getGeneratedPoints()) {
+        for (PathPoint point : path.getGeneratedPoints()) {
             double distance = path.getParametricPath().getLengthIn() - point.getDistanceToEndIn();
             max = Math.max(max, path.getFeedforwardLut().getFFParams(distance).getTangentialVel());
         }

@@ -2,8 +2,8 @@ package drivetrains;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import geometry.Angle;
-import geometry.Vector;
+import paths.geometry.Angle;
+import paths.geometry.Vector;
 
 /**
  * Mecanum drivetrain controller
