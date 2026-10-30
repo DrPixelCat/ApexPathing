@@ -100,6 +100,8 @@ public class VelocityTest extends OpMode {
         Pose pose = localizer.getPose();
         Pose velocity = localizer.getVel();
         Vector robotVelocity = velocity.getVec().rotate(pose.getHeading().times(-1));
+        telemetry.addData("X / Y (in) / heading (deg)", "%.2f / %.2f / %.1f",
+                pose.getX().getIn(), pose.getY().getIn(), pose.getHeading().getDeg());
         telemetry.addData("Capture", recording ? (stepCapture ? "Step" : "Ramp") : "Idle");
         telemetry.addData("Step power", "%.2f", direction * STEP_POWERS[selectedPower]);
         telemetry.addData("Power / velocity (in/s)", "%.2f / %.2f", forwardPower(), robotVelocity.getX().getIn());
