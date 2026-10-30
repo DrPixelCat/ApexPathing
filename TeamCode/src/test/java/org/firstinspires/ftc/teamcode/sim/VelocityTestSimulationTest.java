@@ -17,7 +17,7 @@ public class VelocityTestSimulationTest {
         try (Rig rig = new Rig()) {
             rig.opMode.init();
             rig.opMode.gamepad1.a = true;
-            rig.opMode.loop();
+            rig.loop();
             long start = System.nanoTime(), previous = start;
             while ((System.nanoTime() - start) * 1e-9 < 3.4) {
                 Thread.sleep(20);
@@ -29,12 +29,12 @@ public class VelocityTestSimulationTest {
                     ApexSimulation.stepPhysics(rig.hardware, dt);
                     remaining -= dt;
                 }
-                rig.opMode.loop();
+                rig.loop();
             }
             assertTrue("No file I/O during capture", rig.csvFiles().isEmpty());
             rig.opMode.gamepad1.a = false;
             rig.opMode.gamepad1.left_stick_y = -.8f;
-            rig.opMode.loop();
+            rig.loop();
             rig.assertStopped();
             List<Path> files = rig.csvFiles();
             assertEquals(1, files.size());
@@ -59,7 +59,7 @@ public class VelocityTestSimulationTest {
             localizers.BaseLocalizer<?> sensor = (localizers.BaseLocalizer<?>) sensorField.get(rig.opMode);
             double filtered = sensor.getVel().getVec().rotate(sensor.getPose().getHeading().times(-1)).getX().getIn();
             assertEquals(filtered, Double.parseDouble(last[2]), 1e-9);
-            rig.opMode.loop();
+            rig.loop();
             assertEquals("Idle/repositioning must not append to the capture", lines,
                     Files.readAllLines(files.get(0), StandardCharsets.UTF_8));
         }
@@ -70,13 +70,13 @@ public class VelocityTestSimulationTest {
             rig.opMode.init();
             StockSimTestSupport.setSpeed(rig.hardware, 10);
             rig.opMode.gamepad1.a = true;
-            rig.opMode.loop();
+            rig.loop();
             rig.opMode.gamepad1.a = false;
-            rig.opMode.loop();
+            rig.loop();
             assertEquals(1, rig.csvFiles().size());
             StockSimTestSupport.setSpeed(rig.hardware, 40);
             rig.opMode.gamepad1.a = true;
-            rig.opMode.loop();
+            rig.loop();
             rig.opMode.stop();
             rig.assertStopped();
             List<Path> files = rig.csvFiles();
@@ -97,16 +97,16 @@ public class VelocityTestSimulationTest {
             rig.opMode.init();
             for (int selected = 0; selected < 6; selected++) {
                 if (selected > 0) {
-                    rig.opMode.gamepad1.dpad_right = true; rig.opMode.loop();
-                    rig.opMode.gamepad1.dpad_right = false; rig.opMode.loop();
+                    rig.opMode.gamepad1.dpad_right = true; rig.loop();
+                    rig.opMode.gamepad1.dpad_right = false; rig.loop();
                 }
                 if (selected < 3) { continue; }
                 double expected = new double[]{.35, .45, .55, .7, .85, 1}[selected];
-                rig.opMode.gamepad1.b = true; rig.opMode.loop();
+                rig.opMode.gamepad1.b = true; rig.loop();
                 for (org.codeblooded.ftcodesim.hardware.devices.SimMotor motor : StockSimTestSupport.motors(rig.hardware)) {
                     assertEquals(expected, motor.getPower(), 1e-12);
                 }
-                rig.opMode.gamepad1.b = false; rig.opMode.loop();
+                rig.opMode.gamepad1.b = false; rig.loop();
                 rig.assertStopped();
             }
             assertEquals(3, rig.csvFiles().size());
@@ -149,6 +149,14 @@ public class VelocityTestSimulationTest {
             opMode.hardwareMap = hardware.hardwareMap;
             opMode.telemetry = new ApexSimTelemetry(frame -> { });
             opMode.gamepad1 = new Gamepad();
+        }
+
+        void loop() throws Exception {
+            // The SDK event loop normally updates these edges before calling the OpMode.
+            java.lang.reflect.Method update = Gamepad.class.getDeclaredMethod("updateEdgeDetection");
+            update.setAccessible(true);
+            update.invoke(opMode.gamepad1);
+            opMode.loop();
         }
 
         List<Path> csvFiles() throws Exception {

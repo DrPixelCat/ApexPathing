@@ -21,8 +21,8 @@ public class VelocityTest extends OpMode {
     private static final double MAX_RAMP_POWER = .9;
     private static final double[] STEP_POWERS = {.35, .45, .55, .70, .85, 1.0};
     private static final double STEP_SECONDS = 2;
-    private int selectedPower, direction = 1, captureDirection;
-    private boolean stepCapture, releaseRequired, previousLeft, previousRight, previousX;
+    private int selectedPower;
+    private boolean stepCapture;
     private double capturePower;
     private static final String[] CSV_HEADER = {"time_s", "applied_forward_power",
             "filtered_forward_velocity_in_s", "battery_voltage_v", "acceleration_in_s2",
@@ -50,29 +50,26 @@ public class VelocityTest extends OpMode {
     @Override
     public void loop() {
         localizer.update();
-        boolean left = gamepad1.dpad_left, right = gamepad1.dpad_right, reverse = gamepad1.x;
+        boolean left = gamepad1.dpadLeftWasPressed(), right = gamepad1.dpadRightWasPressed();
+        boolean rampPressed = gamepad1.aWasPressed(), stepPressed = gamepad1.bWasPressed();
+        boolean rampReleased = gamepad1.aWasReleased(), stepReleased = gamepad1.bWasReleased();
         if (!recording) {
-            if (left && !previousLeft) { selectedPower = Math.max(0, selectedPower - 1); }
-            if (right && !previousRight) { selectedPower = Math.min(STEP_POWERS.length - 1, selectedPower + 1); }
-            if (reverse && !previousX) { direction = -direction; }
+            if (left) { selectedPower = Math.max(0, selectedPower - 1); }
+            if (right) { selectedPower = Math.min(STEP_POWERS.length - 1, selectedPower + 1); }
         }
-        previousLeft = left; previousRight = right; previousX = reverse;
-        if (!gamepad1.a && !gamepad1.b) { releaseRequired = false; }
         double precedingPower = forwardPower();
         long now = System.nanoTime();
-        if (!recording && !releaseRequired && (gamepad1.a || gamepad1.b)) {
+        if (!recording && (rampPressed || stepPressed)) {
             // Steps begin from rest so different powers cross comparable velocity ranges.
-            if (gamepad1.b && (!localizer.isLastMeasurementValid()
+            if (stepPressed && (!localizer.isLastMeasurementValid()
                     || localizer.getVel().getVec().getMag().getIn() > .5
                     || Math.abs(localizer.getVel().getHeading(AngleUnit.RAD)) > .05)) {
                 drive.stop();
-                releaseRequired = true;
                 csvStatus = "Wait until stationary, then press B again.";
             } else {
                 samples.clear(); sampleCount = 0; captureNumber++;
                 captureStartNanos = now;
-                stepCapture = gamepad1.b;
-                captureDirection = direction;
+                stepCapture = stepPressed;
                 capturePower = STEP_POWERS[selectedPower];
                 recording = true;
             }
@@ -80,17 +77,16 @@ public class VelocityTest extends OpMode {
         if (recording) {
             double seconds = (now - captureStartNanos) * 1e-9;
             boolean held = stepCapture ? gamepad1.b : gamepad1.a;
-            if (!held || stepCapture && seconds >= STEP_SECONDS) {
+            if ((stepCapture ? stepReleased : rampReleased) || !held || stepCapture && seconds >= STEP_SECONDS) {
                 drive.stop();
                 recordSample(seconds, precedingPower);
                 saveCapture();
-                releaseRequired = gamepad1.a || gamepad1.b;
             } else {
-                double power = captureDirection * (stepCapture ? capturePower : Math.min(MAX_RAMP_POWER, RAMP_RATE * seconds));
+                double power = stepCapture ? capturePower : Math.min(MAX_RAMP_POWER, RAMP_RATE * seconds);
                 drive.moveWithVectors(power, 0, 0);
                 recordSample(seconds, precedingPower);
             }
-        } else if (releaseRequired) {
+        } else if (gamepad1.a || gamepad1.b) {
             drive.stop();
         } else {
             drive.drive(-gamepad1.left_stick_y, -gamepad1.left_stick_x, -gamepad1.right_stick_x,
@@ -103,11 +99,11 @@ public class VelocityTest extends OpMode {
         telemetry.addData("X / Y (in) / heading (deg)", "%.2f / %.2f / %.1f",
                 pose.getX().getIn(), pose.getY().getIn(), pose.getHeading().getDeg());
         telemetry.addData("Capture", recording ? (stepCapture ? "Step" : "Ramp") : "Idle");
-        telemetry.addData("Step power", "%.2f", direction * STEP_POWERS[selectedPower]);
+        telemetry.addData("Step power", "%.2f", STEP_POWERS[selectedPower]);
         telemetry.addData("Power / velocity (in/s)", "%.2f / %.2f", forwardPower(), robotVelocity.getX().getIn());
         if (!recording) {
             telemetry.addLine("Hold A: ramp | B: step (max 2s) | Release: stop/save");
-            telemetry.addLine("Dpad: power | X: reverse | Sticks: drive");
+            telemetry.addLine("Dpad: power | Sticks: drive");
         }
         telemetry.addData("CSV", csvStatus);
         telemetry.update();
@@ -137,7 +133,7 @@ public class VelocityTest extends OpMode {
     private void saveCapture() {
         recording = false;
         TuningCsvWriter csv = TuningCsvWriter.openBuffered((stepCapture ? "velocity_step_" : "velocity_ramp_")
-                + captureDirection + "_" + captureNumber, CSV_HEADER);
+                + captureNumber, CSV_HEADER);
         try {
             for (int i = 0; i < samples.size(); i++) {
                 addAcceleration(i);
