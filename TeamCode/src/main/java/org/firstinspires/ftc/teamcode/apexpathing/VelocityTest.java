@@ -100,19 +100,13 @@ public class VelocityTest extends OpMode {
         Pose pose = localizer.getPose();
         Pose velocity = localizer.getVel();
         Vector robotVelocity = velocity.getVec().rotate(pose.getHeading().times(-1));
-        telemetry.addData("X (in)", pose.getX().getIn());
-        telemetry.addData("Y (in)", pose.getY().getIn());
-        telemetry.addData("Heading (deg)", pose.getHeading().getDeg());
-        telemetry.addData("Filtered forward velocity (in/s)", robotVelocity.getX().getIn());
-        telemetry.addData("Filtered strafe velocity (in/s)", robotVelocity.getY().getIn());
-        telemetry.addData("Filtered angular velocity (rad/s)", velocity.getHeading(AngleUnit.RAD));
-        telemetry.addLine("Hold A: ramp. Hold B: power step (2s maximum). Release: stop/save.");
-        telemetry.addLine("Idle: Dpad left/right selects step power; X switches direction.");
-        telemetry.addData("Selected step power", direction * STEP_POWERS[selectedPower]);
-        telemetry.addData("Saved motor power limit", drive.getConstants().maxPower);
-        telemetry.addData("Capture", recording ? "Recording" : "Idle; sticks drive the robot");
-        telemetry.addData("Samples", sampleCount);
-        telemetry.addData("Forward power", forwardPower());
+        telemetry.addData("Capture", recording ? (stepCapture ? "Step" : "Ramp") : "Idle");
+        telemetry.addData("Step power", "%.2f", direction * STEP_POWERS[selectedPower]);
+        telemetry.addData("Power / velocity (in/s)", "%.2f / %.2f", forwardPower(), robotVelocity.getX().getIn());
+        if (!recording) {
+            telemetry.addLine("Hold A: ramp | B: step (max 2s) | Release: stop/save");
+            telemetry.addLine("Dpad: power | X: reverse | Sticks: drive");
+        }
         telemetry.addData("CSV", csvStatus);
         telemetry.update();
     }
